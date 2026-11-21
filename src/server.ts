@@ -18,6 +18,7 @@ import { buildServer } from './mcp/tools.ts';
 import { createAdmin } from './admin/routes.ts';
 import { createComputers, type Computers } from './computers.ts';
 import { readJson, send } from './http.ts';
+import { count, render } from './metrics.ts';
 import { RunnerDriver } from './host/runner.ts';
 import type { HostDriver } from './host/driver.ts';
 
@@ -32,6 +33,10 @@ const timeout = <T>(p: Promise<T>, ms: number) =>
 export function clientIp(req: http.IncomingMessage, trust: boolean) {
   if (!trust || !req.headers['cf-connecting-ip']) req.headers['cf-connecting-ip'] = req.socket.remoteAddress || 'unknown';
 }
+
+/** Host of a /metrics scrape: an IP literal or a single-label name (localhost, gateway). A page in the operator's
+ *  browser that rebinds its own domain to 127.0.0.1 sends a dotted name: refused. */
+const SCRAPE_HOST = /^(\[[0-9a-f:.]+\]|[0-9.]+|[a-z0-9-]+)(:\d+)?$/i;
 
 const listen = (server: http.Server, port: number, host: string) =>
   new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, () => resolve()));
@@ -66,6 +71,7 @@ export async function start(cfg: Config, driver: HostDriver) {
   const opts = { requestTimeout: 30_000, headersTimeout: 10_000 };
   const mcp = http.createServer(opts, async (req, res) => {
     clientIp(req, cfg.trustProxy);
+    count('arb_http_requests_total', { listener: 'mcp' });
     try {
       // Probes: unauthenticated, no details.
       if (req.url === '/healthz') return res.end('ok');
@@ -80,7 +86,10 @@ export async function start(cfg: Config, driver: HostDriver) {
       }
       const key = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.headers['x-api-key'];
       const who = await principal(db, auth, key);
-      if (!who) return send(res, 401, { error: 'unauthorized' }, challenge);
+      if (!who) {
+        if (key) count('arb_auth_failures_total', { kind: 'token' }); // no credential at all = OAuth discovery, not a failure
+        return send(res, 401, { error: 'unauthorized' }, challenge);
+      }
       // Stateless MCP: no SSE stream, no session; the browser state lives in the computer.
       if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
       const body = await readJson(req);
@@ -95,7 +104,24 @@ export async function start(cfg: Config, driver: HostDriver) {
   });
 
   if (cfg.adminPublic) mcp.on('upgrade', (req, sock, head) => admin.upgrade(req, sock, head, true));
-  const adminServer = http.createServer(opts, (req, res) => { clientIp(req, false); admin.handle(req, res, false); })
+  // /metrics: admin listener only (loopback-published, never on the tunnel nor on the public listener with
+  // ADMIN_PUBLIC). No session, scrapers have none: counts only, no id, no name beyond the tool names.
+  const metrics = async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    if (req.method !== 'GET' || !SCRAPE_HOST.test(req.headers.host ?? '')) return send(res, 403, { error: 'forbidden' });
+    const list = await timeout(driver.list(), 2_000).catch(() => null);
+    const leases = (db.prepare('SELECT count(*) AS n FROM leases WHERE exp >= ?').get(Date.now()) as { n: number }).n;
+    res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' }).end(render({
+      arb_runner_up: { help: 'Runner and Docker reachable (1) or not (0).', value: list ? 1 : 0 },
+      ...(list && { arb_computers_running: { help: 'Browser containers running.', value: list.filter((c) => c.running).length } }),
+      arb_leases_active: { help: 'Unexpired profile leases.', value: leases },
+    }));
+  };
+  const adminServer = http.createServer(opts, (req, res) => {
+    clientIp(req, false);
+    count('arb_http_requests_total', { listener: 'admin' });
+    if (req.url === '/metrics') return void metrics(req, res).catch(() => res.headersSent || send(res, 500, { error: 'metrics failed' }));
+    admin.handle(req, res, false);
+  })
     .on('upgrade', (req, sock, head) => admin.upgrade(req, sock, head, false));
 
   await listen(mcp, cfg.port, cfg.bindAddr);

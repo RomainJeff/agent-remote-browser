@@ -11,12 +11,14 @@ import type { Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import { requireAdmin } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
+import { count } from '../metrics.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
 import { SESSION } from '../runner/protocol.ts';
 import type { Ctx } from '../server.ts';
 
 const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
+const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', '/api/auth/two-factor/verify-totp': 'totp' };
 const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 
@@ -106,7 +108,11 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return send(res, 415, { error: 'JSON content type required' });
       if (path === '/' || AUTH_API.has(path)) {
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
-        if (path !== '/') return await reply(res, await callAuth(authOf(pub), baseOf(pub), req, path));
+        if (path !== '/') {
+          const r = await callAuth(authOf(pub), baseOf(pub), req, path), kind = FAILURE[path];
+          if (kind && (r.status === 401 || r.status === 429)) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : kind });
+          return await reply(res, r);
+        }
         const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
         res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));

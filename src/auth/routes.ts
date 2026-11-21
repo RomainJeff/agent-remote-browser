@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { windowBudget, parseProfileId } from '../policy.ts';
 import { requireAdmin, toHeaders } from './guards.ts';
 import type { Auth } from './better-auth.ts';
+import { count } from '../metrics.ts';
 
 type Res = ServerResponse;
 const MAX_CLIENTS = 1000;
@@ -129,13 +130,15 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
       if (!b.code) {
         const r = await callAuth(auth, base, req, '/api/auth/sign-in/email', { email: b.email, password: b.password, oauth_query: oq });
         const j = await r.json().catch(() => ({}));
-        if (r.status === 429) return loginForm(res, oq, 'Too many attempts, wait a minute.'), true;
+        if (r.status === 429) return count('arb_auth_failures_total', { kind: 'rate_limited' }), loginForm(res, oq, 'Too many attempts, wait a minute.'), true;
+        if (!r.ok) count('arb_auth_failures_total', { kind: 'password' });
         // No twoFactorRedirect = TOTP not enrolled: refuse (its session cookie is not passed on).
         if (!r.ok || !j.twoFactorRedirect) return loginForm(res, oq, r.ok ? 'Two-factor not enrolled: run `arb admin reset-2fa`.' : 'Invalid email or password.'), true;
         return totpForm(res, oq, undefined, r.headers.getSetCookie()), true;
       }
       const r = await callAuth(auth, base, req, '/api/auth/two-factor/verify-totp', { code: b.code, oauth_query: oq });
       const j = await r.json().catch(() => ({}));
+      if (!r.ok) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : 'totp' });
       if (!r.ok) return totpForm(res, oq, r.status === 429 ? 'Too many attempts, wait a minute.' : 'Invalid or expired code. Sign in again if this repeats.'), true;
       res.setHeader('set-cookie', r.headers.getSetCookie());
       return toLocal(res, j.url), true;

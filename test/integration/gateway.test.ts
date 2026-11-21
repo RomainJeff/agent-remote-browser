@@ -284,6 +284,44 @@ test('a lease locks the profile key; the global key drives the profile through t
   assert.equal(last.via, 'global');
 });
 
+test('/metrics: admin listener only, no session, counts without ids or secrets', async () => {
+  const scrape = (port: number, host: string) => new Promise<{ status: number, type?: string, text: string }>((resolve, reject) =>
+    http.get({ host: '127.0.0.1', port, path: '/metrics', headers: { host } }, (res) => {
+      let text = '';
+      res.on('data', (d) => { text += d; }).on('end', () => resolve({ status: res.statusCode!, type: res.headers['content-type'], text }));
+    }).on('error', reject));
+  // One egress refusal, straight on the profile's proxy socket: a private address.
+  const denied = await new Promise<string>((resolve) => {
+    const s = net.connect(join(f.egress, 'shop', 'proxy.sock'), () => s.write('CONNECT 10.0.0.1:443 HTTP/1.1\r\nHost: 10.0.0.1:443\r\n\r\n'));
+    let r = ''; s.on('data', (d) => { r += d; }).on('close', () => resolve(r));
+  });
+  assert.match(denied, /^HTTP\/1\.1 403/);
+  await mcpStatus({ authorization: 'Bearer arb_k_bogus' });
+
+  const r = await scrape(ADMIN, `127.0.0.1:${ADMIN}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.type, 'text/plain; version=0.0.4; charset=utf-8');
+  const value = (series: string) => Number(r.text.match(new RegExp(`^${series.replace(/[{}]/g, '\\$&')} (\\d+)$`, 'm'))?.[1]);
+  assert.ok(value('arb_tool_calls_total{tool="open",outcome="ok"}') >= 1);
+  assert.ok(value('arb_tool_calls_total{tool="open",outcome="error"}') >= 1, 'kill switch refusals');
+  assert.ok(value('arb_auth_failures_total{kind="token"}') >= 1);
+  assert.ok(value('arb_auth_failures_total{kind="password"}') >= 1, 'wrong password earlier');
+  assert.ok(value('arb_egress_denied_total') >= 1);
+  assert.ok(value('arb_http_requests_total{listener="mcp"}') >= 1);
+  assert.equal(value('arb_runner_up'), 1);
+  assert.equal(value('arb_computers_running'), [...fake.computers.values()].filter((c) => c.running).length);
+  assert.equal(value('arb_leases_active'), 0);
+  for (const line of r.text.split('\n').filter(Boolean)) assert.match(line, /^(# (HELP|TYPE) arb_\w+ .+|arb_\w+(\{(\w+="[\w-]+",?)+\})? \d+)$/, line);
+  for (const t of Object.values(tokens)) assert.ok(!r.text.includes(t));
+
+  // Scrapers on the host (localhost) or the stack's network (service name) pass; a rebinding domain does not.
+  assert.equal((await scrape(ADMIN, `localhost:${ADMIN}`)).status, 200);
+  assert.equal((await scrape(ADMIN, 'gateway:18788')).status, 200);
+  assert.equal((await scrape(ADMIN, `rebind.example.com:${ADMIN}`)).status, 403);
+  // Never on the public listener, ADMIN_PUBLIC or not.
+  assert.equal((await scrape(PORT, `127.0.0.1:${PORT}`)).status, 404);
+});
+
 test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes, even with a session', async () => {
   const state = dump();
   const write = { name: 'csrf', scope: 'global' };

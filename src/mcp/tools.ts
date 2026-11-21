@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { urlAllowed, slug, validId, cleanAllow, sitesOf, type Principal, type ProfileId } from '../policy.ts';
 import type { Profile } from '../store/store.ts';
 import { log } from '../audit.ts';
+import { count } from '../metrics.ts';
 import type { Ctx } from '../server.ts';
 
 const untrusted = (origin: unknown, text: string) =>
@@ -61,6 +62,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
     } finally {
       const agent = id || principal.profile || 'global', ms = Date.now() - t0;
       audit({ agent, ...(g && { via: 'global' as const }), tool: name, ok, ms });
+      count('arb_tool_calls_total', { tool: name, outcome: ok ? 'ok' : 'error' });
       log(ok ? 'info' : 'warn', 'tool call', { profile: agent, tool: name, ms, ok });
     }
   };

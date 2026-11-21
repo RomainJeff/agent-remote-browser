@@ -4,6 +4,7 @@ import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { urlAllowed } from '../policy.ts';
+import { count } from '../metrics.ts';
 
 export interface Proxy {
   /** Pin every request to one origin (login), or lift the pin. Drops open connections either way. */
@@ -44,7 +45,7 @@ export async function startProxy(dir: string, getAllow: () => readonly string[])
       res.on('close',()=>out.destroy());
       out.on('error',()=>res.destroy());
       req.pipe(out);
-    } catch { res.writeHead(403).end(); }
+    } catch { count('arb_egress_denied_total'); res.writeHead(403).end(); }
   });
   server.maxConnections = 128;
   server.on('connection', (s: net.Socket)=>{ s.on('error',()=>s.destroy()); sockets.add(s); s.on('close',()=>sockets.delete(s)); });
@@ -59,7 +60,7 @@ export async function startProxy(dir: string, getAllow: () => readonly string[])
       });
       remote.on('error',()=>s.destroy()); s.on('error',()=>remote.destroy());
       s.on('close',()=>remote.destroy()); remote.on('close',()=>s.destroy());
-    } catch { s.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); }
+    } catch { count('arb_egress_denied_total'); s.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); }
   });
   mkdirSync(dir,{recursive:true});
   const path = dir+'/proxy.sock';
