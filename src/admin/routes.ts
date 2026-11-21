@@ -18,8 +18,12 @@ import type { Ctx } from '../server.ts';
 
 const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
-const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', '/api/auth/two-factor/verify-totp': 'totp' };
-const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);
+const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
+const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
+const AUTH_API = new Set(['/api/auth/sign-in/email', VERIFY.code, VERIFY.backupCode, '/api/auth/sign-out', '/api/auth/get-session']);
+// Step-up: these need a second factor proven in the last 15 minutes (sign-in TOTP counts, a trusted device does not).
+const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
+const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'delete']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
 /** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
@@ -63,6 +67,26 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     (SELECT group_concat(DISTINCT referenceId) FROM oauthConsent WHERE clientId = c.clientId) scopes,
     (SELECT max(createdAt) FROM oauthAccessToken WHERE clientId = c.clientId) lastToken
     FROM oauthClient c ORDER BY c.createdAt DESC`).all());
+
+  const stepUpLeft = (sid: string) => {
+    const r = db.prepare('SELECT verified_at v FROM step_up WHERE session_id = ?').get(sid) as { v: number } | undefined;
+    return Math.max(0, Math.ceil(((r?.v ?? 0) + STEP_UP_MS - Date.now()) / 1000));
+  };
+  /** After a TOTP / backup code check: success marks the session it created or confirmed; a failure on a signed-in
+   *  session counts, and the 5th one signs it out (Better Auth's lockout only covers the sign-in step). */
+  async function settle(r: Response, sid: string | undefined) {
+    if (r.ok) {
+      const { token } = await r.clone().json().catch(() => ({}));
+      const s = db.prepare('SELECT id FROM session WHERE token = ?').get(String(token)) as { id: string } | undefined;
+      if (s) db.prepare(`INSERT INTO step_up (session_id, verified_at) VALUES (?, ?)
+        ON CONFLICT DO UPDATE SET verified_at = excluded.verified_at, fails = 0`).run(s.id, Date.now());
+      return;
+    }
+    if (!sid || r.status !== 401) return;
+    const { fails } = db.prepare(`INSERT INTO step_up (session_id, verified_at, fails) VALUES (?, 0, 1)
+      ON CONFLICT DO UPDATE SET fails = fails + 1 RETURNING fails`).get(sid) as { fails: number };
+    if (fails >= STEP_UP_FAILS) db.prepare('DELETE FROM session WHERE id = ?').run(sid);
+  }
 
   async function listComputers() {
     const running = new Map((await driver.list()).map((c) => [c.id, c]));
@@ -118,8 +142,10 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (path === '/' || AUTH_API.has(path)) {
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
         if (path !== '/') {
+          const verify = FAILURE[path] === 'totp', s = verify ? await requireAdmin(authOf(pub), req.headers) : null;
           const r = await callAuth(authOf(pub), baseOf(pub), req, path), kind = FAILURE[path];
           if (kind && (r.status === 401 || r.status === 429)) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : kind });
+          if (verify) await settle(r, s?.session.id);
           return await reply(res, r);
         }
         const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
@@ -129,6 +155,20 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       const session = await gate(req, pub);
       if (session === false) return send(res, 403, { error: 'forbidden' });
       if (!session) return send(res, 401, { error: 'Sign in first' });
+      const sid = session.session.id;
+      if (path === '/api/session') return send(res, 200, { email: session.user.email, stepUpRemainingS: stepUpLeft(sid) });
+      if (path === '/api/step-up' && post) {
+        const b = (await readJson(req)) || {}, field = typeof b.code === 'string' ? 'code' : typeof b.backupCode === 'string' ? 'backupCode' : null;
+        if (!field) return send(res, 400, { error: 'code (TOTP) or backupCode required' });
+        req.headers.origin = new URL(baseOf(pub)).origin; // gate() checked it (or its absence): Better Auth wants one
+        const r = await callAuth(authOf(pub), baseOf(pub), req, VERIFY[field], { code: b[field] });
+        await settle(r, sid);
+        if (r.ok) return send(res, 200, { stepUpRemainingS: stepUpLeft(sid) });
+        count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : 'totp' });
+        if (r.status === 429) return send(res, 429, { error: 'Too many attempts, wait a minute' });
+        return send(res, 401, await requireAdmin(authOf(pub), req.headers) ? { stepUp: true, error: 'Invalid code' } : { error: 'Sign in first' });
+      }
+      const stale = () => stepUpLeft(sid) === 0 && (send(res, 401, { stepUp: true, error: 'Confirm with a 2FA code first' }), true);
       if (path === '/api/computers') return send(res, 200, await listComputers());
       if (path === '/api/profiles' && post) {
         const { id, allow } = (await readJson(req)) || {}, a = cleanAllow(allow);
@@ -142,6 +182,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       // Connected clients: OAuth clients (with the scopes granted) and API keys. A key is shown once, at creation.
       if (path === '/api/clients' && !post) return send(res, 200, { oauth: listClients(), keys: listKeys() });
       if (path === '/api/keys' && post) {
+        if (stale()) return;
         const { name, scope, expiresIn, expiresAt } = (await readJson(req)) || {};
         if (typeof name !== 'string' || !/^[\w .-]{1,60}$/.test(name)) return send(res, 400, { error: 'Name: letters, digits, spaces, dots, dashes (max 60)' });
         const pid = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
@@ -154,6 +195,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       }
       const rv = path.match(/^\/api\/(keys|clients)\/([^/]+)\/revoke$/);
       if (rv && post) {
+        if (stale()) return;
         const target = decodeURIComponent(rv[2]);
         // Deleting the client cascades to its tokens and consents (foreign keys).
         const n = rv[1] === 'keys' ? db.prepare('DELETE FROM apikey WHERE id = ?').run(target).changes
@@ -167,6 +209,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (!m || !id || !p) return send(res, 404, { error: 'unknown profile' });
       if (!m[2] && req.method === 'GET') return send(res, 200, await computerDetails(id, p));
       if (!m[2] || !post) return send(res, 405, { error: 'method not allowed' });
+      if (SENSITIVE.has(m[2]) && stale()) return;
       const act = m[2], body = (await readJson(req)) || {};
       audit({ agent: id, tool: `admin:${act}`, ok: true });
 

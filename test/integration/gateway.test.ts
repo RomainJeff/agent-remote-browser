@@ -575,6 +575,57 @@ test('client IP (rate limits, API key last IP): Cf-Connecting-IP is ignored unle
   assert.equal(await lastIp(), '203.0.113.9');
 });
 
+/** Runs fn on a second connection to the gateway database (tests reach under the API: age a step-up, reset rate limits). */
+function sql(fn: (db: DatabaseSync) => void) {
+  const db = new DatabaseSync(dbFile());
+  try { fn(db); } finally { db.close(); }
+}
+const wrong = () => String((Number(totp(owner.uri)) + 1) % 1e6).padStart(6, '0');
+
+test('step-up: sensitive admin actions need a 2FA code from the last 15 minutes; 5 bad codes sign out', async () => {
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+  const left = async () => (await admin('GET', '/api/session')).json.stepUpRemainingS;
+  // Re-sign-in: the TOTP step counts as a step-up.
+  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: owner.password }, headers: adminOrigin() });
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', { body: { code: totp(owner.uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) } });
+  session = jar(ok.cookies, jar(half.cookies));
+  assert.deepEqual((await admin('GET', '/api/session')).json.email, owner.email);
+  assert.ok(await left() > 890);
+  sql((db) => db.exec('UPDATE step_up SET verified_at = verified_at - 16 * 60000'));
+  assert.equal(await left(), 0);
+  const sensitive: [string, unknown][] = [
+    ['/api/keys', { name: 'k', scope: 'global', expiresIn: '30d' }], ['/api/keys/x/revoke', {}], ['/api/clients/x/revoke', {}],
+    ['/api/computers/shop3/config', { allow: ['example.com'] }], ['/api/computers/shop3/login-save', { site: 's', url: 'https://example.com/', username: 'u', password: 'synthetic' }],
+    ['/api/computers/shop3/login-delete', { site: 's' }], ['/api/computers/shop3/delete', {}],
+  ];
+  for (const [path, body] of sensitive) assert.deepEqual((await admin('POST', path, { body })).json, { stepUp: true, error: 'Confirm with a 2FA code first' }, path);
+  assert.equal((await admin('GET', '/api/computers/shop3')).status, 200, 'nothing deleted');
+  // The rest of the admin still works.
+  assert.equal((await admin('GET', '/api/computers')).status, 200);
+  assert.equal((await admin('POST', '/api/computers/shop3/release', { body: {} })).status, 200);
+
+  assert.equal((await admin('POST', '/api/step-up', { body: {} })).status, 400);
+  const bad = await admin('POST', '/api/step-up', { body: { code: wrong() } });
+  assert.deepEqual([bad.status, bad.json], [401, { stepUp: true, error: 'Invalid code' }]);
+  const up = await admin('POST', '/api/step-up', { body: { code: totp(owner.uri) } });
+  assert.equal(up.status, 200);
+  assert.ok(up.json.stepUpRemainingS > 890);
+  assert.equal((await admin('POST', '/api/computers/shop3/config', { body: { allow: ['example.com'] } })).status, 200);
+
+  // Rate limited: 5 tries per minute per IP and endpoint (3 bad, 1 good, 1 bad, then refused).
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+  const tries = [];
+  for (const code of [wrong(), wrong(), wrong(), totp(owner.uri), wrong(), totp(owner.uri)]) tries.push((await admin('POST', '/api/step-up', { body: { code } })).status);
+  assert.deepEqual(tries, [401, 401, 401, 200, 401, 429]);
+  // A stolen session cookie cannot brute-force the step-up: the 5th bad code in a row ends the session.
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+  const codes = [];
+  for (let i = 0; i < 4; i++) codes.push((await admin('POST', '/api/step-up', { body: { code: wrong() } })).json.error);
+  assert.deepEqual(codes, ['Invalid code', 'Invalid code', 'Invalid code', 'Sign in first'], 'one bad code left over from above');
+  assert.equal((await admin('GET', '/api/computers')).status, 401);
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+});
+
 test('https PUBLIC_URL: the admin port (http, localhost) gets plain cookies and a working session', async () => {
   await restart({ PUBLIC_URL: 'https://arb.example.test' });
   session = '';

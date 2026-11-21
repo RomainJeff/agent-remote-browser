@@ -284,7 +284,14 @@ const ago = (ts) => { if (!ts) return '—'; const s = Math.round((Date.now() - 
 const api = async (path, method = 'GET', body) => {
   const r = await fetch(path, { method, ...(method === 'POST' && { body: JSON.stringify(body || {}), headers: { 'content-type': 'application/json' } }) });
   const j = await r.json().catch(() => ({}));
-  if (r.status === 401 && !path.startsWith('/api/auth/')) showLogin();
+  // Step-up: a sensitive action needs a fresh second factor (15 min). Ask once, then retry the call.
+  if (r.status === 401 && j.stepUp && path !== '/api/step-up') {
+    const c = prompt('Confirm with a two-factor code (or a backup code)')?.trim();
+    if (!c) throw new Error('Cancelled: this action needs a two-factor code');
+    await api('/api/step-up', 'POST', /^\d{6}$/.test(c) ? { code: c } : { backupCode: c });
+    return api(path, method, body);
+  }
+  if (r.status === 401 && !j.stepUp && !path.startsWith('/api/auth/')) showLogin();
   if (!r.ok) throw new Error(j.error || j.message || `HTTP ${r.status}`);
   return j;
 };
