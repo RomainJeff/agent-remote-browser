@@ -133,9 +133,30 @@ Le piège du `!reset` : sans lui, un `ports: []` dans le fichier qui inclut **s'
 
 Et `ADMIN_PUBLIC=1` sans Cloudflare Access ? Refus de démarrer. Le bureau du gérant ne donne jamais sur la rue sans videur.
 
-**Tout est épinglé par empreinte.** `node:26-bookworm-slim@sha256:5df7…`, `alpine:3.22@sha256:4934…`, `cloudflare/cloudflared:2026.10.7@sha256:4955…`. Un tag, c'est une étiquette sur un carton qu'on peut recoller sur un autre carton ; un digest, c'est l'empreinte du contenu. Contrepartie : les mises à jour de sécurité des images ne viennent plus toutes seules, il faudra un Renovate (Lot 7).
+**Tout est épinglé par empreinte.** `node:26-bookworm-slim@sha256:5df7…`, `alpine:3.22@sha256:4934…`, `cloudflare/cloudflared:2026.10.7@sha256:4955…`. Un tag, c'est une étiquette sur un carton qu'on peut recoller sur un autre carton ; un digest, c'est l'empreinte du contenu. Contrepartie : les mises à jour de sécurité des images ne viennent plus toutes seules : c'est Renovate qui les apporte depuis le Lot 7.
 
 **Le runbook (`deploy/runbook.md`)** est le mode d'emploi du gérant : prérequis (Docker 27+, Compose 2.24+, gVisor), secrets avec leurs propriétaires (uid 1000 pour le gateway, 65532 pour cloudflared, lecture seule), premier démarrage, accès admin par SSH (en plan B, vers l'adresse du conteneur, puisque rien n'est publié), tunnel et Access, mises à jour, rotation de clé, migration du POC avec et sans `ALLOW_POC_MIGRATION`, désinstallation.
+
+## Lot 7 : le contrôle technique, le coffre et le tableau de bord
+
+Jusqu'ici, la boutique tournait sur le laptop, en mode « sans bac à sable » (`ALLOW_NO_SANDBOX=1`, macOS n'a pas gVisor). Le Lot 7, c'est le **contrôle technique** : une machine neutre qui refait tout, à chaque push, dans les conditions de la production.
+
+**La CI (`.github/workflows/ci.yml`), trois postes de contrôle.**
+- `test` : typecheck et 82 tests, sur Node 24 **et** Node 26 (le piège n° 5 nous a appris pourquoi), plus `check:compose`.
+- `scan` : les deux images construites et passées à Trivy. Une faille CRITICAL qui a un correctif = rouge. Une faille sans correctif ne bloque pas : on ne peut rien y faire, à part le savoir.
+- `e2e` : le vrai banc d'essai. gVisor installé depuis son dépôt apt signé, la pile démarrée avec `SANDBOX_RUNTIME=runsc` et **sans** dérogation. Puis `test/e2e/smoke.ts` joue l'agent et le gérant : création de l'admin, login avec TOTP, profil, clé d'API, `open` + `snapshot` sur example.com, refus d'example.org. Il inspecte ensuite le poste : racine en lecture seule, `/tmp` inscriptible, runtime `runsc`. Il vérifie les métriques, envoie trois requêtes hostiles au gardien (qui doit les refuser **et** les noter au registre), et termine par un `backup-db`. Ensuite, la CI fabrique un faux POC (`ac-profile-legacy`, créé uniquement sur la machine jetable de GitHub) et le migre avec `--apply`. Enfin, elle sauvegarde avec restic et rejoue les trois restaurations du runbook **telles qu'écrites**. Un runbook qu'on n'exécute jamais, c'est une recette jamais cuisinée.
+
+Tous les secrets de la CI sont fabriqués sur place (`/dev/urandom`) et meurent avec la machine. Aucun secret de dépôt, seulement le `GITHUB_TOKEN`. Chaque action GitHub est épinglée par SHA de commit, pas par tag : même logique que les digests d'images, un tag se recolle. Trivy n'est pas utilisé via son action, mais en binaire dont on vérifie l'empreinte sha256 : en 2026, l'action officielle s'est fait détourner. On ne laisse pas l'outil de sécurité devenir la porte d'entrée.
+
+**La release (`release.yml`), la chaîne d'emballage.** Sur un tag `v*` : build amd64, Trivy, puis build amd64 + arm64 poussé sur GHCR (`ghcr.io/romainjeff/agent-remote-browser-{gateway,computer}`), avec SBOM (la liste des ingrédients) et attestation de provenance (le certificat d'origine). Compose sait tirer ces images (`ARB_IMAGE_REPO`, `ARB_IMAGE_TAG`), et sans ces variables il construit en local comme avant.
+
+**Renovate, le livreur du lundi.** Une PR par semaine regroupe les mises à jour minor, patch et digests (npm, Dockerfiles, compose, actions GitHub). Better Auth bouge en bloc. agent-browser (0.x, qui casse vite) a sa propre PR. Deux règles regex suivent aussi ce que Renovate ne voit pas tout seul : la version d'agent-browser dans le `Dockerfile` et l'image `alpine` de `docker.ts`.
+
+**L'empreinte de l'image dans le plan du poste.** Le gardien compare le plan (spec) d'un poste à celui du conteneur existant via un hash. Avant, ce hash ignorait l'image : une mise à jour laissait les vieux postes tourner sur l'ancienne. Maintenant, l'ID de l'image entre dans le hash, donc nouvelle image = poste recréé (au démarrage ou au prochain usage). Le casier (volume de profil) reste.
+
+**Le coffre (`deploy/backup.sh` + `arb backup-db`).** Copier un fichier SQLite pendant qu'il écrit, c'est photographier un livre pendant qu'on tourne les pages. `backup-db` demande à SQLite lui-même une copie cohérente, la vérifie (`integrity_check`) et compte profils et logins. `backup.sh` envoie cette copie dans un dépôt restic (chiffré, dédupliqué), plus, si on veut (`BACKUP_PROFILES=1`), un tar de chaque casier navigateur. **La clé des logins n'y est jamais** : un coffre qui contient le carnet **et** sa clé, c'est un coffre ouvert. Elle se sauvegarde ailleurs (gestionnaire de mots de passe, copie hors ligne), comme le mot de passe restic. Le runbook (section 10) décrit l'exercice de restauration, que la CI joue à chaque push.
+
+**Le tableau de bord (`/metrics`).** Des compteurs au format Prometheus, sans nouvelle dépendance : `arb_http_requests_total`, `arb_tool_calls_total{tool,outcome}`, `arb_auth_failures_total{kind}`, `arb_egress_denied_total`, `arb_computers_running`, `arb_leases_active`, `arb_runner_up`. Uniquement sur le port admin (404 côté public). Aucun id de profil ni token dans les étiquettes : un tableau de bord dit combien, jamais qui.
 
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
@@ -157,8 +178,10 @@ Et `ADMIN_PUBLIC=1` sans Cloudflare Access ? Refus de démarrer. Le bureau du g�
 
 16. **`ports: []` n'efface rien.** En surcouche, Compose fusionne les listes : un `ports: []` vide ajoute zéro élément à la liste héritée. Il faut `!reset []`. Le script de vérification l'attrape.
 17. **Le refus poli devenu muet.** Le premier smoke du cap `MAX_COMPUTERS` a échoué : le gateway transformait le refus du gardien en « Browser operation failed ». Fix : le message de capacité passe jusqu'à l'agent, un test d'intégration le verrouille.
-18. **Les postes survivent au déménagement.** Les conteneurs navigateurs sont créés par le gardien, pas par Compose : `docker compose down -v` ne les voit pas, et les volumes qu'ils utilisent restent. La désinstallation passe par l'étiquette `arb-computer`. Même chose à la mise à jour : un poste existant garde l'ancienne image, il faut le supprimer pour qu'il renaisse sur la nouvelle (son casier reste).
+18. **Les postes survivent au déménagement.** Les conteneurs navigateurs sont créés par le gardien, pas par Compose : `docker compose down -v` ne les voit pas, et les volumes qu'ils utilisent restent. La désinstallation passe par l'étiquette `arb-computer`. À la mise à jour, en revanche, plus rien à faire depuis le Lot 7 : l'ID de l'image fait partie du hash du poste, qui renaît donc sur la nouvelle image (son casier reste).
 19. **`NODE_ENV` jamais posé.** Le garde-fou « PUBLIC_URL obligatoire, pas de trycloudflare » ne s'activait qu'en production… et aucun compose ne disait qu'on était en production. Le plan B le pose maintenant.
+20. **gVisor ne laisse pas sortir par la chatière.** Premier e2e sous `runsc` : chaque appel navigateur échoue (`Browser operation failed`). Le poste n'a pas de réseau. Son seul chemin vers l'extérieur est le socket Unix du proxy, créé par le gateway **hors** du bac à sable. Or gVisor refuse par défaut de se connecter à un socket de l'hôte. Fix : `runsc install -- --host-uds=open` (connexion autorisée, création toujours interdite), documenté dans le runbook. Exactement le genre de bug que le laptop sans gVisor ne pouvait pas voir : c'est tout l'intérêt du Lot 7.
+21. **`include` + surcharge, ça dépend de la version.** `compose.tunnel.yaml` faisait `include: compose.yaml` puis redéfinissait le gateway. Ça passait avec le Compose du laptop, mais celui de GitHub répondait `services.gateway conflicts with imported resource`. Fix : le plan B devient une surcouche classique, `COMPOSE_FILE=compose.yaml:compose.tunnel.yaml` dans `.env`. Bonus : toutes les commandes du runbook redeviennent un simple `docker compose`.
 
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
@@ -167,4 +190,5 @@ Et `ADMIN_PUBLIC=1` sans Cloudflare Access ? Refus de démarrer. Le bureau du g�
 - Un secret ne doit jamais dormir à côté de ce qu'il protège : la clé dans un secret Docker, le carnet dans un volume. Deux sauvegardes séparées.
 - Un périmètre se donne, il ne se demande pas : le client OAuth demande « mcp », c'est le gérant qui écrit « profile:shop » sur la carte.
 - Une porte qu'on n'ouvre pas n'a pas besoin de serrure : en plan B, rien n'est publié, et l'en-tête de Cloudflare devient digne de confiance précisément parce qu'il n'y a pas d'autre entrée.
-- **Prochaines étapes** : CI de bout en bout sur Linux avec gVisor (la racine en lecture seule des postes n'y est pas encore vérifiée), Renovate pour les digests, sauvegardes et métriques (Lot 7) ; puis un vrai hébergeur, un vrai tunnel et Access, et la bascule depuis le POC (Lot 8).
+- Ce qu'on n'a pas vu tourner dans les conditions réelles n'est pas vérifié : la CI sous gVisor a trouvé en deux minutes un bug que des semaines sur macOS n'auraient jamais montré.
+- **Prochaines étapes** (Lot 8) : un vrai hébergeur Linux avec gVisor, un vrai domaine, le tunnel et Access, la première release taguée, puis la bascule depuis le POC.
