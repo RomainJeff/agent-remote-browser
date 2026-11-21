@@ -55,7 +55,9 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       return r;
     } catch (e) {
       ok = false;
-      return fail(e instanceof PolicyError ? e.message : 'Browser operation failed');
+      const msg = (e as Error).message;
+      // The runner's capacity refusal (MAX_COMPUTERS) is for the agent too: it can wait or close another session.
+      return fail(e instanceof PolicyError || msg.startsWith('Too many computers') ? msg : 'Browser operation failed');
     } finally {
       const agent = id || principal.profile || 'global', ms = Date.now() - t0;
       audit({ agent, ...(g && { via: 'global' as const }), tool: name, ok, ms });

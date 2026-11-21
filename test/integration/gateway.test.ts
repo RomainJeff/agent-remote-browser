@@ -489,6 +489,21 @@ test('a lease survives a gateway restart', async () => {
   assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', { lease })).text), { released: true });
 });
 
+test('MAX_COMPUTERS: the runner refusal reaches the agent, no computer starts', async () => {
+  const id = parseProfileId('shop3')!;
+  assert.equal((await admin('POST', '/api/profiles', { body: { id, allow: ['example.com'] } })).status, 201);
+  const running = [...fake.computers.values()].filter((c) => c.running).length;
+  runner.close();
+  runner = await serveRunner(fake, runnerSock, { maxComputers: running });
+  try {
+    const { lease } = JSON.parse((await call(tokens.global, 'lease_profile', { profile: id })).text);
+    const r = await call(tokens.global, 'open', { lease, url: 'https://example.com/' });
+    assert.deepEqual(r, { error: true, text: `Too many computers running (MAX_COMPUTERS=${running})` });
+    assert.equal(fake.computers.has(id), false);
+    await call(tokens.global, 'release_profile', { lease });
+  } finally { runner.close(); runner = await serveRunner(fake, runnerSock); }
+});
+
 test('client IP: Cf-Connecting-IP is ignored unless TRUST_PROXY=cloudflare', async () => {
   const register = (ip: string) => fetch(base + '/api/auth/oauth2/register', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
     body: JSON.stringify({ redirect_uris: ['http://127.0.0.1:9/cb'], token_endpoint_auth_method: 'none' }) });
