@@ -13,11 +13,11 @@ import { requireAdmin } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
-import { SESSION } from '../runner/protocol.ts';
+import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin } from '../mcp/tools.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|config|login-save|login-test|login-delete|release|extend|delete';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-delete|release|extend|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -222,6 +222,15 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         await pc.serial(id, () => pc.ab(id, ['open', body.url]));
         return send(res, 200, { opened: true });
       }
+      // Takeover clipboard: the remote Chrome has its own, so the admin page bridges the local one through these.
+      if (act === 'paste') {
+        const t = body.text;
+        if (typeof t !== 'string' || !t || t.length > 5000) return send(res, 400, { error: 'Text required, 5000 characters max' });
+        const [, dashes, rest] = t.match(/^(-*)([\s\S]*)$/)!; // a leading dash would read as a flag
+        await pc.serial(id, async () => { for (const s of [...dashes, rest]) if (s) await pc.ab(id, ['keyboard', 'inserttext', s]); });
+        return send(res, 200, { pasted: true });
+      }
+      if (act === 'copy') return send(res, 200, { text: String((await pc.serial(id, () => pc.ab(id, ['eval', SELECTION]))).result ?? '') });
       if (act === 'stop') { await pc.serial(id, () => pc.stop(id)); return send(res, 200, { stopped: true }); }
       if (act === 'start') {
         // `stream status` launches Chrome if needed and tells us the in-container stream port.

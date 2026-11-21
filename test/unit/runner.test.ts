@@ -5,7 +5,7 @@ import net from 'node:net';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Request, AB_FLAGS, SESSION, MAX_REQUEST } from '../../src/runner/protocol.ts';
+import { Request, AB_FLAGS, SESSION, SELECTION, MAX_REQUEST } from '../../src/runner/protocol.ts';
 import { serveRunner } from '../../src/runner/server.ts';
 import { RunnerDriver } from '../../src/host/runner.ts';
 import { FakeDriver } from '../../src/host/fake.ts';
@@ -36,6 +36,7 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
   for (const a of [ab('open', 'https://example.com/a?b=1'), ab('snapshot', '-i'), ab('get', 'text', '@e12'), ab('get', 'text', 'body'),
     ab('get', 'url'), ab('click', '@e1'), ab('fill', '@e1', '--', '-starts with a dash'), ab('press', 'Enter'), ab('press', '-'),
     ab('back'), ab('screenshot'), ab('close'), ab('stream', 'status'),
+    ab('keyboard', 'inserttext', 'two\nlines'), ab('keyboard', 'inserttext', '-'), ab('eval', SELECTION),
     ab('auth', 'save', 'gw-shop-1', '--url', 'https://example.com/login', '--username', 'me@example.test', '--password-stdin'),
     ab('auth', 'login', 'gw-shop-1'), ab('auth', 'delete', 'gw-shop-1'),
     ['base64', '-w0', '/tmp/shot.png'], ['rm', '-f', '/home/agent/.agent-browser/tmp/s-1.png'], ['cat', SESSION]])
@@ -43,7 +44,8 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
   for (const a of [['sh', '-c', 'id'], ['agent-browser', 'open', 'https://example.com'], ab('eval', '1'),
     ['agent-browser', ...AB_FLAGS.slice(0, -1), '--no-sandbox', 'open', 'https://example.com'],
     ab('open', 'file:///etc/passwd'), ab('open', 'javascript:alert(1)'), ab('open', 'https://example.com', '--extra'),
-    ab('press', '--foo'), ab('click', 'e1'), ab('fill', '@e1', 'no separator'),
+    ab('press', '--foo'), ab('click', 'e1'), ab('keyboard', 'inserttext', '--json'), ab('keyboard', 'inserttext', 'x'.repeat(5001)),
+    ab('keyboard', 'type', 'x'), ab('eval', SELECTION + ';1'), ab('fill', '@e1', 'no separator'),
     ab('auth', 'save', 'gw-x', '--url', 'http://example.com', '--username', 'u', '--password-stdin'),
     ab('auth', 'save', 'gw-x', '--url', 'https://example.com', '--username', '--password', '--password-stdin'),
     ab('auth', 'login', 'someone-else'),

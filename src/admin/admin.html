@@ -680,7 +680,7 @@ function renderLiveBar() {
   $('#bLeave').hidden = !live;
   // ponytail: the lease holder's name is not exposed by the list API, so the banner says "un agent".
   patch('banner', [ctl, !!c.leasedUntil], () => ctl
-    ? '<div class="banner b-ctl"><span>Vous avez la main. Clavier et souris vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button></div>'
+    ? '<div class="banner b-ctl"><span>Vous avez la main. Clavier, souris et copier/coller vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button></div>'
     : c.leasedUntil ? '<div class="banner b-agent"><span>Un agent est aux commandes. Vous pouvez regarder ou prendre la main.</span><button type="button" class="btn btn-sm" id="bTake">Prendre la main</button></div>' : '');
   const give = $('#bGiveBack'), take = $('#bTake');
   if (give) give.onclick = () => openView(selected, false);
@@ -776,7 +776,9 @@ function openView(id, control) {
 function closeView() { if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
 
 // Human input -> agent-browser stream protocol (same fields as its own dashboard).
-const mods = (e) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
+// The remote Chrome runs on Linux: on a Mac, Cmd is sent as Ctrl so Cmd+A, Cmd+Z... behave as expected.
+const MAC = /Mac|iP/.test(navigator.platform);
+const mods = (e) => (e.altKey ? 1 : 0) | (e.ctrlKey || (MAC && e.metaKey) ? 2 : 0) | (!MAC && e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 const KEY_TEXT = { Enter: '\r', Tab: '\t' };
 function wireControl() {
   const img = $('#frame'), screen = $('#screen');
@@ -794,12 +796,31 @@ function wireControl() {
   img.onmousemove = (e) => { if (Date.now() - lastMove < 40 && !e.buttons) return; lastMove = Date.now(); send({ type: 'input_mouse', eventType: 'mouseMoved', ...pos(e), button: e.buttons ? 'left' : 'none', clickCount: 0, modifiers: mods(e) }); };
   img.oncontextmenu = (e) => on && e.preventDefault();
   img.onwheel = (e) => { if (!on) return; e.preventDefault(); send({ type: 'input_mouse', eventType: 'mouseWheel', ...pos(e), button: 'none', clickCount: 0, deltaX: e.deltaX, deltaY: e.deltaY, modifiers: mods(e) }); };
-  const key = (type) => (e) => {
-    if (!on) return; e.preventDefault();
-    const text = type === 'keyDown' ? (KEY_TEXT[e.key] ?? ([...e.key].length === 1 ? e.key : undefined)) : undefined;
+  const kb = (type, e) => {
+    const cmd = (e.ctrlKey || e.metaKey) && !e.altKey; // shortcuts type nothing (AltGr = Ctrl+Alt still does)
+    const text = type === 'keyDown' && !cmd ? (KEY_TEXT[e.key] ?? ([...e.key].length === 1 ? e.key : undefined)) : undefined;
     send({ type: 'input_keyboard', eventType: type, key: e.key, code: e.code, text, windowsVirtualKeyCode: e.keyCode, modifiers: mods(e) });
   };
+  // Clipboard: the remote Chrome has its own, so copy/paste go through the gateway instead of keystrokes.
+  const ep = (a) => `/api/computers/${encodeURIComponent(view.id)}/${a}`;
+  const copyRemote = () => api(ep('copy'), 'POST', {})
+    .then((r) => r.text ? navigator.clipboard.writeText(r.text).then(() => toast('Copié dans votre presse-papiers.')) : toast('Rien de sélectionné.', 'error'))
+    .catch((err) => toast(`Copie impossible : ${err.message}`, 'error'));
+  const key = (type) => (e) => {
+    if (!on) return;
+    const sc = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase();
+    if (sc === 'v') return; // no preventDefault: the browser fires `paste` below with the local clipboard
+    e.preventDefault();
+    if (sc === 'c' || sc === 'x') { if (type === 'keyDown') copyRemote().then(() => { if (sc === 'x') { kb('keyDown', e); kb('keyUp', e); } }); return; }
+    kb(type, e);
+  };
   img.onkeydown = key('keyDown'); img.onkeyup = key('keyUp');
+  img.onpaste = (e) => {
+    if (!on) return; e.preventDefault();
+    const t = e.clipboardData.getData('text/plain');
+    if (t.length > 5000) return toast('Texte trop long (5000 caractères max).', 'error');
+    if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Collage impossible : ${err.message}`, 'error'));
+  };
   if (on) img.focus();
 }
 

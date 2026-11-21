@@ -295,6 +295,16 @@ test('saved login: password only reaches the host through stdin', async () => {
   assert.ok(!JSON.stringify(details.json).includes(password));
 });
 
+test('takeover clipboard: paste inserts text, leading dashes never read as flags; copy reads the selection', async () => {
+  const paste = (text: unknown) => admin('POST', '/api/computers/shop/paste', { body: { text } });
+  for (const bad of ['', 'x'.repeat(5001), 42]) assert.equal((await paste(bad)).status, 400, String(bad).slice(0, 10));
+  const before = agentBrowser('inserttext').length;
+  assert.equal((await paste('--json x\ny')).status, 200);
+  assert.deepEqual(agentBrowser('inserttext').slice(before).map((c) => c.argv!.at(-1)), ['-', '-', 'json x\ny']);
+  const copy = await admin('POST', '/api/computers/shop/copy', { body: {} });
+  assert.deepEqual([copy.status, copy.json], [200, { text: '' }]);
+});
+
 test('kill switch refuses every tool until removed', async () => {
   writeFileSync(f.kill, '');
   try {

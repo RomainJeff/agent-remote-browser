@@ -17,6 +17,9 @@ export const AB_FLAGS = ['--json', '--profile', PROFILE, '--restore', 'agent',
 export const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json';
 /** Volume of a profile in the POC (agent-computer): the only source migrate-from-poc may copy from. */
 export const pocVolume = (id: ProfileId) => `ac-profile-${id}`;
+/** Admin copy during takeover: selected text of the focused field, else of the page. Never a password field's.
+ *  ponytail: selections inside iframes are not seen; walk frames if that matters. */
+export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selectionStart?e.value.slice(e.selectionStart,e.selectionEnd):getSelection().toString())(document.activeElement)";
 /** Request line limit: the largest legitimate request is a 5000-character fill plus a password on stdin. */
 export const MAX_REQUEST = 64 * 1024;
 
@@ -38,6 +41,9 @@ const agentBrowser = z.union([
   z.tuple([lit('press'), value(30)]),
   z.tuple([z.enum(['back', 'screenshot', 'close'])]),
   z.tuple([lit('stream'), lit('status')]),
+  // Admin clipboard during takeover. inserttext has no "--" separator: a leading dash is sent alone first.
+  z.tuple([lit('keyboard'), lit('inserttext'), value(5000)]),
+  z.tuple([lit('eval'), lit(SELECTION)]),
   z.tuple([lit('auth'), lit('save'), vault, lit('--url'), z.url({ protocol: /^https$/ }).max(4096), lit('--username'), value(200), lit('--password-stdin')]),
   z.tuple([lit('auth'), z.enum(['login', 'delete']), vault]),
 ]);
