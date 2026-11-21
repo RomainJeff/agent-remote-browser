@@ -435,17 +435,23 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   const code_challenge = createHash('sha256').update(code_verifier).digest('base64url');
   const authorizeQuery = new URLSearchParams({ client_id, redirect_uri, response_type: 'code', code_challenge_method: 'S256', code_challenge,
     state: 'xyz', scope: 'mcp offline_access', resource });
-  // A browser navigation: Better Auth only redirects those (fetch calls get JSON). Raw http: Node's fetch forces
-  // sec-fetch-mode: cors.
-  const get = (path: string, cookie = '') => new Promise<Response>((resolve, reject) => {
-    http.get(new URL(path, base), { headers: { cookie, accept: 'text/html', 'sec-fetch-mode': 'navigate' } }, (r) => {
+  // Browser navigations and form POSTs: Better Auth only redirects those (fetch calls get JSON), so the gateway must
+  // cope with their headers. Raw http: Node's fetch forces sec-fetch-mode: cors.
+  const nav = (path: string, cookie = '', form?: Record<string, string>, origin = base) => new Promise<Response>((resolve, reject) => {
+    const headers: Record<string, string> = { accept: 'text/html', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', ...(cookie && { cookie }) };
+    if (form) Object.assign(headers, { 'content-type': 'application/x-www-form-urlencoded', ...(origin && { origin }) });
+    http.request(new URL(path, base), { method: form ? 'POST' : 'GET', headers }, (r) => {
       let raw = '';
       r.on('data', (d) => { raw += d; });
-      r.on('end', () => resolve(new Response(raw, { status: r.statusCode, headers: Object.entries(r.headers).filter(([k]) => k !== 'set-cookie').map(([k, v]) => [k, String(v)]) })));
-    }).on('error', reject);
+      r.on('end', () => {
+        const h = new Headers();
+        for (const [k, v] of Object.entries(r.headers)) for (const x of [v ?? []].flat()) h.append(k, String(x));
+        resolve(new Response(raw, { status: r.statusCode, headers: h }));
+      });
+    }).on('error', reject).end(form && String(new URLSearchParams(form)));
   });
-  const postForm = (path: string, form: Record<string, string>, cookie = '', origin = base) => fetch(base + path, { method: 'POST', redirect: 'manual',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', ...(origin && { origin }), ...(cookie && { cookie }) }, body: new URLSearchParams(form) });
+  const get = (path: string, cookie = '') => nav(path, cookie);
+  const postForm = (path: string, form: Record<string, string>, cookie = '', origin = base) => nav(path, cookie, form, origin);
   const queryOf = (r: Response) => new URL(r.headers.get('location')!, base).search.slice(1);
 
   // No session: authorize -> /login. Consent without a session sends to /login too.
@@ -461,6 +467,8 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   const loginPage = await get('/login?' + q);
   assert.equal(loginPage.status, 200);
   assert.match(loginPage.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
+  // Not no-referrer: browsers then send `Origin: null` on form POSTs and the same-origin check below refuses them.
+  assert.equal(loginPage.headers.get('referrer-policy'), 'same-origin');
   assert.equal((await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q }, '', 'http://evil.test')).status, 403);
   const step1 = await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q });
   assert.equal(step1.status, 200);

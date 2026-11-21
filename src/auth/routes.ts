@@ -30,7 +30,12 @@ export async function callAuth(auth: Auth, base: string, req: IncomingMessage, p
   headers.delete('host'); headers.delete('content-length'); headers.delete('connection');
   // Cf-Connecting-IP (the rate limit key) was settled by the listener: see clientIp in server.ts.
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-  if (body) headers.set('content-type', 'application/json');
+  // A JSON body = our own API call, even when relaying a browser form POST: strip the navigation hints, or
+  // Better Auth answers with a 302 instead of the JSON ({twoFactorRedirect}, {url}) the caller reads.
+  if (body) {
+    headers.set('content-type', 'application/json'); headers.set('accept', 'application/json');
+    for (const h of ['sec-fetch-mode', 'sec-fetch-dest', 'sec-fetch-user']) headers.delete(h);
+  }
   return auth.handler(new Request(base + path, {
     method: req.method, headers, redirect: 'manual',
     body: !hasBody ? undefined : body ? JSON.stringify(body) : new Uint8Array(await rawBody(req)),
@@ -48,7 +53,7 @@ export async function reply(res: Res, r: Response) {
 function page(res: Res, code: number, body: string, headers: Record<string, string | string[]> = {}) {
   res.writeHead(code, {
     ...headers,
-    'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
+    'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', 'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; base-uri 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'",
   }).end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent Remote Browser access</title><style>
