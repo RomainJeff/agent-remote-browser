@@ -1,12 +1,13 @@
-# Gateway image: MCP server + docker CLI. Drives the host daemon through the mounted socket.
+# Gateway image: MCP server + admin UI. Talks to the Docker Engine API over the mounted socket (no docker CLI).
 FROM node:26-bookworm-slim
-COPY --from=docker:29.0.4-cli /usr/local/bin/docker /usr/local/bin/docker
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY *.mjs admin.html ./
 COPY src ./src
-# Test suite runs at build time (fake docker, no daemon needed); test/ is bind-mounted, never shipped.
+# Named volumes take their owner from the image path on first use: create them for the non-root user.
+RUN mkdir -p /run/arb-keys /run/arb-egress /data && chown node:node /run/arb-keys /run/arb-egress /data
+USER node
+# Test suite runs at build time (FakeDriver, no daemon needed); test/ is bind-mounted, never shipped.
 RUN --mount=type=bind,source=test,target=/app/test node --test "test/**/*.test.ts"
 EXPOSE 8787 8788
-CMD ["node", "gateway.mjs"]
+CMD ["node", "src/server.ts"]

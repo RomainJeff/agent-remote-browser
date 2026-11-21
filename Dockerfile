@@ -18,4 +18,4 @@ USER agent
 WORKDIR /home/agent
 # Container idles; the gateway drives it with `docker exec ... agent-browser <cmd>`.
 CMD ["sleep", "infinity"]
-COPY chromium-policy.json /etc/chromium/policies/managed/agent-computer.json
+COPY chromium-policy.json /etc/chromium/policies/managed/agent-remote-browser.json
