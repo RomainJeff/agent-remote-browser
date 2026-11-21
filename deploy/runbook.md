@@ -5,7 +5,7 @@ How to run agent-remote-browser on one Linux host you control. Hosting-agnostic:
 ## 1. Prerequisites
 
 - **Linux x86_64 or arm64**, encrypted disk (browser profile volumes hold session cookies in clear), ~1 GB RAM per running browser (`MAX_COMPUTERS`, default 4) plus ~300 MB for the stack.
-- **Docker Engine 27 or newer** (the runner speaks Engine API v1.47) and **Docker Compose 2.24 or newer** (`include`, `!reset`).
+- **Docker Engine 27 or newer** (the runner speaks Engine API v1.47) and **Docker Compose 2.24 or newer** (`!reset`).
 
   ```sh
   docker version --format '{{.Server.Version}}'   # >= 27
@@ -19,16 +19,18 @@ How to run agent-remote-browser on one Linux host you control. Hosting-agnostic:
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
     | sudo tee /etc/apt/sources.list.d/gvisor.list >/dev/null
   sudo apt-get update && sudo apt-get install -y runsc
-  sudo runsc install            # adds the runtime to /etc/docker/daemon.json
+  sudo runsc install -- --host-uds=open   # adds the runtime to /etc/docker/daemon.json
   sudo systemctl restart docker
-  docker info --format '{{json .Runtimes}}' | grep -q runsc && echo runsc ok
+  docker info --format '{{json .Runtimes}}' | grep -q host-uds=open && echo runsc ok
   ```
 
   `runsc install` writes this into `/etc/docker/daemon.json` (merge it by hand if you manage that file yourself):
 
   ```json
-  { "runtimes": { "runsc": { "path": "/usr/bin/runsc" } } }
+  { "runtimes": { "runsc": { "path": "/usr/bin/runsc", "runtimeArgs": ["--host-uds=open"] } } }
   ```
+
+  `--host-uds=open` lets a sandboxed browser connect to a Unix socket created outside gVisor: its only network path is the gateway's egress socket, mounted read-only from `arb-egress`. Without it every browser call fails (`Browser operation failed`). It does not let the sandbox create sockets on the host.
 
 - **Configuration**: `cp .env.example .env`, then set at least:
 
@@ -73,7 +75,9 @@ sudo chmod 400 secrets/login_key secrets/better_auth_secret
 
 Pick **the tunnel** when the host should accept no inbound connection, or has no public IP. Pick **compose.yaml** for local use, a private network, or when you already run a TLS reverse proxy.
 
-Every image is pinned by digest (`node`, `alpine` in the source; `cloudflared` in `compose.tunnel.yaml`). `npm run check:compose` (needs Node 24+) validates both files and their exposure rules.
+Every image is pinned by digest (`node`, `alpine` in the source; `cloudflared` in `compose.tunnel.yaml`). `npm run check:compose` (needs Node 24+) validates both setups and their exposure rules.
+
+`compose.tunnel.yaml` is an override of `compose.yaml`: put `COMPOSE_FILE=compose.yaml:compose.tunnel.yaml` in `.env`, and every `docker compose` command of this runbook (and `deploy/backup.sh`) uses both files.
 
 **Without a tunnel, remote agents**: keep `BIND_ADDR` empty and put a reverse proxy on the host, for example Caddy (automatic certificates):
 
@@ -88,16 +92,14 @@ Rate limits are then keyed on the proxy's address, so every client shares one bu
 ## 4. First boot
 
 ```sh
-docker compose up -d --build                                  # or: docker compose -f compose.tunnel.yaml up -d --build
+docker compose up -d --build                                  # with the tunnel: COMPOSE_FILE set in .env (section 3)
 docker compose ps                                             # runner healthy, gateway up
 docker compose exec gateway node src/cli.ts admin create you@example.com
 ```
 
 `admin create` asks for a password (12 to 128 characters), prints an `otpauth://` URI (add it to an authenticator app, then clear the terminal), and asks for a code to confirm. One admin per gateway; signups are disabled.
 
-With `compose.tunnel.yaml`, add `-f compose.tunnel.yaml` to every `docker compose` command of this runbook.
-
-Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or `docker compose -f compose.tunnel.yaml exec gateway node -e "fetch('http://127.0.0.1:18787/readyz').then(r => process.exit(r.ok ? 0 : 1))"`.
+Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or with the tunnel `docker compose exec gateway node -e "fetch('http://127.0.0.1:18787/readyz').then(r => process.exit(r.ok ? 0 : 1))"`.
 
 ### Reaching the admin UI
 
@@ -122,8 +124,8 @@ In the Cloudflare dashboard (Zero Trust, Networks, Tunnels):
 
 1. Create a tunnel of type **Cloudflared**, name it, and copy the token from the install command it shows (`cloudflared ... --token <TOKEN>`). Store it as `secrets/cloudflared_token` (section 2).
 2. Add a **public hostname** to the tunnel, e.g. `browser.example.com`, service **HTTP**, URL **`gateway:18787`**. The hostname must be on a zone of your account.
-3. Set `PUBLIC_URL=https://browser.example.com` in `.env` and start `docker compose -f compose.tunnel.yaml up -d --build`. The gateway runs with `NODE_ENV=production` there: it refuses an empty `PUBLIC_URL` and quick-tunnel hostnames.
-4. Check: `curl -fsS https://browser.example.com/healthz` prints `ok`. `docker compose -f compose.tunnel.yaml logs cloudflared` shows the registered connections.
+3. Set `PUBLIC_URL=https://browser.example.com` in `.env` and `COMPOSE_FILE=compose.yaml:compose.tunnel.yaml`, then start `docker compose up -d --build`. The gateway runs with `NODE_ENV=production` there: it refuses an empty `PUBLIC_URL` and quick-tunnel hostnames.
+4. Check: `curl -fsS https://browser.example.com/healthz` prints `ok`. `docker compose logs cloudflared` shows the registered connections.
 
 No route to `gateway:18788` is needed: the admin port is never put on the tunnel.
 
@@ -152,6 +154,8 @@ Check end to end from a checkout with Node 24+: `GATEWAY=https://browser.example
 docker compose logs -f gateway runner
 docker compose exec gateway tail -f /data/audit.jsonl      # who did what (agent, tool, ok, duration), kept in the data volume
 ```
+
+**Metrics**: `curl -s 127.0.0.1:18788/metrics` (Prometheus text: requests, tool calls by tool and outcome, auth failures, egress denials, runner up, computers running, active leases; README, Metrics). Admin listener only, so a Prometheus on the same host scrapes `127.0.0.1:18788`; a remote one goes through the same SSH forward as the admin UI. Worth an alert: `arb_runner_up == 0`, a jump in `arb_auth_failures_total` or `arb_egress_denied_total`.
 
 **Kill switch**: every tool call is refused while the file exists; browsers stay up.
 
@@ -217,7 +221,7 @@ The second way never gives the gateway a path to the POC's cookies, even for the
 ## 9. Uninstall
 
 ```sh
-docker compose down                                                # services, networks (-f compose.tunnel.yaml if used)
+docker compose down                                                # services, networks
 docker ps -aq --filter label=arb-computer | xargs -r docker rm -f   # browser containers: created by the runner, not by compose
 docker volume ls -q --filter label=arb-computer | xargs -r docker volume rm   # profile volumes (cookies)
 docker volume rm arb-data arb-egress arb-runner                     # database, egress sockets, runner socket
