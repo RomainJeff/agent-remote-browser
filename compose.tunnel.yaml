@@ -1,13 +1,10 @@
-# Agent Remote Browser stack behind a Cloudflare named tunnel: compose.yaml with no published port, plus cloudflared.
+# Override of compose.yaml: the stack behind a Cloudflare named tunnel, no published port, plus cloudflared.
 # The gateway is reachable only through the tunnel, so its Cf-Connecting-IP header can be trusted (TRUST_PROXY).
 # The admin UI stays off the tunnel unless ADMIN_PUBLIC=1 with Cloudflare Access (the gateway refuses to boot otherwise).
 #   secrets/cloudflared_token: the tunnel token, readable by uid 65532 only (deploy/runbook.md)   # once
-#   docker compose -f compose.tunnel.yaml up -d --build
+#   COMPOSE_FILE=compose.yaml:compose.tunnel.yaml in .env, then every `docker compose` command uses both files
+#   (an override, not `include`: Compose versions differ on overriding an included service).
 # The tunnel's public hostname routes to http://gateway:18787 (set in the Cloudflare dashboard). No quick tunnel.
-name: ${ARB_PREFIX:-arb}
-include:
-  - compose.yaml
-
 services:
   gateway:
     ports: !reset []

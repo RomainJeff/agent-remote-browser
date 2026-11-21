@@ -4,7 +4,7 @@
 # Run from the repository checkout, as a user that can reach the Docker daemon, e.g. from cron:
 #   17 3 * * * cd /opt/agent-remote-browser && RESTIC_REPOSITORY=... RESTIC_PASSWORD_FILE=/root/.arb-restic deploy/backup.sh
 # Required: RESTIC_REPOSITORY, RESTIC_PASSWORD_FILE (plus the repository's own credentials, e.g. AWS_* for S3).
-# Optional: COMPOSE_FILE (compose.tunnel.yaml), ARB_PREFIX, BACKUP_PROFILES=1, KEEP_DAILY (default 30).
+# Optional: COMPOSE_FILE (compose.yaml:compose.tunnel.yaml), ARB_PREFIX, BACKUP_PROFILES=1, KEEP_DAILY (default 30).
 # NOT backed up here, on purpose: secrets/login_key and secrets/better_auth_secret. A backup holding both arb.db
 # and the login key would hold every saved password. Keep them, and the restic password, somewhere else
 # (password manager, offline copy): deploy/runbook.md, section 10.

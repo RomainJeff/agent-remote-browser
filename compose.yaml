@@ -1,5 +1,5 @@
 # Agent Remote Browser stack, without a tunnel: listeners published on the host only.
-# compose.tunnel.yaml = this file, no published port, + a Cloudflare named tunnel. Operator guide: deploy/runbook.md.
+# compose.tunnel.yaml = an override of this file: no published port, + a Cloudflare named tunnel. Operator guide: deploy/runbook.md.
 # Every resource name starts with ARB_PREFIX (default "arb"), so it can run next to another stack on the same daemon.
 #   mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key            # once
 #   openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
