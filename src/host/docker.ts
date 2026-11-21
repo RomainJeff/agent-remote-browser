@@ -70,6 +70,7 @@ export class DockerDriver implements HostDriver {
         NetworkMode: 'none',
         CapDrop: ['ALL'],
         SecurityOpt: ['no-new-privileges'],
+        Init: true, // reaps Chrome's orphans: the bridge as PID 1 would not, and zombies fill PidsLimit
         PidsLimit: 512,
         Memory: 1024 ** 3,
         NanoCpus: 1e9,

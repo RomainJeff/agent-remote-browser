@@ -95,6 +95,8 @@ test('ensure on a missing computer: volume, fixed hardened spec, start', async (
   assert.match(spec.Labels['arb-spec'], /^[0-9a-f]{16}$/);
   const h = spec.HostConfig;
   assert.equal(h.ReadonlyRootfs, true);
+  assert.equal(h.Init, true, 'an init reaps zombies');
+  assert.match(spec.Cmd[2], /rmSync\('\/home\/agent\/\.agent-browser\/profile\/'\+f/, 'stale Chrome lock dropped at start');
   assert.deepEqual(Object.keys(h.Tmpfs), ['/tmp', '/home/agent']);
   assert.equal(h.Privileged, undefined);
   assert.equal(h.Binds, undefined);
