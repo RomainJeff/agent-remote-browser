@@ -1,20 +1,25 @@
 // Saved login envelopes: AES-256-GCM, the password bound to its profile, site, URL and username (AAD).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 
 export interface Envelope { iv: string; tag: string; data: string }
 export interface LoginRef { url: string; username: string }
 
-/** Reads the 32-byte key, creating it (0600, never overwriting) only when no envelope needs an older one. */
+/** Reads the 32-byte key, creating it (0600, never overwriting) only when no envelope needs an older one.
+ *  A Docker secret is read-only: there the operator creates the file (see README). */
 export function loadLoginKey(file: string, hasEnvelopes: boolean): Buffer {
   if (!existsSync(file)) {
-    if (hasEnvelopes) throw Error('Restore the existing login key');
-    writeFileSync(file, randomBytes(32), {flag:'wx', mode:0o600});
+    if (hasEnvelopes) throw Error(`Restore the existing login key at ${file}`);
+    try { writeFileSync(file, randomBytes(32), {flag:'wx', mode:0o600}); }
+    catch { throw Error(`No login key at ${file} and it cannot be created there: write 32 random bytes to it`); }
   }
   const key = readFileSync(file);
   if (key.length !== 32) throw Error('Invalid login key');
   return key;
 }
+
+/** Public id of a key, stored next to each envelope: tells which key a login needs without trying it. */
+export const keyId = (key: Buffer) => createHash('sha256').update(key).digest('hex').slice(0, 16);
 
 const aad = (id: string, site: string, c: LoginRef) => Buffer.from(JSON.stringify([id,site,c.url,c.username]));
 

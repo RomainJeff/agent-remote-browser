@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import type { HostDriver } from './host/driver.ts';
 import type { ProfileId } from './policy.ts';
-import type { Store } from './store/state.ts';
+import type { Store } from './store/store.ts';
 import { startProxy, type Proxy } from './egress/proxy.ts';
 import { log } from './audit.ts';
 

@@ -10,19 +10,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import { openStore } from '../../src/store/state.ts';
-import { hash } from '../../src/policy.ts';
+import { openDb, tx } from '../../src/store/db.ts';
+import { openStore } from '../../src/store/store.ts';
+import { hash, parseProfileId } from '../../src/policy.ts';
 import { createOAuth } from '../../src/oauth/routes.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-oauth-'));
-const store = openStore(join(dir, 'state.json'), join(dir, 'login.key'));
-const { state } = store;
+const db = openDb(join(dir, 'arb.db'));
+const store = openStore(db, join(dir, 'login.key'));
 
 const token = randomBytes(32).toString('hex');
 const redirect_uri = 'https://example.com/callback';
 const servers: http.Server[] = [];
-before(() => { state.profiles.fixture = { allow: [], tokenHash: hash(token), logins: {}, createdAt: 0 }; });
-after(() => { for (const s of servers) s.close(); rmSync(dir, { recursive: true, force: true }); });
+before(() => { store.createProfile(parseProfileId('fixture')!, [], hash(token)); });
+after(() => { for (const s of servers) s.close(); db.close(); rmSync(dir, { recursive: true, force: true }); });
 
 async function serve() {
   const { handle: oauth } = createOAuth(store);
@@ -56,11 +57,11 @@ test('registration budget: 20 per hour', async () => {
 
 test('registration refused past 1000 clients', async () => {
   const { post } = await serve();
-  const saved = state.clients;
-  state.clients = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`seed${i}`, { redirect_uris: [redirect_uri] }]));
+  const n = store.clientCount();
+  tx(db, () => { for (let i = n; i < 1000; i++) store.addClient(`seed${i}`, { redirect_uris: [redirect_uri], client_name: '', secretHash: null }); });
   try {
     assert.equal((await post('/register', { redirect_uris: [redirect_uri] })).status, 429);
-  } finally { state.clients = saved; }
+  } finally { db.exec("DELETE FROM oauth_clients WHERE id LIKE 'seed%'"); }
 });
 
 test('registration validates redirect URIs and auth method', async () => {

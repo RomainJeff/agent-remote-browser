@@ -5,7 +5,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
@@ -18,7 +19,7 @@ import { parseProfileId } from '../../src/policy.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-gw-'));
 const f = {
-  state: join(dir, 'state.json'), audit: join(dir, 'audit.jsonl'), kill: join(dir, 'KILL'),
+  data: join(dir, 'data'), audit: join(dir, 'audit.jsonl'), kill: join(dir, 'KILL'),
   key: join(dir, 'login.key'), egress: join(dir, 'egress'),
 };
 const fake = new FakeDriver();
@@ -26,13 +27,22 @@ let app: Awaited<ReturnType<typeof start>>, PORT = 0, ADMIN = 0, base = '';
 const tokens = { global: '', shop: '' };
 
 const boot = () => start(loadConfig({
-  PORT: String(PORT), ADMIN_PORT: String(ADMIN), STATE_FILE: f.state, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
+  PORT: String(PORT), ADMIN_PORT: String(ADMIN), DATA_DIR: f.data, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
   LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, ALLOW_NO_SANDBOX: '1',
 }), fake);
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); });
 });
+
+/** Graceful close, then boot on new ports: fetch's keep-alive pool may hold a socket the old server closed. */
+async function restart() {
+  await app.close();
+  fake.calls = [];
+  [PORT, ADMIN] = [await freePort(), await freePort()];
+  base = `http://127.0.0.1:${PORT}`;
+  app = await boot();
+}
 
 before(async () => {
   [PORT, ADMIN] = [await freePort(), await freePort()];
@@ -68,6 +78,17 @@ const call = (token: string, name: string, args: Record<string, unknown> = {}) =
   return { error: !!r.isError, text: r.content[0].text };
 });
 const toolNames = (token: string) => mcp(token, async (c) => (await c.listTools()).tools.map((t) => t.name).sort());
+const dbFile = () => join(f.data, 'arb.db');
+/** Every row of every table, read through a second connection (sees WAL content). */
+function dump() {
+  const db = new DatabaseSync(dbFile(), { readOnly: true });
+  try {
+    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name);
+    return JSON.stringify(names.map((n) => [n, db.prepare(`SELECT * FROM "${n}"`).all()]));
+  } finally { db.close(); }
+}
+/** Raw bytes of the database and its WAL, as latin1 text for substring checks. */
+const rawDb = () => ['', '-wal'].map((s) => existsSync(dbFile() + s) ? readFileSync(dbFile() + s, 'latin1') : '').join('');
 const calls = (op: string) => fake.calls.filter((c) => c.op === op);
 const agentBrowser = (op: string) => calls('exec').filter((c) => c.argv![0] === 'agent-browser' && c.argv!.includes(op));
 
@@ -93,9 +114,10 @@ test('admin issues tokens, MCP without a valid bearer gets the OAuth hint', asyn
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'Bad', allow: ['example.com'] } })).status, 400);
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'lan', allow: ['nas.lan'] } })).status, 400);
 
-  const state = readFileSync(f.state, 'utf8');
+  const state = dump() + rawDb();
   assert.ok(!state.includes(tokens.global) && !state.includes(tokens.shop), 'tokens stored as hashes only');
-  assert.equal(statSync(f.state).mode & 0o777, 0o600);
+  assert.equal(statSync(f.data).mode & 0o777, 0o700);
+  for (const s of ['', '-wal']) assert.equal(statSync(dbFile() + s).mode & 0o777, 0o600, s);
 
   for (const authorization of [undefined, 'Bearer acp_wrong']) {
     const r = await fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...(authorization && { authorization }) }, body: '{}' });
@@ -150,7 +172,8 @@ test('saved login: password only reaches the host through stdin', async () => {
   assert.equal(agentBrowser('delete').length, 1, 'in-container vault entry deleted');
   const details = await admin('GET', '/api/computers/shop');
   assert.deepEqual(details.json.logins, [{ site: 'main', url: 'https://example.com/login', username: 'fixture' }]);
-  for (const file of [f.state, f.audit]) assert.ok(!readFileSync(file, 'utf8').includes(password), file);
+  assert.ok(!dump().includes(password) && !rawDb().includes(password), 'database');
+  assert.ok(!readFileSync(f.audit, 'utf8').includes(password), 'audit');
   assert.ok(!JSON.stringify(details.json).includes(password));
 });
 
@@ -188,7 +211,7 @@ test('a lease locks the profile token; the global token drives the profile throu
 });
 
 test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes', async () => {
-  const state = readFileSync(f.state, 'utf8');
+  const state = dump();
   for (const headers of [{ origin: 'http://evil.test' }, { origin: 'null' }, { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' }, { host: `evil.test:${ADMIN}` }, { host: `127.0.0.1:${PORT}` }] as Record<string, string>[]) {
     assert.equal((await admin('GET', '/api/computers', { headers })).status, 403, JSON.stringify(headers));
@@ -197,7 +220,7 @@ test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes',
   for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x'])
     assert.equal((await admin('POST', '/api/global-token', { body: '{}', headers: { 'content-type': type } })).status, 415, type);
   assert.equal((await admin('POST', '/api/global-token', { body: '{}', headers: { 'content-type': '' } })).status, 415);
-  assert.equal(readFileSync(f.state, 'utf8'), state, 'no refused write changed state');
+  assert.equal(dump(), state, 'no refused write changed state');
   assert.equal((await admin('GET', '/api/computers', { headers: { origin: `http://127.0.0.1:${ADMIN}`, 'sec-fetch-site': 'same-origin' } })).status, 200);
 });
 
@@ -293,9 +316,19 @@ test('restart reconnects running computers of known profiles only', async () => 
   assert.equal((await admin('POST', '/api/profiles', { body: { id, allow: ['example.com'] } })).status, 201);
   fake.computers.set(id, { id, running: true });
   fake.computers.set('ghost', { id: 'ghost', running: true });
-  await app.close();
-  fake.calls = [];
-  app = await boot();
+  await restart();
   assert.deepEqual(fake.calls, [{ op: 'list' }, { op: 'ensure', id: 'shop2' }]);
   assert.equal(fake.computers.get(id)!.running, true, 'graceful close left the computer running');
+});
+
+test('a lease survives a gateway restart', async () => {
+  const leased = await call(tokens.global, 'lease_profile', { profile: 'shop2', minutes: 5 });
+  assert.ok(!leased.error, leased.text);
+  const { lease } = JSON.parse(leased.text);
+  assert.ok(!rawDb().includes(lease), 'lease stored as a hash');
+  await restart();
+  assert.match((await call(tokens.global, 'lease_profile', { profile: 'shop2' })).text, /already leased/);
+  const viaLease = await call(tokens.global, 'open', { lease, url: 'https://example.com/' });
+  assert.ok(!viaLease.error, viaLease.text);
+  assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', { lease })).text), { released: true });
 });

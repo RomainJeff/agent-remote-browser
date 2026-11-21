@@ -1,10 +1,13 @@
 // agent-remote-browser gateway: remote MCP (Streamable HTTP) -> one sandboxed browser computer per profile.
 // Run: node src/server.ts   (config from env, see config.ts)
 import http from 'node:http';
+import { join } from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { loadConfig, type Config } from './config.ts';
 import { parseProfileId } from './policy.ts';
-import { openStore, type Store } from './store/state.ts';
+import { openDb } from './store/db.ts';
+import { openStore, type Store } from './store/store.ts';
 import { createOAuth } from './oauth/routes.ts';
 import { createAudit, log, type Audit } from './audit.ts';
 import { createLeases, type Leases } from './mcp/leases.ts';
@@ -15,7 +18,7 @@ import { readJson, send } from './http.ts';
 import { DockerDriver } from './host/docker.ts';
 import type { HostDriver } from './host/driver.ts';
 
-export interface Ctx { cfg: Config; store: Store; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
+export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
 
 const DRAIN_MS = 8_000;
 const timeout = <T>(p: Promise<T>, ms: number) =>
@@ -25,11 +28,13 @@ const listen = (server: http.Server, port: number, host: string) =>
   new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, () => resolve()));
 
 export async function start(cfg: Config, driver: HostDriver) {
-  const store = openStore(cfg.stateFile, cfg.loginKeyFile);
+  const db = openDb(join(cfg.dataDir, 'arb.db'));
+  let store: Store;
+  try { store = openStore(db, cfg.loginKeyFile); } catch (e) { db.close(); throw e; }
   const audit = createAudit(cfg.auditFile);
-  const leases = createLeases();
+  const leases = createLeases(db);
   const computers = createComputers(driver, store, { egressDir: cfg.egressDir, idleMs: cfg.idleMs });
-  const ctx: Ctx = { cfg, store, audit, leases, computers, driver };
+  const ctx: Ctx = { cfg, db, store, audit, leases, computers, driver };
   const { handle: oauth, wwwAuthenticate } = createOAuth(store, cfg.publicUrl);
 
   // Reconnect running computers to their egress proxy (ensure also recreates any with a stale spec).
@@ -87,6 +92,7 @@ export async function start(cfg: Config, driver: HostDriver) {
       await timeout(drained, DRAIN_MS).catch(() => log('warn', 'drain timeout'));
       for (const s of [mcp, adminServer]) s.closeAllConnections();
       computers.closeProxies();
+      db.close();
     },
   };
 }

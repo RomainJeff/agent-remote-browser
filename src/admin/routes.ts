@@ -6,7 +6,7 @@ import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { urlAllowed, localRequest, validId, cleanAllow, sitesOf, hash, type ProfileId } from '../policy.ts';
-import { newToken, type Profile } from '../store/state.ts';
+import { newToken, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import type { Ctx } from '../server.ts';
 
@@ -15,13 +15,14 @@ const ACTIONS = 'start|stop|open|token|config|login-save|login-delete|release|de
 const html = new URL('./admin.html', import.meta.url).pathname;
 
 export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }: Ctx) {
-  const { state, save, profile, decryptLogin, encryptLogin, revoke } = store;
+  const { profile, decryptLogin } = store;
   const localReq = (req: IncomingMessage) => localRequest(req.headers, cfg.adminPort);
 
   async function listComputers() {
     const running = new Map((await driver.list()).map((c) => [c.id, c]));
     const log = audit.read();
-    return Object.entries(state.profiles).map(([id, p]) => {
+    return store.profiles().map((p) => {
+      const id = p.id;
       const c = running.get(id), last = log.findLast((l) => l.agent === id), l = leases.of(id);
       return {
         id, container: `${cfg.prefix}-${id}`,
@@ -56,10 +57,7 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
 
   async function deleteProfile(id: ProfileId) {
     await pc.remove(id).catch(() => {});
-    delete state.profiles[id];
-    revoke((pr) => pr.profile === id);
-    leases.drop(id);
-    save();
+    store.deleteProfile(id); // cascades to its logins, leases and OAuth tokens
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
@@ -78,13 +76,12 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));
       }
       if (path === '/api/computers') return send(res, 200, await listComputers());
-      if (path === '/api/settings') return send(res, 200, { globalToken: !!state.globalTokenHash });
+      if (path === '/api/settings') return send(res, 200, { globalToken: !!store.globalTokenHash() });
       // Tokens are returned once, here, and stored as hashes. Regenerating one revokes its OAuth tokens.
       if (path === '/api/global-token' && post) {
         const token = newToken('acg');
-        state.globalTokenHash = hash(token);
-        revoke((pr) => !!pr.global);
-        save();
+        store.setGlobalTokenHash(hash(token));
+        store.revokeTokens({ global: true });
         audit({ agent: 'global', tool: 'admin:global-token', ok: true });
         return send(res, 200, { token });
       }
@@ -94,8 +91,7 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
         if (profile(id)) return send(res, 409, { error: 'This profile already exists' });
         if (!a) return send(res, 400, { error: 'Invalid allow list: plain domains like example.com' });
         const token = newToken('acp');
-        state.profiles[id] = { allow: a, tokenHash: hash(token), logins: {}, createdAt: Date.now() };
-        save();
+        store.createProfile(id, a, hash(token));
         audit({ agent: id, tool: 'admin:create', ok: true });
         return send(res, 201, { id, token });
       }
@@ -120,16 +116,14 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
       }
       if (act === 'token') {
         const token = newToken('acp');
-        p.tokenHash = hash(token);
-        revoke((pr) => pr.profile === id);
-        save();
+        store.setProfileToken(id, hash(token));
+        store.revokeTokens({ profile: id });
         return send(res, 200, { token });
       }
       if (act === 'config') {
         const a = cleanAllow(body.allow);
         if (!a) return send(res, 400, { error: 'Invalid allow list: plain domains like example.com' });
-        p.allow = a;
-        save();
+        store.setAllow(id, a);
         // Drop connections established under the previous policy.
         pc.restrict(id);
         await pc.serial(id, () => pc.stop(id));
@@ -140,19 +134,17 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
         if (typeof site !== 'string' || !/^[a-z0-9-]{1,40}$/.test(site)) return send(res, 400, { error: 'Site: lowercase letters, digits, dashes' });
         if (typeof url !== 'string' || !url.startsWith('https://') || !urlAllowed(url, p.allow)) return send(res, 400, { error: 'Login URL must be on an allowed domain' });
         if (typeof username !== 'string' || !username || username.length > 200) return send(res, 400, { error: 'Username required' });
-        const old = Object.hasOwn(p.logins ||= {}, site) ? p.logins[site] : null;
+        const old = Object.hasOwn(p.logins, site) ? p.logins[site] : null;
         // Empty password on an existing site = keep the saved one (the UI never reads passwords back).
         if (!password && old && old.url !== url) return send(res, 400, { error: 'Enter the password again to change the login URL' });
         const pw = typeof password === 'string' && password ? password : old ? decryptLogin(id, site, old) : null;
         if (!pw || pw.length > 500) return send(res, 400, { error: 'Password required' });
-        p.logins[site] = { url, username, password: encryptLogin(id, site, { url, username }, pw) };
-        save();
+        store.saveLogin(id, site, { url, username }, pw);
         return send(res, 200, { saved: site });
       }
       if (act === 'login-delete') {
-        if (!Object.hasOwn(p.logins || {}, body.site)) return send(res, 404, { error: 'unknown site' });
-        delete p.logins[body.site];
-        save();
+        if (!Object.hasOwn(p.logins, body.site)) return send(res, 404, { error: 'unknown site' });
+        store.deleteLogin(id, body.site);
         return send(res, 200, { deleted: body.site });
       }
       if (act === 'release') { leases.drop(id); return send(res, 200, { released: true }); }

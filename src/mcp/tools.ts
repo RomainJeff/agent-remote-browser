@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { urlAllowed, slug, validId, cleanAllow, sitesOf, type Principal, type ProfileId } from '../policy.ts';
-import type { Profile } from '../store/state.ts';
+import type { Profile } from '../store/store.ts';
 import { log } from '../audit.ts';
 import type { Ctx } from '../server.ts';
 
@@ -23,7 +23,7 @@ class PolicyError extends Error {}
 
 export function buildServer(principal: Principal, { cfg, store, audit, leases, computers: pc }: Ctx) {
   const server = new McpServer({ name: 'agent-remote-browser', version: '0.2.0' });
-  const { state, save, profile, decryptLogin } = store;
+  const { profile, decryptLogin } = store;
   const g = !!principal.global;
 
   // Which profile this call drives: the token's own, or the one behind the lease.
@@ -124,7 +124,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
 
   // Global token only: manage and lease profiles. Never returns a profile token.
   gtool('list_profiles', 'List browser profiles: allowed domains, login sites, lease state.', {}, async () =>
-    txt(Object.entries(state.profiles).map(([id, p]) => {
+    txt(store.profiles().map(({ id, ...p }) => {
       const l = leases.of(id);
       return { id, allow: p.allow, logins: sitesOf(p), leasedUntil: l ? new Date(l.exp).toISOString() : null };
     })));
@@ -136,8 +136,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       if (!validId(id)) return fail('Invalid id: lowercase letters, digits, dashes, max 40');
       if (profile(id)) return fail('This profile already exists');
       if (!a) return fail('Invalid allow list: plain domains like example.com');
-      state.profiles[id] = { allow: a, tokenHash: null, logins: {}, createdAt: Date.now() };
-      save();
+      store.createProfile(id, a, null);
       return txt({ created: id, allow: a });
     });
 
@@ -145,7 +144,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
     'Pick a profile by id, or let the gateway pick a free one that allows a domain.',
     { profile: z.string().optional(), domain: z.string().max(253).optional(), minutes: z.number().int().min(1).max(120).default(15).describe('Idle minutes before the lease expires') },
     async ({ profile: want, domain, minutes }) => {
-      const id = (want ? [want] : Object.keys(state.profiles))
+      const id = (want ? [want] : store.profiles().map((p) => p.id))
         .find((i) => profile(i) && !leases.of(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i)!.allow)));
       if (!id) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
       const { token: lease, exp } = leases.take(id, minutes), p = profile(id)!;

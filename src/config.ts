@@ -15,10 +15,10 @@ const schema = z.object({
   ADMIN_PORT: port(8788),
   /** OAuth issuer and public base URL, without trailing slash. Empty = derived from the Host header (dev only). */
   PUBLIC_URL: z.url({ protocol: /^https?$/ }).transform((u) => u.replace(/\/$/, '')).optional(),
-  /** Profiles, token hashes, encrypted logins, OAuth clients (written 0600). */
-  STATE_FILE: z.string().min(1).default(root('data/state.json')),
-  /** 32-byte AES key for saved logins, created on first start. Keep it out of state backups. */
-  LOGIN_KEY_FILE: z.string().min(1).default('/run/arb-keys/login.key'),
+  /** Holds arb.db (SQLite: profiles, token hashes, encrypted logins, leases, OAuth clients and tokens). */
+  DATA_DIR: z.string().min(1).default(root('data')),
+  /** 32-byte AES key for saved logins (a Docker secret in compose). Created on first start only if writable. Keep it out of backups of DATA_DIR. */
+  LOGIN_KEY_FILE: z.string().min(1).default('/run/secrets/login_key'),
   /** Append-only JSON lines: who called which tool, when, ok or not. Never arguments. */
   AUDIT_FILE: z.string().min(1).default(root('audit.jsonl')),
   /** If this file exists, every tool call is refused. */
@@ -58,7 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     production: c.NODE_ENV === 'production',
     bindAddr: c.BIND_ADDR, port: c.PORT, adminPort: c.ADMIN_PORT, publicUrl: c.PUBLIC_URL,
-    stateFile: c.STATE_FILE, loginKeyFile: c.LOGIN_KEY_FILE, auditFile: c.AUDIT_FILE, killFile: c.KILL_FILE,
+    dataDir: c.DATA_DIR, loginKeyFile: c.LOGIN_KEY_FILE, auditFile: c.AUDIT_FILE, killFile: c.KILL_FILE,
     idleMs: c.IDLE_MIN * 60_000, prefix: c.ARB_PREFIX, image: c.IMAGE ?? `${c.ARB_PREFIX}-computer:dev`,
     egressDir: c.EGRESS_DIR, dockerSocket: c.DOCKER_SOCKET, runtime: c.SANDBOX_RUNTIME,
   };
