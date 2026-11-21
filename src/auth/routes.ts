@@ -55,8 +55,8 @@ function page(res: Res, code: number, body: string, headers: Record<string, stri
     ...headers,
     'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', 'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; base-uri 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'",
-  }).end(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agent Remote Browser : accès</title><style>
+  }).end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Remote Browser: access</title><style>
 :root{color-scheme:light;--sans:Mulish,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 *{box-sizing:border-box}
 body{margin:0;background:#F6F7F8;color:#1F2226;font:14px/20px var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:100vh;padding:32px 16px}
@@ -87,7 +87,7 @@ ul{margin:0;padding-left:20px;color:#585F66;display:flex;flex-direction:column;g
 .row{display:flex;gap:8px}.row button{flex:1}
 .hint{font-size:12px;line-height:16px;color:#585F66;text-align:center;max-width:460px}
 .mono{font-family:'Roboto Mono',ui-monospace,monospace;font-size:13px;word-break:break-all}</style></head><body>
-<div class="brand"><i>A</i><div><b>Agent Remote Browser</b><span>Accès des agents MCP</span></div></div>
+<div class="brand"><i>A</i><div><b>Agent Remote Browser</b><span>MCP agent access</span></div></div>
 <main>${body}</main></body></html>`);
 }
 
@@ -99,21 +99,21 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
   const hidden = (q: string) => `<input type="hidden" name="oauth_query" value="${esc(q)}">`;
   const error = (err?: string) => err ? `<p class="err" role="alert">${esc(err)}</p>` : '';
 
-  const loginForm = (res: Res, q: string, err?: string) => page(res, err ? 401 : 200, `<div><div class="step">Étape 1 sur 2</div><h1>Connexion administrateur</h1></div>
-<p>Un client MCP demande à piloter ce navigateur distant. Connectez-vous pour choisir ce qu'il pourra faire.</p>${error(err)}
+  const loginForm = (res: Res, q: string, err?: string) => page(res, err ? 401 : 200, `<div><div class="step">Step 1 of 2</div><h1>Admin sign-in</h1></div>
+<p>An MCP client asks to drive this remote browser. Sign in to choose what it may do.</p>${error(err)}
 <form method="post" action="/login">${hidden(q)}
-<label>E-mail<input type="email" name="email" autocomplete="username" required autofocus></label>
-<label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label>
-<button>Continuer</button></form>`);
-  const totpForm = (res: Res, q: string, err?: string, cookies: string[] = []) => page(res, err ? 401 : 200, `<div><div class="step">Étape 2 sur 2</div><h1>Code de double authentification</h1></div>
-<p>Saisissez le code à 6 chiffres de votre application d'authentification.</p>${error(err)}
+<label>Email<input type="email" name="email" autocomplete="username" required autofocus></label>
+<label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+<button>Continue</button></form>`);
+  const totpForm = (res: Res, q: string, err?: string, cookies: string[] = []) => page(res, err ? 401 : 200, `<div><div class="step">Step 2 of 2</div><h1>Two-factor code</h1></div>
+<p>Enter the 6-digit code from your authenticator app.</p>${error(err)}
 <form method="post" action="/login">${hidden(q)}
-<label>Code à 6 chiffres<input class="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus></label>
-<button>Vérifier</button></form>
-<div class="or">application perdue ?</div>
+<label>6-digit code<input class="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus></label>
+<button>Verify</button></form>
+<div class="or">lost your app?</div>
 <form method="post" action="/login">${hidden(q)}
-<label>Code de secours<input class="mono" name="backupCode" placeholder="xxxxx-xxxxx" autocomplete="off" maxlength="32" required></label>
-<button class="alt">Utiliser un code de secours</button></form>`, cookies.length ? { 'set-cookie': cookies } : {});
+<label>Backup code<input class="mono" name="backupCode" placeholder="xxxxx-xxxxx" autocomplete="off" maxlength="32" required></label>
+<button class="alt">Use a backup code</button></form>`, cookies.length ? { 'set-cookie': cookies } : {});
 
   async function form(req: IncomingMessage) {
     return Object.fromEntries(new URLSearchParams((await rawBody(req, 8e3)).toString())) as Record<string, string>;
@@ -125,13 +125,13 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
   const clientOf = (id: string) => {
     const c = db.prepare('SELECT name, createdAt, clientDiscoveryId d FROM oauthClient WHERE clientId = ?').get(id) as
       { name: string | null; createdAt: string | null; d: string | null } | undefined;
-    return { id, name: c?.name || 'un client MCP', dcr: c?.d !== 'cimd', createdAt: c?.createdAt ?? null };
+    return { id, name: c?.name || 'an MCP client', dcr: c?.d !== 'cimd', createdAt: c?.createdAt ?? null };
   };
   const age = (iso: string | null) => {
     const m = iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)) : NaN;
-    return Number.isNaN(m) ? 'à une date inconnue' : m < 1 ? 'à l’instant' : m < 120 ? `il y a ${m} min` : m < 2880 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} jours`;
+    return Number.isNaN(m) ? 'at an unknown date' : m < 1 ? 'just now' : m < 120 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
   };
-  const GLOBAL_WARNING = 'Client non vérifié avec accès Global : il pourrait gérer, louer et supprimer tous les profils et leurs identifiants. N\'acceptez que si vous venez d\'enregistrer ce client vous-même.';
+  const GLOBAL_WARNING = 'Unverified client with Global access: it could manage, lease and delete every profile and its saved logins. Accept only if you registered this client yourself just now.';
 
   /** `confirmGlobal`: the second page an unverified (DCR) client gets after picking Global. */
   function consentPage(res: Res, q: string, confirmGlobal = false) {
@@ -141,20 +141,20 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
     const profiles = (db.prepare('SELECT id FROM profiles ORDER BY id').all() as { id: string }[]).map((r) => r.id);
     const choice = confirmGlobal ? `<input type="hidden" name="scope" value="global"><input type="hidden" name="confirm" value="global">
 <p class="err"><b>${esc(GLOBAL_WARNING)}</b></p>`
-      : `<fieldset><legend>Accès accordé</legend>${profiles.map((id, i) => `<label class="opt"><input type="radio" name="scope" value="profile:${esc(id)}"${i ? '' : ' checked'}><span>Profil <b class="mono">${esc(id)}</b><small>Uniquement ce navigateur, ses domaines et ses identifiants.</small></span></label>`).join('')}
-<label class="opt g"><input type="radio" name="scope" value="global"${profiles.length ? '' : ' checked'}><span>Global : gère et loue tous les profils<small>${c.dcr ? 'Déconseillé pour un client non vérifié.' : 'Y compris les profils créés plus tard.'}</small></span></label></fieldset>`;
-    page(res, 200, `<h1>Connecter ${esc(c.name)}</h1>
-<p>Il pilotera un navigateur distant avec l'accès choisi. Vous reviendrez ensuite sur <b>${esc(host)}</b>.</p>
+      : `<fieldset><legend>Access granted</legend>${profiles.map((id, i) => `<label class="opt"><input type="radio" name="scope" value="profile:${esc(id)}"${i ? '' : ' checked'}><span>Profile <b class="mono">${esc(id)}</b><small>This browser only, with its domains and saved logins.</small></span></label>`).join('')}
+<label class="opt g"><input type="radio" name="scope" value="global"${profiles.length ? '' : ' checked'}><span>Global: manages and leases every profile<small>${c.dcr ? 'Not recommended for an unverified client.' : 'Including profiles created later.'}</small></span></label></fieldset>`;
+    page(res, 200, `<h1>Connect ${esc(c.name)}</h1>
+<p>It will drive a remote browser with the access you choose. You will then return to <b>${esc(host)}</b>.</p>
 <dl><dt>Client ID</dt><dd class="mono">${esc(c.id)}</dd>
-<dt>Origine</dt><dd>${c.dcr
-      ? '<span class="pill ko">Client non vérifié</span> Il s\'est enregistré seul : son nom est auto-déclaré.'
-      : '<span class="pill ok">Vérifié</span> Vérifié par son URL de métadonnées (CIMD) : le nom vient de ce domaine.'}</dd>
-<dt>Enregistré</dt><dd>Enregistré ${esc(age(c.createdAt))}</dd></dl>
-${loopback ? '<p class="warn">Loopback : l\'autorisation part vers une application de cet ordinateur. N\'acceptez que si vous venez de la lancer.</p>' : ''}
+<dt>Origin</dt><dd>${c.dcr
+      ? '<span class="pill ko">Unverified client</span> It registered itself: its name is self-declared.'
+      : '<span class="pill ok">Verified</span> Verified by its metadata URL (CIMD): the name comes from that domain.'}</dd>
+<dt>Registered</dt><dd>Registered ${esc(age(c.createdAt))}</dd></dl>
+${loopback ? '<p class="warn">Loopback: the authorization goes to an app on this computer. Accept only if you just started it.</p>' : ''}
 <form method="post" action="/consent">${hidden(q)}
 ${choice}
-<p class="note">L'agent ouvre des pages sur les domaines autorisés, clique, tape et se connecte avec les identifiants enregistrés sans jamais voir les mots de passe. Il prend un bail de 10 min prolongé à chaque action. Révocable à tout moment dans la console admin, page Accès agents.</p>
-<div class="row"><button class="alt" name="accept" value="false">Refuser</button><button name="accept" value="true">Autoriser</button></div></form>`);
+<p class="note">The agent opens pages on the allowed domains, clicks, types and signs in with the saved logins without ever seeing the passwords. With Global, it borrows a profile through a lease (15 min by default, extended on each action). Revoke it at any time in the admin UI, Agent access page.</p>
+<div class="row"><button class="alt" name="accept" value="false">Deny</button><button name="accept" value="true">Allow</button></div></form>`);
   }
 
   async function handle(req: IncomingMessage, res: Res): Promise<boolean> {
@@ -185,16 +185,16 @@ ${choice}
       if (!b.code && !b.backupCode) {
         const r = await callAuth(auth, base, req, '/api/auth/sign-in/email', { email: b.email, password: b.password, oauth_query: oq });
         const j = await r.json().catch(() => ({}));
-        if (r.status === 429) return count('arb_auth_failures_total', { kind: 'rate_limited' }), loginForm(res, oq, 'Trop d\'essais : patientez une minute.'), true;
+        if (r.status === 429) return count('arb_auth_failures_total', { kind: 'rate_limited' }), loginForm(res, oq, 'Too many attempts: wait a minute.'), true;
         if (!r.ok) count('arb_auth_failures_total', { kind: 'password' });
         // No twoFactorRedirect = TOTP not enrolled: refuse (its session cookie is not passed on).
-        if (!r.ok || !j.twoFactorRedirect) return loginForm(res, oq, r.ok ? '2FA non activée : lancez `arb admin reset-2fa`.' : 'E-mail ou mot de passe incorrect.'), true;
+        if (!r.ok || !j.twoFactorRedirect) return loginForm(res, oq, r.ok ? '2FA not enabled: run `arb admin reset-2fa`.' : 'Wrong email or password.'), true;
         return totpForm(res, oq, undefined, r.headers.getSetCookie()), true;
       }
       const r = await callAuth(auth, base, req, `/api/auth/two-factor/${b.code ? 'verify-totp' : 'verify-backup-code'}`, { code: b.code || b.backupCode, oauth_query: oq });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : 'totp' });
-      if (!r.ok) return totpForm(res, oq, r.status === 429 ? 'Trop d\'essais : patientez une minute.' : 'Code invalide ou expiré. Reconnectez-vous si cela se répète.'), true;
+      if (!r.ok) return totpForm(res, oq, r.status === 429 ? 'Too many attempts: wait a minute.' : 'Invalid or expired code. Sign in again if this keeps happening.'), true;
       res.setHeader('set-cookie', r.headers.getSetCookie());
       return toLocal(res, j.url), true;
     }
@@ -221,8 +221,8 @@ ${choice}
         if (!r.ok || typeof j.url !== 'string') return res.writeHead(r.status === 429 ? 429 : 400).end(), true;
         // Not a 302: Chrome applies the consent page's form-action 'self' to the redirect that follows the POST and
         // blocks the hop to the client's redirect_uri. A Refresh is a fresh navigation, with no script; the link is the fallback.
-        return page(res, 200, `<h1>${b.accept === 'true' ? 'Accès accordé' : 'Accès refusé'}</h1><p>Retour à l'application…</p>
-<p><a href="${esc(j.url)}">Continuer si rien ne se passe</a></p>`, { refresh: `0;url=${j.url}` }), true;
+        return page(res, 200, `<h1>${b.accept === 'true' ? 'Access granted' : 'Access denied'}</h1><p>Returning to the app…</p>
+<p><a href="${esc(j.url)}">Continue if nothing happens</a></p>`, { refresh: `0;url=${j.url}` }), true;
       } finally { pending.delete(s.session.id); }
     }
     return false;

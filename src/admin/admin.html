@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -218,49 +218,49 @@
   .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
   .toast { pointer-events: auto; max-width: min(440px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 4px; background: #1F2226; color: #fff; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2); animation: tin .18s ease-out; }
   .toast.error { background: var(--danger-ink); }
-  .toast.error::before { content: "Erreur : "; font-weight: 700; }
+  .toast.error::before { content: "Error: "; font-weight: 700; }
   @keyframes tin { from { transform: translateY(6px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
 <section class="auth" id="login" aria-labelledby="hLogin" hidden>
-  <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Console d'administration</span></div></div>
+  <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Admin console</span></div></div>
   <div class="card">
     <form id="pwForm">
-      <div><div class="step">Étape 1 sur 2</div><h1 id="hLogin">Connexion administrateur</h1></div>
-      <label class="f">E-mail<input class="in" name="email" type="email" autocomplete="username" required></label>
-      <label class="f">Mot de passe<input class="in" name="password" type="password" autocomplete="current-password" required></label>
-      <button class="btn btn-p" type="submit">Continuer</button>
+      <div><div class="step">Step 1 of 2</div><h1 id="hLogin">Admin sign-in</h1></div>
+      <label class="f">Email<input class="in" name="email" type="email" autocomplete="username" required></label>
+      <label class="f">Password<input class="in" name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn btn-p" type="submit">Continue</button>
     </form>
     <form id="totpForm" hidden>
-      <div><div class="step">Étape 2 sur 2</div><h1>Code de l'application</h1></div>
-      <p class="hint" style="font-size:14px;line-height:20px">Ouvrez votre application d'authentification et saisissez le code à 6 chiffres.</p>
-      <label class="f" id="lCode">Code à 6 chiffres<input class="in codein" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label>
-      <label class="f" id="lBackup" hidden>Code de secours<input class="in mono" name="backup" maxlength="32" autocomplete="off"><span class="hint">Chaque code ne sert qu'une fois.</span></label>
-      <button type="button" class="linkbtn" id="bBackup">Utiliser un code de secours</button>
-      <label class="check"><input type="checkbox" name="trust"><span>Faire confiance à cet appareil 30 jours<span class="hint" style="display:block">Port admin uniquement. Les actions sensibles redemandent un code.</span></span></label>
-      <div class="actions"><button type="button" class="btn" id="bBack">Retour</button><button class="btn btn-p" type="submit">Vérifier</button></div>
+      <div><div class="step">Step 2 of 2</div><h1>Authenticator code</h1></div>
+      <p class="hint" style="font-size:14px;line-height:20px">Open your authenticator app and enter the 6-digit code.</p>
+      <label class="f" id="lCode">6-digit code<input class="in codein" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label>
+      <label class="f" id="lBackup" hidden>Backup code<input class="in mono" name="backup" maxlength="32" autocomplete="off"><span class="hint">Each code works only once.</span></label>
+      <button type="button" class="linkbtn" id="bBackup">Use a backup code</button>
+      <label class="check"><input type="checkbox" name="trust"><span>Trust this device for 30 days<span class="hint" style="display:block">Admin port only. Sensitive actions still ask for a code.</span></span></label>
+      <div class="actions"><button type="button" class="btn" id="bBack">Back</button><button class="btn btn-p" type="submit">Verify</button></div>
     </form>
     <div class="alert a-danger" id="loginMsg" role="alert" hidden></div>
   </div>
-  <div class="chipsrow"><span class="pill green">Accès local uniquement</span><span class="pill">Mot de passe</span><span class="pill">Code 2FA</span></div>
-  <p class="hint" style="text-align:center;max-width:420px">2FA perdue sans code de secours : sur la machine hôte, <code>node src/cli.ts admin reset-2fa</code>.</p>
+  <div class="chipsrow"><span class="pill green">Local access only</span><span class="pill">Password</span><span class="pill">2FA code</span></div>
+  <p class="hint" style="text-align:center;max-width:420px">Lost your 2FA and have no backup code? On the host machine, run <code>node src/cli.ts admin reset-2fa</code>.</p>
 </section>
 
 <div class="shell" id="app" hidden>
   <aside class="side">
-    <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Console d'administration</span></div></div>
-    <div class="badge"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Admin local uniquement, jamais exposé via le tunnel</span></div>
-    <nav class="navl" aria-label="Navigation principale">
-      <a class="nav" href="#/profils" data-nav="profils"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profils<span class="n" id="nProfiles"></span></a>
-      <a class="nav" href="#/acces" data-nav="acces"><svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Accès agents<span class="n" id="nClients"></span></a>
-      <a class="nav" href="#/securite" data-nav="securite"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Sécurité</a>
+    <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Admin console</span></div></div>
+    <div class="badge"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Local admin only, never exposed through the tunnel</span></div>
+    <nav class="navl" aria-label="Main navigation">
+      <a class="nav" href="#/profiles" data-nav="profiles"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profiles<span class="n" id="nProfiles"></span></a>
+      <a class="nav" href="#/access" data-nav="access"><svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Agent access<span class="n" id="nClients"></span></a>
+      <a class="nav" href="#/security" data-nav="security"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Security</a>
     </nav>
     <div class="me">
       <span class="avatar" id="avatar">AD</span>
-      <span class="who"><b id="meEmail">Administrateur</b><span>2FA active</span></span>
-      <button type="button" class="btn btn-i btn-g" id="bSignOut" aria-label="Se déconnecter" title="Se déconnecter"><svg class="i" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg></button>
+      <span class="who"><b id="meEmail">Administrator</b><span>2FA enabled</span></span>
+      <button type="button" class="btn btn-i btn-g" id="bSignOut" aria-label="Sign out" title="Sign out"><svg class="i" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg></button>
     </div>
   </aside>
   <main id="main"></main>
@@ -274,9 +274,9 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const ago = (ts) => { if (!ts) return '—'; const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000)); return s < 60 ? `il y a ${s} s` : s < 3600 ? `il y a ${Math.round(s / 60)} min` : s < 172800 ? `il y a ${Math.round(s / 3600)} h` : `il y a ${Math.round(s / 86400)} j`; };
-const day = (ts) => new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+const ago = (ts) => { if (!ts) return '—'; const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000)); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const day = (ts) => new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const setText = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
 const domains = (s) => s.split(/[\s,]+/).filter(Boolean);
 const codeBody = (c) => /^\d{6}$/.test(c) ? { code: c } : { backupCode: c };
@@ -286,7 +286,7 @@ const api = async (path, method = 'GET', body) => {
   const j = await r.json().catch(() => ({}));
   // Step-up: a sensitive action needs a fresh second factor (15 min). Ask in a dialog, then retry the call.
   if (r.status === 401 && j.stepUp && path !== '/api/step-up') {
-    if (!await ask({ title: 'Confirmez avec votre code 2FA', desc: 'Cette action est sensible.', label: 'Confirmer', code: true })) throw new Error('Annulé : cette action demande un code 2FA');
+    if (!await ask({ title: 'Confirm with your 2FA code', desc: 'This action is sensitive.', label: 'Confirm', code: true })) throw new Error('Cancelled: this action needs a 2FA code');
     return api(path, method, body);
   }
   if (r.status === 401 && !j.stepUp && !path.startsWith('/api/auth/')) showLogin();
@@ -321,20 +321,20 @@ async function act(btn, fn, done) {
   finally { if (btn) { delete btn.dataset.busy; btn.disabled = false; btn.removeAttribute('aria-busy'); renderLiveBar(); } }
 }
 const submit = (form, fn) => { form.onsubmit = (e) => { e.preventDefault(); act(e.submitter || $('[type=submit]', form), () => fn(form)); }; };
-const copy = (btn, text) => act(btn, async () => { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copié'; setTimeout(() => { btn.textContent = t; }, 1500); });
+const copy = (btn, text) => act(btn, async () => { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t; }, 1500); });
 
 /** In-page confirm (replaces prompt/confirm, which a nonce CSP page should not rely on).
  *  typed: text to retype. code: ask for a 2FA code and open the step-up window before resolving. Resolves true or null. */
-function ask({ title, desc = '', label = 'Confirmer', danger = false, typed, code = false }) {
+function ask({ title, desc = '', label = 'Confirm', danger = false, typed, code = false }) {
   const d = $('#dlg');
   d.innerHTML = `<form novalidate>
     <span class="ic${danger ? ' d' : ''}" aria-hidden="true">${danger ? '!' : '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'}</span>
     <div><h2 id="dlgT">${esc(title)}</h2>${desc ? `<p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">${esc(desc)}</p>` : ''}</div>
-    ${typed ? `<label class="f">Tapez <span class="mono" style="color:var(--ink)">${esc(typed)}</span> pour confirmer<input class="in mono" name="typed" autocomplete="off" spellcheck="false"></label>` : ''}
-    ${code ? `<label class="f">Code 2FA<input class="in mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 chiffres, ou un code de secours"></label>
-      <p class="hint">Ensuite, plus de code demandé pendant 15 min pour les actions sensibles.</p>` : ''}
+    ${typed ? `<label class="f">Type <span class="mono" style="color:var(--ink)">${esc(typed)}</span> to confirm<input class="in mono" name="typed" autocomplete="off" spellcheck="false"></label>` : ''}
+    ${code ? `<label class="f">2FA code<input class="in mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 digits, or a backup code"></label>
+      <p class="hint">After that, sensitive actions won't ask for a code for 15 min.</p>` : ''}
     <p class="msg err" aria-live="polite"></p>
-    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn ${danger ? 'btn-d' : 'btn-p'}">${esc(label)}</button></div></form>`;
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn ${danger ? 'btn-d' : 'btn-p'}">${esc(label)}</button></div></form>`;
   d.setAttribute('aria-labelledby', 'dlgT');
   return new Promise((resolve) => {
     const f = $('form', d), err = $('.msg', f);
@@ -343,12 +343,12 @@ function ask({ title, desc = '', label = 'Confirmer', danger = false, typed, cod
     d.onclose = () => finish(null);
     $('[data-cancel]', f).onclick = () => finish(null);
     submit(f, async () => {
-      if (typed && f.typed.value.trim() !== typed) return flash(err, 'Le texte ne correspond pas.', true);
+      if (typed && f.typed.value.trim() !== typed) return flash(err, 'The text does not match.', true);
       if (code) {
         const c = f.code.value.trim();
-        if (!c) return flash(err, 'Saisissez un code.', true);
+        if (!c) return flash(err, 'Enter a code.', true);
         try { await api('/api/step-up', 'POST', codeBody(c)); }
-        catch (e) { f.code.value = ''; f.code.focus(); return flash(err, e.status === 401 ? 'Code invalide. Cinq erreurs ferment la session.' : e.message, true); }
+        catch (e) { f.code.value = ''; f.code.focus(); return flash(err, e.status === 401 ? 'Invalid code. Five wrong codes end the session.' : e.message, true); }
       }
       finish(true);
     });
@@ -375,7 +375,7 @@ async function showApp() {
   authed = true; $('#login').hidden = true; $('#app').hidden = false;
   $('#pwForm').reset(); $('#totpForm').reset(); loginErr('');
   try { me = await api('/api/session'); } catch { me = {}; }
-  setText($('#meEmail'), me.email || 'Administrateur');
+  setText($('#meEmail'), me.email || 'Administrator');
   setText($('#avatar'), (me.email || 'AD').slice(0, 2).toUpperCase());
   await refreshList(); refreshClients(); route();
 }
@@ -383,15 +383,15 @@ submit($('#pwForm'), async (f) => {
   try {
     const r = await api('/api/auth/sign-in/email', 'POST', { email: f.email.value.trim(), password: f.password.value });
     // No twoFactorRedirect = TOTP not enrolled: the server refuses that session anyway.
-    if (!r.twoFactorRedirect) throw new Error('2FA non activée : lancez `arb admin reset-2fa`.');
+    if (!r.twoFactorRedirect) throw new Error('2FA is not set up: run `arb admin reset-2fa`.');
     loginErr(''); f.hidden = true; $('#totpForm').hidden = false; backupMode(false);
-  } catch (e) { loginErr(e.status === 429 ? 'Trop d\'essais. Attendez une minute avant de réessayer.' : e.status === 401 ? 'E-mail ou mot de passe incorrect.' : e.message); }
+  } catch (e) { loginErr(e.status === 429 ? 'Too many attempts. Wait a minute and try again.' : e.status === 401 ? 'Wrong email or password.' : e.message); }
 });
 function backupMode(on) {
   const f = $('#totpForm');
   $('#lCode').hidden = on; $('#lBackup').hidden = !on;
   f.code.required = !on; f.backup.required = on;
-  setText($('#bBackup'), on ? 'Utiliser le code de l\'application' : 'Utiliser un code de secours');
+  setText($('#bBackup'), on ? 'Use the authenticator code' : 'Use a backup code');
   (on ? f.backup : f.code).focus();
 }
 $('#bBackup').onclick = () => backupMode($('#lBackup').hidden);
@@ -400,34 +400,34 @@ submit($('#totpForm'), async (f) => {
   const backup = !$('#lBackup').hidden, c = (backup ? f.backup : f.code).value.trim();
   try { await api(`/api/auth/two-factor/${backup ? 'verify-backup-code' : 'verify-totp'}`, 'POST', { code: c, trustDevice: f.trust.checked }); await showApp(); }
   catch (e) {
-    loginErr(e.status === 429 ? 'Trop d\'essais. Le compte est verrouillé 15 min après 5 échecs.' : e.status === 401 ? 'Code invalide ou expiré. Reconnectez-vous si cela se répète.' : e.message);
+    loginErr(e.status === 429 ? 'Too many attempts. The account locks for 15 min after 5 failures.' : e.status === 401 ? 'Invalid or expired code. Sign in again if this keeps happening.' : e.message);
     (backup ? f.backup : f.code).value = '';
   }
 });
 $('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/api/auth/sign-out', 'POST'); showLogin(); });
 
-// ---- Routing: #/profils, #/p/<id>/<tab>, #/acces, #/securite -----------------------
+// ---- Routing: #/profiles, #/p/<id>/<tab>, #/access, #/security -----------------------
 function route() {
   if (!authed) return;
   const [, a, b, c] = location.hash.split('/');
   if (a === 'p' && b) return showProfile(decodeURIComponent(b), c || 'session');
   if (page === 'profile') closeView();
   selected = null; allowDraft = null;
-  if (a === 'acces') showClients(); else if (a === 'securite') showSecurity(); else showProfiles();
+  if (a === 'access') showClients(); else if (a === 'security') showSecurity(); else showProfiles();
 }
 addEventListener('hashchange', route);
 function setPage(p, html) {
   page = p; keys = {};
-  const cur = p.startsWith('profile') ? 'profils' : p;
+  const cur = p.startsWith('profile') ? 'profiles' : p;
   for (const n of $$('[data-nav]')) n.dataset.nav === cur ? n.setAttribute('aria-current', 'page') : n.removeAttribute('aria-current');
   $('#main').innerHTML = html;
   scrollTo(0, 0);
 }
 const MCP_KEY = 'agentComputer.mcpUrl';
 const mcpUrl = () => { let v = null; try { v = localStorage.getItem(MCP_KEY); } catch {} return v || `${location.protocol}//${location.hostname}:${+location.port - 1}/mcp` /* MCP port = admin port - 1 */; };
-const mcpField = () => `<div class="stack" style="gap:4px"><label class="lbl" for="mcpUrl">URL du serveur MCP</label>
-  <div class="urlbar"><input class="in mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" class="btn" id="bCopyUrl">Copier</button></div>
-  <p class="hint">Client distant (Notion…) : URL publique du tunnel (<code>docker compose logs tunnel</code>) + <code>/mcp</code>. Votre modification reste dans ce navigateur.</p></div>`;
+const mcpField = () => `<div class="stack" style="gap:4px"><label class="lbl" for="mcpUrl">MCP server URL</label>
+  <div class="urlbar"><input class="in mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" class="btn" id="bCopyUrl">Copy</button></div>
+  <p class="hint">Remote client (Notion…): the tunnel's public URL (<code>docker compose logs tunnel</code>) + <code>/mcp</code>. Your edit stays in this browser.</p></div>`;
 function wireMcp() {
   const u = $('#mcpUrl'); if (!u) return;
   u.value = mcpUrl();
@@ -437,28 +437,28 @@ function wireMcp() {
 
 // ---- Profiles page --------------------------------------------------------------
 const stateOf = (c) => (c.state === 'running' ? 'up' : c.state === 'none' ? 'never' : 'down');
-const statePill = (c) => `<span class="pill dot ${stateOf(c) === 'up' ? 'up' : ''}">${({ up: 'Actif', never: 'Jamais démarré', down: 'Arrêté' })[stateOf(c)]}</span>`;
+const statePill = (c) => `<span class="pill dot ${stateOf(c) === 'up' ? 'up' : ''}">${({ up: 'Running', never: 'Never started', down: 'Stopped' })[stateOf(c)]}</span>`;
 const leftMin = (c) => Math.max(0, Math.ceil((Date.parse(c.leasedUntil) - Date.now()) / 60000));
-const leasePill = (c) => c.leasedUntil ? `<span class="pill dot agent">Bail · ${leftMin(c)} min restantes</span>` : '<span class="hint">Aucun bail</span>';
-const stateNote = (c) => c.viewers ? plural(c.viewers, 'spectateur') : c.state === 'running' && c.idleStopInS != null ? `Arrêt auto dans ${Math.ceil(c.idleStopInS / 60)} min` : !c.profile ? 'Aucune donnée enregistrée' : '';
+const leasePill = (c) => c.leasedUntil ? `<span class="pill dot agent">Lease · ${leftMin(c)} min left</span>` : '<span class="hint">No lease</span>';
+const stateNote = (c) => c.viewers ? plural(c.viewers, 'viewer') : c.state === 'running' && c.idleStopInS != null ? `Auto-stop in ${Math.ceil(c.idleStopInS / 60)} min` : !c.profile ? 'No saved data' : '';
 const nClients = () => clients ? clients.keys.length + clients.oauth.length : null;
 
 function showProfiles() {
   setPage('profiles', `
-    <div class="head"><div><h1>Profils</h1><p class="sub">Chaque profil est un navigateur isolé, avec ses cookies, ses identifiants et ses domaines autorisés.</p></div>
-      <div class="row"><a class="btn" href="#/acces">Connecter un agent</a><button type="button" class="btn btn-p" id="bNew">+ Nouveau profil</button></div></div>
+    <div class="head"><div><h1>Profiles</h1><p class="sub">Each profile is an isolated browser with its own cookies, saved logins and allowed domains.</p></div>
+      <div class="row"><a class="btn" href="#/access">Connect an agent</a><button type="button" class="btn btn-p" id="bNew">+ New profile</button></div></div>
     <div class="stats">
-      <div class="card stat"><span class="lbl">Navigateurs actifs</span><b id="sUp"></b></div>
-      <div class="card stat"><span class="lbl">Baux agents en cours</span><b id="sLease"></b></div>
-      <div class="card stat"><span class="lbl">Accès agents</span><b id="sClients"></b></div>
+      <div class="card stat"><span class="lbl">Running browsers</span><b id="sUp"></b></div>
+      <div class="card stat"><span class="lbl">Active agent leases</span><b id="sLease"></b></div>
+      <div class="card stat"><span class="lbl">Agent access</span><b id="sClients"></b></div>
     </div>
     <section class="card" aria-labelledby="hAll">
-      <div class="tblhead"><h2 id="hAll">Tous les profils</h2>
-        <div class="filters" role="group" aria-label="Filtrer"><button type="button" data-f="all"></button><button type="button" data-f="up"></button></div>
-        <input class="in" id="q" type="search" placeholder="Rechercher un profil" aria-label="Rechercher un profil" style="width:220px">
+      <div class="tblhead"><h2 id="hAll">All profiles</h2>
+        <div class="filters" role="group" aria-label="Filter"><button type="button" data-f="all"></button><button type="button" data-f="up"></button></div>
+        <input class="in" id="q" type="search" placeholder="Search profiles" aria-label="Search profiles" style="width:220px">
       </div>
       <div id="ptable"></div>
-      <div class="tblfoot"><p class="hint">Un navigateur inactif s'arrête automatiquement. Ses cookies et identifiants restent enregistrés.</p></div>
+      <div class="tblfoot"><p class="hint">An idle browser stops on its own. Its cookies and saved logins are kept.</p></div>
     </section>`);
   $('#bNew').onclick = openNewProfile;
   for (const b of $$('[data-f]')) b.onclick = () => { filter = b.dataset.f; renderProfiles(); };
@@ -468,21 +468,21 @@ function showProfiles() {
 function renderProfiles() {
   if (page !== 'profiles') return;
   const up = computers.filter((c) => c.state === 'running');
-  $('#sUp').innerHTML = `${up.length} <small>sur ${computers.length}</small>`;
+  $('#sUp').innerHTML = `${up.length} <small>of ${computers.length}</small>`;
   setText($('#sLease'), String(computers.filter((c) => c.leasedUntil).length));
   setText($('#sClients'), String(nClients() ?? '…'));
-  for (const b of $$('[data-f]')) { b.setAttribute('aria-pressed', String(b.dataset.f === filter)); setText(b, b.dataset.f === 'all' ? `Tous · ${computers.length}` : `Actifs · ${up.length}`); }
+  for (const b of $$('[data-f]')) { b.setAttribute('aria-pressed', String(b.dataset.f === filter)); setText(b, b.dataset.f === 'all' ? `All · ${computers.length}` : `Running · ${up.length}`); }
   const rows = computers.filter((c) => (filter === 'all' || c.state === 'running') && (!search || c.id.includes(search) || c.allow.some((d) => d.includes(search))));
   // Minutes, not seconds, in the key: the table only redraws when something visible changed.
   patch('ptable', [rows, filter, search, Math.floor(Date.now() / 60000)], () => !computers.length
-    ? '<p class="empty">Aucun profil. Créez-en un, puis prenez la main pour vous connecter aux sites.</p>'
-    : !rows.length ? '<p class="empty">Aucun profil ne correspond.</p>'
-    : `<div class="tbl"><table><tr><th>Profil</th><th>État</th><th>Agent</th><th>Dernière activité</th><th><span class="sr">Action</span></th></tr>${rows.map((c) => `
+    ? '<p class="empty">No profiles yet. Create one, then take over to sign in to your sites.</p>'
+    : !rows.length ? '<p class="empty">No matching profiles.</p>'
+    : `<div class="tbl"><table><tr><th>Profile</th><th>State</th><th>Agent</th><th>Last activity</th><th><span class="sr">Action</span></th></tr>${rows.map((c) => `
       <tr><td><a class="mono" href="#/p/${encodeURIComponent(c.id)}" style="font-weight:600">${esc(c.id)}</a><span class="s">${esc(c.allow.join(', '))}</span></td>
       <td>${statePill(c)}<span class="s">${esc(stateNote(c))}</span></td>
       <td>${leasePill(c)}</td>
-      <td>${c.lastCall ? `${esc(ago(c.lastCall.ts))}<span class="s mono">${esc(c.lastCall.tool)}${c.lastCall.ok ? '' : ' · échec'}</span>` : '<span class="hint">Aucun appel</span>'}</td>
-      <td class="act"><button type="button" class="btn btn-sm" data-go="${esc(c.id)}" data-ctl="${c.state === 'running' ? '' : '1'}">${c.state === 'running' ? 'Regarder' : 'Démarrer'}</button></td></tr>`).join('')}</table></div>`);
+      <td>${c.lastCall ? `${esc(ago(c.lastCall.ts))}<span class="s mono">${esc(c.lastCall.tool)}${c.lastCall.ok ? '' : ' · failed'}</span>` : '<span class="hint">No calls</span>'}</td>
+      <td class="act"><button type="button" class="btn btn-sm" data-go="${esc(c.id)}" data-ctl="${c.state === 'running' ? '' : '1'}">${c.state === 'running' ? 'Watch' : 'Start'}</button></td></tr>`).join('')}</table></div>`);
   for (const b of $$('[data-go]')) b.onclick = () => {
     location.hash = `#/p/${encodeURIComponent(b.dataset.go)}`; route(); // render now: hashchange fires later
     b.dataset.ctl ? act($('#bCtl'), () => takeControl(b.dataset.go)) : openView(b.dataset.go, false);
@@ -493,112 +493,112 @@ function renderProfiles() {
 function openNewProfile() {
   const d = $('#newDlg');
   d.innerHTML = `<form>
-    <div><h2 id="newT">Nouveau profil</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">Un navigateur isolé. L'agent ne pourra ouvrir que les domaines autorisés.</p></div>
-    <label class="f">Nom du profil<input class="in mono" name="id" placeholder="notion-veille" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Minuscules, chiffres et tirets, 40 max. Commence par une lettre ou un chiffre." required autocomplete="off" spellcheck="false"></label>
-    <label class="f">Domaines autorisés<input class="in mono" name="allow" placeholder="notion.so, example.com" required autocomplete="off" spellcheck="false"><span class="hint">Séparés par des virgules. Les sous-domaines sont inclus.</span></label>
-    <p class="hint">Ensuite : prenez la main pour vous connecter aux sites, ajoutez des identifiants si besoin, puis connectez un agent.</p>
+    <div><h2 id="newT">New profile</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">An isolated browser. The agent can only open the allowed domains.</p></div>
+    <label class="f">Profile name<input class="in mono" name="id" placeholder="notion-research" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." required autocomplete="off" spellcheck="false"></label>
+    <label class="f">Allowed domains<input class="in mono" name="allow" placeholder="notion.so, example.com" required autocomplete="off" spellcheck="false"><span class="hint">Comma-separated. Subdomains are included.</span></label>
+    <p class="hint">Next: take over to sign in to your sites, add saved logins if needed, then connect an agent.</p>
     <p class="msg err" aria-live="polite"></p>
-    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn btn-p">Créer le profil</button></div></form>`;
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn btn-p">Create profile</button></div></form>`;
   d.setAttribute('aria-labelledby', 'newT');
   const f = $('form', d);
   $('[data-cancel]', f).onclick = () => d.close();
   submit(f, async () => {
     try {
       const r = await api('/api/profiles', 'POST', { id: f.elements.id.value.trim(), allow: domains(f.allow.value) });
-      d.close(); await refreshList(); location.hash = `#/p/${encodeURIComponent(r.id)}`; toast(`Profil ${r.id} créé. Prenez la main pour vous connecter aux sites.`);
+      d.close(); await refreshList(); location.hash = `#/p/${encodeURIComponent(r.id)}`; toast(`Profile ${r.id} created. Take over to sign in to your sites.`);
     } catch (e) { flash($('.msg', f), e.message, true); }
   });
   d.showModal(); f.elements.id.focus();
 }
 
 // ---- Profile page ---------------------------------------------------------------
-const TABS = [['session', 'Session'], ['identifiants', 'Identifiants'], ['domaines', 'Domaines autorisés'], ['diagnostic', 'Diagnostic'], ['parametres', 'Paramètres']];
+const TABS = [['session', 'Session'], ['logins', 'Logins'], ['domains', 'Domains'], ['diagnostics', 'Diagnostics'], ['settings', 'Settings']];
 function showProfile(id, t) {
   const c = computers.find((x) => x.id === id);
-  if (!c) { if (page === 'profile') closeView(); selected = null; setPage('profile', `<div class="head"><div><span class="crumb"><a href="#/profils">Profils</a> › ${esc(id)}</span><h1>Profil introuvable</h1><p class="sub">${esc(id)} n'existe pas ou a été supprimé.</p></div></div>`); return; }
+  if (!c) { if (page === 'profile') closeView(); selected = null; setPage('profile', `<div class="head"><div><span class="crumb"><a href="#/profiles">Profiles</a> › ${esc(id)}</span><h1>Profile not found</h1><p class="sub">${esc(id)} doesn't exist or was deleted.</p></div></div>`); return; }
   tab = TABS.some(([k]) => k === t) ? t : 'session';
   if (page === 'profile' && selected === id) return showTab();
   if (view && view.id !== id) closeView();
   selected = id; allowDraft = null;
   const p = `/api/computers/${encodeURIComponent(id)}`;
   setPage('profile', `
-    <div class="head"><div><span class="crumb"><a href="#/profils">Profils</a> › <span class="mono">${esc(id)}</span></span>
+    <div class="head"><div><span class="crumb"><a href="#/profiles">Profiles</a> › <span class="mono">${esc(id)}</span></span>
       <div class="row" style="gap:12px"><h1 class="mono" id="dTitle" tabindex="-1">${esc(id)}</h1><span id="dState"></span></div></div>
-      <div class="row"><button type="button" class="btn" id="bStop">Arrêter le navigateur</button></div></div>
-    <nav class="tabs" aria-label="Sections du profil">${TABS.map(([k, l]) => `<a class="tab" href="#/p/${encodeURIComponent(id)}/${k}" data-tab="${k}">${l}<span data-count="${k}"></span></a>`).join('')}</nav>
+      <div class="row"><button type="button" class="btn" id="bStop">Stop browser</button></div></div>
+    <nav class="tabs" aria-label="Profile sections">${TABS.map(([k, l]) => `<a class="tab" href="#/p/${encodeURIComponent(id)}/${k}" data-tab="${k}">${l}<span data-count="${k}"></span></a>`).join('')}</nav>
 
     <div data-panel="session" class="cols">
-      <section class="card live" aria-label="Vue en direct">
+      <section class="card live" aria-label="Live view">
         <div id="banner"></div>
         <div class="row">
-          <button type="button" class="btn btn-sm" id="bWatch">Regarder</button>
+          <button type="button" class="btn btn-sm" id="bWatch">Watch</button>
           <button type="button" class="btn btn-sm btn-p" id="bCtl"></button>
-          <button type="button" class="btn btn-sm" id="bLeave" hidden>Quitter la vue</button>
-          <span class="grow"></span><span class="vstate" id="vstate" aria-live="polite">Pas de vue</span><span class="hint" id="vfps"></span>
+          <button type="button" class="btn btn-sm" id="bLeave" hidden>Leave view</button>
+          <span class="grow"></span><span class="vstate" id="vstate" aria-live="polite">No view</span><span class="hint" id="vfps"></span>
         </div>
-        <form class="urlbar" id="nav"><label for="vurl" class="sr">Adresse</label>
-          <input class="in mono" id="vurl" placeholder="https://… (domaines autorisés uniquement)" autocomplete="off"><button type="submit" class="btn">Ouvrir</button></form>
-        <div class="bezel"><div class="screen" id="screen"><div class="nosig"><div><b>Pas de signal</b>Regarder montre un navigateur actif. Prendre la main le démarre si besoin.</div></div></div></div>
+        <form class="urlbar" id="nav"><label for="vurl" class="sr">Address</label>
+          <input class="in mono" id="vurl" placeholder="https://… (allowed domains only)" autocomplete="off"><button type="submit" class="btn">Open</button></form>
+        <div class="bezel"><div class="screen" id="screen"><div class="nosig"><div><b>No signal</b>Watch shows a running browser. Take over starts it if needed.</div></div></div></div>
         <div class="vfoot"><span id="vViewers"></span><span class="pt" id="pageinfo"></span></div>
       </section>
       <div class="stack">
-        <section class="card pad" aria-labelledby="hLease"><h3 id="hLease">Bail agent</h3><div id="lease"></div></section>
-        <section class="card pad" aria-labelledby="hAct"><h3 id="hAct">Activité de l'agent</h3><div id="activity"></div></section>
-        <section class="card pad" aria-labelledby="hConn"><h3 id="hConn">Connecter un agent</h3>${mcpField()}
-          <p class="hint" style="font-size:13px">OAuth recommandé : ajoutez l'URL dans votre client MCP, connectez-vous, puis choisissez ce profil. Sinon, une clé API limitée à ce profil.</p>
-          <a href="#/acces" style="font-weight:600">Accès agents →</a></section>
+        <section class="card pad" aria-labelledby="hLease"><h3 id="hLease">Agent lease</h3><div id="lease"></div></section>
+        <section class="card pad" aria-labelledby="hAct"><h3 id="hAct">Agent activity</h3><div id="activity"></div></section>
+        <section class="card pad" aria-labelledby="hConn"><h3 id="hConn">Connect an agent</h3>${mcpField()}
+          <p class="hint" style="font-size:13px">OAuth is recommended: add the URL to your MCP client, sign in, then pick this profile. Otherwise, use an API key scoped to this profile.</p>
+          <a href="#/access" style="font-weight:600">Agent access →</a></section>
       </div>
     </div>
 
-    <div data-panel="identifiants" class="stack">
-      <div class="alert a-info"><p>Coffre en écriture seule. Les mots de passe sont chiffrés (AES-256-GCM) et ne sont jamais réaffichés, ni ici, ni à l'agent. L'agent appelle <code>login</code> avec le nom du site : le formulaire est rempli pour lui.</p></div>
-      <section class="card" aria-labelledby="hLogins"><div class="tblhead"><h2 id="hLogins">Identifiants enregistrés</h2><span class="hint">Enregistrer ou supprimer demande votre code 2FA</span></div><div id="logins"></div></section>
-      <section class="card pad" aria-labelledby="hAdd"><h3 id="hAdd">Ajouter ou remplacer</h3>
+    <div data-panel="logins" class="stack">
+      <div class="alert a-info"><p>Write-only vault. Passwords are encrypted (AES-256-GCM) and never shown again, here or to the agent. The agent calls <code>login</code> with the site name and the form is filled for it.</p></div>
+      <section class="card" aria-labelledby="hLogins"><div class="tblhead"><h2 id="hLogins">Saved logins</h2><span class="hint">Saving or deleting asks for your 2FA code</span></div><div id="logins"></div></section>
+      <section class="card pad" aria-labelledby="hAdd"><h3 id="hAdd">Add or replace</h3>
         <form class="grid-form" id="loginForm">
-          <label class="f">Site<input class="in mono" name="site" placeholder="notion" pattern="[a-z0-9\\-]{1,40}" title="Minuscules, chiffres et tirets, 40 max" required autocomplete="off"></label>
-          <label class="f">URL de connexion<input class="in mono" name="url" placeholder="https://www.notion.so/login" required autocomplete="off"></label>
-          <label class="f">Identifiant<input class="in" name="username" autocomplete="off" required></label>
-          <label class="f">Mot de passe<input class="in" name="password" type="password" placeholder="Vide : garde l'actuel" autocomplete="new-password"></label>
-          <div class="wide row"><button type="submit" class="btn btn-p">Enregistrer</button><p class="msg" id="loginErr" aria-live="polite"></p></div>
+          <label class="f">Site<input class="in mono" name="site" placeholder="notion" pattern="[a-z0-9\\-]{1,40}" title="Lowercase letters, digits and hyphens, 40 max" required autocomplete="off"></label>
+          <label class="f">Sign-in URL<input class="in mono" name="url" placeholder="https://www.notion.so/login" required autocomplete="off"></label>
+          <label class="f">Username<input class="in" name="username" autocomplete="off" required></label>
+          <label class="f">Password<input class="in" name="password" type="password" placeholder="Leave empty to keep the current one" autocomplete="new-password"></label>
+          <div class="wide row"><button type="submit" class="btn btn-p">Save</button><p class="msg" id="loginErr" aria-live="polite"></p></div>
         </form></section>
     </div>
 
-    <div data-panel="domaines" class="stack">
-      <section class="card pad" aria-labelledby="hAllow"><h3 id="hAllow">Domaines autorisés</h3>
-        <p class="hint" style="font-size:14px;line-height:20px">L'agent ne peut ouvrir que ces domaines et leurs sous-domaines. Le reste est bloqué au niveau DNS.</p>
+    <div data-panel="domains" class="stack">
+      <section class="card pad" aria-labelledby="hAllow"><h3 id="hAllow">Allowed domains</h3>
+        <p class="hint" style="font-size:14px;line-height:20px">The agent can only open these domains and their subdomains. Everything else is blocked at the DNS level.</p>
         <div class="chips" id="chips"></div>
-        <form class="urlbar" id="addDomain"><label for="newDomain" class="sr">Ajouter un domaine</label><input class="in mono" id="newDomain" placeholder="exemple.com" autocomplete="off" spellcheck="false"><button type="submit" class="btn">Ajouter</button></form>
-        <div class="alert a-warn"><p>Enregistrer redémarre le navigateur de ce profil : la liste DNS est fixée au lancement. Un agent en cours perd sa page.</p></div>
-        <div class="row"><button type="button" class="btn btn-p" id="bSaveAllow">Enregistrer les domaines</button><span class="hint" id="allowDirty"></span></div>
+        <form class="urlbar" id="addDomain"><label for="newDomain" class="sr">Add a domain</label><input class="in mono" id="newDomain" placeholder="example.com" autocomplete="off" spellcheck="false"><button type="submit" class="btn">Add</button></form>
+        <div class="alert a-warn"><p>Saving restarts this profile's browser: the DNS list is set at launch. An agent in the middle of a task loses its page.</p></div>
+        <div class="row"><button type="button" class="btn btn-p" id="bSaveAllow">Save domains</button><span class="hint" id="allowDirty"></span></div>
       </section>
     </div>
 
-    <div data-panel="diagnostic" class="stack">
-      <section class="card" aria-labelledby="hAudit"><div class="tblhead"><h2 id="hAudit">Appels récents</h2></div><div class="tbl" id="audit"></div></section>
+    <div data-panel="diagnostics" class="stack">
+      <section class="card" aria-labelledby="hAudit"><div class="tblhead"><h2 id="hAudit">Recent calls</h2></div><div class="tbl" id="audit"></div></section>
       <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
-        <section class="card" aria-labelledby="hCookies"><div class="tblhead"><h2 id="hCookies">Cookies</h2><span class="hint">Noms seulement</span></div><div class="tbl" id="cookies"></div></section>
-        <section class="card" aria-labelledby="hStore"><div class="tblhead"><h2 id="hStore">Stockage local</h2></div><div class="tbl" id="storage"></div></section>
+        <section class="card" aria-labelledby="hCookies"><div class="tblhead"><h2 id="hCookies">Cookies</h2><span class="hint">Names only</span></div><div class="tbl" id="cookies"></div></section>
+        <section class="card" aria-labelledby="hStore"><div class="tblhead"><h2 id="hStore">Local storage</h2></div><div class="tbl" id="storage"></div></section>
       </div>
-      <p class="hint">Conteneur <span class="mono" id="fContainer"></span></p>
+      <p class="hint">Container <span class="mono" id="fContainer"></span></p>
     </div>
 
-    <div data-panel="parametres" class="stack">
-      <section class="card pad dz" aria-labelledby="hDanger"><h2 id="hDanger">Zone de danger</h2>
-        <div class="row" style="gap:16px"><div class="grow" style="flex-basis:280px"><b>Supprimer le profil</b><p class="hint" style="font-size:14px;line-height:20px">Conteneur, cookies, identifiants, accès OAuth et clés API de ce profil sont détruits. Irréversible.</p></div>
-        <button type="button" class="btn btn-d" id="bDelete">Supprimer le profil</button></div></section>
+    <div data-panel="settings" class="stack">
+      <section class="card pad dz" aria-labelledby="hDanger"><h2 id="hDanger">Danger zone</h2>
+        <div class="row" style="gap:16px"><div class="grow" style="flex-basis:280px"><b>Delete profile</b><p class="hint" style="font-size:14px;line-height:20px">The container, cookies, saved logins, OAuth access and API keys of this profile are destroyed. This cannot be undone.</p></div>
+        <button type="button" class="btn btn-d" id="bDelete">Delete profile</button></div></section>
     </div>`);
 
   wireMcp();
   $('#bWatch').onclick = () => openView(id, false);
   $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeControl(id));
   $('#bLeave').onclick = () => { closeView(); renderLiveBar(); $('#bCtl').focus(); };
-  $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Navigateur arrêté. Le profil est conservé.');
+  $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Browser stopped. The profile is kept.');
   $('#nav').onsubmit = (e) => {
     e.preventDefault();
     act(e.submitter, async () => {
       let url = $('#vurl').value.trim(); if (!url) return false;
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-      setVstate('Ouverture…');
+      setVstate('Opening…');
       try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
       catch (err) { setVstate(err.message); return false; }
       refreshDetail();
@@ -607,7 +607,7 @@ function showProfile(id, t) {
   submit($('#loginForm'), async (f) => {
     try {
       await api(`${p}/login-save`, 'POST', { site: f.site.value.trim(), url: f.url.value.trim(), username: f.username.value, password: f.password.value });
-      f.reset(); flash($('#loginErr'), 'Enregistré.'); refreshDetail(); refreshList();
+      f.reset(); flash($('#loginErr'), 'Saved.'); refreshDetail(); refreshList();
     } catch (err) { flash($('#loginErr'), err.message, true); }
   });
   $('#addDomain').onsubmit = (e) => {
@@ -618,16 +618,16 @@ function showProfile(id, t) {
   };
   $('#bSaveAllow').onclick = (e) => act(e.currentTarget, async () => {
     const allow = allowDraft ?? computers.find((x) => x.id === id)?.allow ?? [];
-    if (!allow.length) throw new Error('Gardez au moins un domaine.');
+    if (!allow.length) throw new Error('Keep at least one domain.');
     closeView();
     try { await api(`${p}/config`, 'POST', { allow }); allowDraft = null; }
     finally { await refreshList(); refreshDetail(); }
-  }, 'Domaines enregistrés. Le navigateur redémarre au prochain usage.');
+  }, 'Domains saved. The browser restarts on next use.');
   $('#bDelete').onclick = (e) => act(e.currentTarget, async () => {
-    if (!await confirmSensitive({ title: `Supprimer le profil « ${id} » ?`, desc: 'Conteneur, cookies, identifiants, accès OAuth et clés API de ce profil sont détruits. Irréversible.', typed: id, label: 'Supprimer définitivement', danger: true })) return false;
+    if (!await confirmSensitive({ title: `Delete profile "${id}"?`, desc: 'The container, cookies, saved logins, OAuth access and API keys of this profile are destroyed. This cannot be undone.', typed: id, label: 'Delete permanently', danger: true })) return false;
     closeView(); await api(`${p}/delete`, 'POST');
-    location.hash = '#/profils'; refreshList();
-  }, `Profil ${id} supprimé.`);
+    location.hash = '#/profiles'; refreshList();
+  }, `Profile ${id} deleted.`);
 
   showTab(); renderProfile(); refreshDetail();
 }
@@ -640,24 +640,24 @@ function showTab() {
 function renderProfile() {
   const c = computers.find((x) => x.id === selected);
   if (page !== 'profile' || !c) return;
-  patch('dState', [c.state, c.leasedUntil && 1], () => statePill(c) + (c.leasedUntil ? ' <span class="pill dot agent">Bail agent</span>' : ''));
+  patch('dState', [c.state, c.leasedUntil && 1], () => statePill(c) + (c.leasedUntil ? ' <span class="pill dot agent">Agent lease</span>' : ''));
   const bs = $('#bStop'); if (!bs.dataset.busy) bs.disabled = c.state !== 'running';
-  setText($('[data-count="identifiants"]'), ` · ${c.logins.length}`);
-  setText($('[data-count="domaines"]'), ` · ${c.allow.length}`);
+  setText($('[data-count="logins"]'), ` · ${c.logins.length}`);
+  setText($('[data-count="domains"]'), ` · ${c.allow.length}`);
   patch('lease', [c.leasedUntil], () => c.leasedUntil
-    ? `<div><span class="big" id="leaseLeft"></span><p class="hint" style="margin-top:4px">Se prolonge à chaque appel de l'agent. Fin prévue à ${esc(new Date(c.leasedUntil).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}.</p></div>
-       <div class="row"><button type="button" class="btn btn-sm" id="bExtend">Prolonger 30 min</button><button type="button" class="btn btn-sm btn-dl" id="bRelease">Forcer la libération</button></div>`
-    : '<p class="hint" style="font-size:14px;line-height:20px">Libre. Aucun agent ne pilote ce profil. Un agent prend un bail de 10 min, prolongé à chaque action.</p>')
+    ? `<div><span class="big" id="leaseLeft"></span><p class="hint" style="margin-top:4px">Extended on every agent call. Ends at ${esc(new Date(c.leasedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}.</p></div>
+       <div class="row"><button type="button" class="btn btn-sm" id="bExtend">Extend 30 min</button><button type="button" class="btn btn-sm btn-dl" id="bRelease">Force release</button></div>`
+    : '<p class="hint" style="font-size:14px;line-height:20px">Free. No agent is driving this profile. An agent takes a 10 min lease, extended on every action.</p>')
     && wireLease();
   tickLease();
-  setText($('#vViewers'), plural(c.viewers, 'spectateur'));
+  setText($('#vViewers'), plural(c.viewers, 'viewer'));
   setText($('#fContainer'), `${c.container} : ${c.status}`);
   renderLiveBar(); renderAllow();
 }
 function wireLease() {
   const p = `/api/computers/${encodeURIComponent(selected)}`;
-  if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/release`, 'POST'); refreshList(); }, 'Bail libéré. L\'agent doit en reprendre un.');
-  if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); refreshList(); }, 'Bail prolongé de 30 min à partir de maintenant.');
+  if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/release`, 'POST'); refreshList(); }, 'Lease released. The agent has to take a new one.');
+  if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); refreshList(); }, 'Lease extended to 30 min from now.');
 }
 function tickLease() {
   const c = computers.find((x) => x.id === selected), el = $('#leaseLeft');
@@ -669,28 +669,28 @@ function renderAllow() {
   const c = computers.find((x) => x.id === selected);
   if (!c || !$('#chips')) return;
   const list = allowDraft ?? c.allow;
-  patch('chips', list, () => list.map((d) => `<span class="chip">${esc(d)}<button type="button" data-rm="${esc(d)}" aria-label="Retirer ${esc(d)}">×</button></span>`).join('') || '<span class="hint">Aucun domaine.</span>')
+  patch('chips', list, () => list.map((d) => `<span class="chip">${esc(d)}<button type="button" data-rm="${esc(d)}" aria-label="Remove ${esc(d)}">×</button></span>`).join('') || '<span class="hint">No domains.</span>')
     && $$('[data-rm]').forEach((b) => { b.onclick = () => { allowDraft = list.filter((d) => d !== b.dataset.rm); renderAllow(); }; });
-  setText($('#allowDirty'), allowDraft && JSON.stringify(allowDraft) !== JSON.stringify(c.allow) ? 'Modifications non enregistrées' : '');
+  setText($('#allowDirty'), allowDraft && JSON.stringify(allowDraft) !== JSON.stringify(c.allow) ? 'Unsaved changes' : '');
 }
 const setBtn = (b, dis, title) => { b.disabled = !!b.dataset.busy || dis; if (title) { if (b.title !== title) b.title = title; } else b.removeAttribute('title'); };
 function renderLiveBar() {
   const c = computers.find((x) => x.id === selected);
   if (!c || !$('#bCtl')) return;
   const up = c.state === 'running', live = view?.id === c.id, ctl = live && view.control;
-  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'Navigateur arrêté : utilisez Démarrer et prendre la main.' : live && !ctl ? 'Vous regardez déjà' : 'Regarder sans envoyer de saisie');
-  setText($('#bCtl'), up ? 'Prendre la main' : 'Démarrer et prendre la main');
-  setBtn($('#bCtl'), ctl, ctl ? 'Vous avez déjà la main' : '');
+  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'Browser stopped: use Start and take over.' : live && !ctl ? 'Already watching' : 'Watch without sending input');
+  setText($('#bCtl'), up ? 'Take over' : 'Start and take over');
+  setBtn($('#bCtl'), ctl, ctl ? 'You already have control' : '');
   $('#bLeave').hidden = !live;
-  // ponytail: the lease holder's name is not exposed by the list API, so the banner says "un agent".
+  // ponytail: the lease holder's name is not exposed by the list API, so the banner says "an agent".
   // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
   const here = ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
   patch('banner', [ctl, !!c.leasedUntil, here.map((l) => [l.site, l.username])], () => ctl
-    ? `<div class="banner b-ctl"><span>Vous avez la main. Clavier, souris et copier/coller vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button>${here.length ? `
-       <div class="fill"><span>${here.length === 1 ? `Identifiant enregistré : <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} identifiants enregistrés pour <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
-       ${c.leasedUntil ? '<span class="hint">Un agent tient ce profil : libérez le bail pour remplir.</span>'
-         : here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Remplir et envoyer' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
-    : c.leasedUntil ? '<div class="banner b-agent"><span>Un agent est aux commandes. Vous pouvez regarder ou prendre la main.</span><button type="button" class="btn btn-sm" id="bTake">Prendre la main</button></div>' : '');
+    ? `<div class="banner b-ctl"><span>You have control. Keyboard, mouse and copy/paste go to this browser: click the view to type.</span><button type="button" class="btn btn-sm" id="bGiveBack">Hand back</button>${here.length ? `
+       <div class="fill"><span>${here.length === 1 ? `Saved login: <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} saved logins for <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
+       ${c.leasedUntil ? '<span class="hint">An agent holds this profile: release the lease to fill.</span>'
+         : here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Fill and submit' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
+    : c.leasedUntil ? '<div class="banner b-agent"><span>An agent is in control. You can watch or take over.</span><button type="button" class="btn btn-sm" id="bTake">Take over</button></div>' : '');
   const give = $('#bGiveBack'), take = $('#bTake');
   if (give) give.onclick = () => openView(selected, false);
   if (take) take.onclick = (e) => act(e.currentTarget, () => takeControl(selected));
@@ -700,13 +700,13 @@ const originOf = (u) => { try { return new URL(u).origin; } catch { return null;
 /** Takeover: the server fills the page on screen (the password never reaches this page). */
 function fillHere(btn, site) {
   const veil = document.createElement('div');
-  veil.className = 'veil'; veil.textContent = 'Remplissage par le serveur… ne touchez pas la vue';
+  veil.className = 'veil'; veil.textContent = 'The server is filling the form… do not touch the view';
   act(btn, async () => {
     $('#screen')?.append(veil);
     const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-fill`, 'POST', { site });
-    if (r.ok) return toast(`${site} : formulaire envoyé. Vérifiez dans la vue.`);
-    toast(r.reason === 'origin' ? `La page n'est plus sur ${originOf(logins.find((l) => l.site === site)?.url) ?? 'le site de cet identifiant'} : rien n'a été rempli.`
-      : 'Formulaire introuvable (identifiant et mot de passe visibles requis). Rien n\'a été envoyé.', 'error');
+    if (r.ok) return toast(`${site}: form submitted. Check the view.`);
+    toast(r.reason === 'origin' ? `The page is no longer on ${originOf(logins.find((l) => l.site === site)?.url) ?? 'the site of this login'}: nothing was filled.`
+      : 'No form found (it needs visible username and password fields). Nothing was submitted.', 'error');
   }).finally(() => { veil.remove(); $('#frame')?.focus(); });
 }
 
@@ -725,53 +725,53 @@ async function refreshDetail() {
   let d; try { d = await api(`/api/computers/${encodeURIComponent(id)}`); } catch (e) { if ($('#logins')) toast(e.message, 'error'); return; }
   if (id !== selected || !$('#logins')) return;
   if (JSON.stringify(logins) !== JSON.stringify(d.logins)) { logins = d.logins; renderLiveBar(); }
-  setText($('#pageinfo'), d.page ? `${d.page.title || 'Page sans titre'} · ${d.page.url}` : 'Navigateur arrêté');
+  setText($('#pageinfo'), d.page ? `${d.page.title || 'Untitled page'} · ${d.page.url}` : 'Browser stopped');
 
   if (patch('logins', d.logins, () => d.logins.length
-    ? `<div class="tbl"><table><tr><th>Site</th><th>Identifiant</th><th>Mot de passe</th><th>Dernier test</th><th><span class="sr">Actions</span></th></tr>${d.logins.map((l) => `
+    ? `<div class="tbl"><table><tr><th>Site</th><th>Username</th><th>Password</th><th>Last test</th><th><span class="sr">Actions</span></th></tr>${d.logins.map((l) => `
       <tr><td><span class="mono" style="font-weight:600">${esc(l.site)}</span><span class="s mono">${esc(l.url)}</span></td><td>${esc(l.username)}</td>
-      <td><span class="pill green">Enregistré</span></td>
-      <td class="nw">${l.lastTestedAt ? `${l.lastResult === 'ok' ? '<span class="pill up dot">Formulaire envoyé</span>' : '<span class="pill danger">Échec</span>'}<span class="s"><time data-ts="${esc(l.lastTestedAt)}">${ago(l.lastTestedAt)}</time></span>` : '<span class="hint">Jamais testé</span>'}</td>
-      <td class="act"><button type="button" class="btn btn-sm" data-test="${esc(l.site)}">Tester</button> <button type="button" class="btn btn-sm btn-dl" data-del="${esc(l.site)}">Supprimer</button></td></tr>`).join('')}</table></div>`
-    : '<p class="empty">Aucun identifiant. Ajoutez-en un ci-dessous, ou connectez-vous à la main avec Prendre la main : les cookies restent dans le profil.</p>')) {
+      <td><span class="pill green">Saved</span></td>
+      <td class="nw">${l.lastTestedAt ? `${l.lastResult === 'ok' ? '<span class="pill up dot">Form submitted</span>' : '<span class="pill danger">Failed</span>'}<span class="s"><time data-ts="${esc(l.lastTestedAt)}">${ago(l.lastTestedAt)}</time></span>` : '<span class="hint">Never tested</span>'}</td>
+      <td class="act"><button type="button" class="btn btn-sm" data-test="${esc(l.site)}">Test</button> <button type="button" class="btn btn-sm btn-dl" data-del="${esc(l.site)}">Delete</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">No saved logins. Add one below, or sign in by hand with Take over: the cookies stay in the profile.</p>')) {
     for (const b of $$('[data-del]')) b.onclick = () => deleteLogin(b, b.dataset.del);
     for (const b of $$('[data-test]')) b.onclick = () => testLogin(b, b.dataset.test);
   }
   patch('activity', d.audit.slice(0, 6), () => d.audit.length
     ? `<ul class="activity">${d.audit.slice(0, 6).map((l) => `<li><span class="${l.ok ? '' : 'ko'}">${l.ok ? '✓' : '✗'}</span><span class="mono">${esc(l.tool)}</span><time class="t" data-ts="${esc(l.ts)}">${ago(l.ts)}</time></li>`).join('')}</ul>`
-    : '<p class="hint">Aucun appel pour l\'instant.</p>');
+    : '<p class="hint">No calls yet.</p>');
   patch('audit', d.audit, () => d.audit.length
-    ? `<table><tr><th>Quand</th><th>Outil</th><th>Résultat</th><th>Durée</th></tr>${d.audit.map((l) => `<tr><td class="nw"><time data-ts="${esc(l.ts)}" title="${esc(l.ts)}">${ago(l.ts)}</time></td><td class="mono nw">${esc(l.tool)}</td>
-      <td class="${l.ok ? 'ok' : 'err'}">${l.ok ? '✓ ok' : '✗ ' + esc(l.err || 'erreur')}</td><td class="nw">${l.ms != null ? l.ms + ' ms' : ''}</td></tr>`).join('')}</table>`
-    : '<p class="empty">Aucun appel.</p>');
+    ? `<table><tr><th>When</th><th>Tool</th><th>Result</th><th>Duration</th></tr>${d.audit.map((l) => `<tr><td class="nw"><time data-ts="${esc(l.ts)}" title="${esc(l.ts)}">${ago(l.ts)}</time></td><td class="mono nw">${esc(l.tool)}</td>
+      <td class="${l.ok ? 'ok' : 'err'}">${l.ok ? '✓ ok' : '✗ ' + esc(l.err || 'error')}</td><td class="nw">${l.ms != null ? l.ms + ' ms' : ''}</td></tr>`).join('')}</table>`
+    : '<p class="empty">No calls.</p>');
   patch('cookies', d.cookies, () => d.cookies.length
-    ? `<table><tr><th>Nom</th><th>Domaine</th><th>Expire</th><th>Options</th></tr>${d.cookies.map((k) => `
-      <tr><td class="mono nw">${esc(k.name)}</td><td class="mono">${esc(k.domain)}</td><td class="nw">${k.session || k.expires < 0 ? 'session' : new Date(k.expires * 1000).toLocaleDateString('fr-FR')}</td>
+    ? `<table><tr><th>Name</th><th>Domain</th><th>Expires</th><th>Options</th></tr>${d.cookies.map((k) => `
+      <tr><td class="mono nw">${esc(k.name)}</td><td class="mono">${esc(k.domain)}</td><td class="nw">${k.session || k.expires < 0 ? 'session' : new Date(k.expires * 1000).toLocaleDateString('en-GB')}</td>
       <td>${[k.httpOnly && 'httpOnly', k.secure && 'secure'].filter(Boolean).join(' ')}</td></tr>`).join('')}</table>`
-    : '<p class="empty">Aucun cookie enregistré.</p>');
+    : '<p class="empty">No cookies stored.</p>');
   patch('storage', d.storage, () => d.storage.length
-    ? `<table><tr><th>Origine</th><th>Clés</th></tr>${d.storage.map((o) => `<tr><td class="mono">${esc(o.origin)}</td><td>${o.localStorageKeys}</td></tr>`).join('')}</table>`
-    : '<p class="empty">Rien.</p>');
+    ? `<table><tr><th>Origin</th><th>Keys</th></tr>${d.storage.map((o) => `<tr><td class="mono">${esc(o.origin)}</td><td>${o.localStorageKeys}</td></tr>`).join('')}</table>`
+    : '<p class="empty">Nothing.</p>');
   tickTimes();
 }
 function deleteLogin(btn, site) {
   act(btn, async () => {
-    if (!await confirmSensitive({ title: `Supprimer l'identifiant « ${site} » ?`, desc: 'L\'agent ne pourra plus s\'y connecter. Les cookies déjà présents restent.', label: 'Supprimer', danger: true })) return false;
+    if (!await confirmSensitive({ title: `Delete saved login "${site}"?`, desc: 'The agent can no longer sign in with it. Existing cookies stay.', label: 'Delete', danger: true })) return false;
     await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail(); refreshList();
-  }, `Identifiant ${site} supprimé.`);
+  }, `Saved login ${site} deleted.`);
 }
 function testLogin(btn, site) {
   act(btn, async () => {
     const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-test`, 'POST', { site }); refreshDetail();
     // ok = the form was filled and submitted, not that the site accepted it: the page URL tells.
-    toast(r.ok ? `${site} : formulaire envoyé. Page : ${r.url || 'inconnue'}. Regardez la vue pour vérifier.` : `${site} : remplissage échoué. Page : ${r.url || 'inconnue'}`, r.ok ? undefined : 'error');
+    toast(r.ok ? `${site}: form submitted. Page: ${r.url || 'unknown'}. Check the view to confirm.` : `${site}: fill failed. Page: ${r.url || 'unknown'}`, r.ok ? undefined : 'error');
   });
 }
 
 // ---- Live view (agent-browser stream protocol) ------------------------------------
 function setVstate(text, mode) { const v = $('#vstate'); if (!v) return; setText(v, text); if ((v.dataset.mode || '') !== (mode || '')) v.dataset.mode = mode || ''; }
 async function takeControl(id) {
-  setVstate('Démarrage…');
+  setVstate('Starting…');
   try { await api(`/api/computers/${encodeURIComponent(id)}/start`, 'POST'); } catch (e) { setVstate(e.message); throw e; }
   await refreshList();
   openView(id, true);
@@ -782,10 +782,10 @@ function openView(id, control) {
   if (!$('#screen')) return;
   const ws = new WebSocket(`ws://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
   view = { id, ws, control, meta: null, frames: 0 };
-  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Vue en direct du navigateur">';
+  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live view of the browser">';
   const img = $('#frame'), v = view;
-  ws.onopen = () => { setVstate(v.control ? 'Vous avez la main' : 'En direct', v.control ? 'control' : 'watch'); };
-  ws.onclose = () => { if (view === v) { view = null; setVstate('Vue fermée'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderLiveBar(); } };
+  ws.onopen = () => { setVstate(v.control ? 'You have control' : 'Live', v.control ? 'control' : 'watch'); };
+  ws.onclose = () => { if (view === v) { view = null; setVstate('View closed'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderLiveBar(); } };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'frame') {
@@ -812,7 +812,7 @@ function wireControl() {
   if (!img || !view) return;
   const on = view.control;
   screen.classList.toggle('control', on);
-  setVstate(on ? 'Vous avez la main' : 'En direct', on ? 'control' : 'watch');
+  setVstate(on ? 'You have control' : 'Live', on ? 'control' : 'watch');
   const send = (m) => on && view?.ws.readyState === 1 && view.ws.send(JSON.stringify(m));
   // Map onto the frame itself, not metadata.deviceHeight: that is the window (720), the frame only the page (633),
   // so y scaled by deviceHeight lands too low. deviceWidth / naturalWidth converts frame pixels to CSS pixels.
@@ -834,8 +834,8 @@ function wireControl() {
   // Clipboard: the remote Chrome has its own, so copy/paste go through the gateway instead of keystrokes.
   const ep = (a) => `/api/computers/${encodeURIComponent(view.id)}/${a}`;
   const copyRemote = () => api(ep('copy'), 'POST', {})
-    .then((r) => r.text ? navigator.clipboard.writeText(r.text).then(() => toast('Copié dans votre presse-papiers.')) : toast('Rien de sélectionné.', 'error'))
-    .catch((err) => toast(`Copie impossible : ${err.message}`, 'error'));
+    .then((r) => r.text ? navigator.clipboard.writeText(r.text).then(() => toast('Copied to your clipboard.')) : toast('Nothing selected.', 'error'))
+    .catch((err) => toast(`Copy failed: ${err.message}`, 'error'));
   const key = (type) => (e) => {
     if (!on) return;
     const sc = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase();
@@ -848,59 +848,59 @@ function wireControl() {
   img.onpaste = (e) => {
     if (!on) return; e.preventDefault();
     const t = e.clipboardData.getData('text/plain');
-    if (t.length > 5000) return toast('Texte trop long (5000 caractères max).', 'error');
-    if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Collage impossible : ${err.message}`, 'error'));
+    if (t.length > 5000) return toast('Text too long (5000 characters max).', 'error');
+    if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Paste failed: ${err.message}`, 'error'));
   };
   if (on) img.focus();
 }
 
-// ---- Accès agents: OAuth clients (scope picked at consent) and API keys -----------------
+// ---- Agent access: OAuth clients (scope picked at consent) and API keys -----------------
 const scopePill = (s) => s === 'global' ? '<span class="pill danger">Global</span>' : `<span class="pill green mono">${esc(String(s).replace(/^profile:/, ''))}</span>`;
 function showClients() {
-  setPage('acces', `
-    <div class="head"><div><h1>Accès agents</h1><p class="sub">Tout ce qui peut piloter un profil : clients OAuth et clés API, au même endroit.</p></div>
-      <div class="row"><button type="button" class="btn btn-p" id="bNewKey">+ Créer une clé API</button></div></div>
+  setPage('access', `
+    <div class="head"><div><h1>Agent access</h1><p class="sub">Everything that can drive a profile, in one place: OAuth clients and API keys.</p></div>
+      <div class="row"><button type="button" class="btn btn-p" id="bNewKey">+ Create API key</button></div></div>
     <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
-      <section class="card pad" aria-labelledby="hOauth"><div class="row"><h3 id="hOauth">OAuth</h3><span class="pill green">recommandé</span></div>
-        <p class="hint" style="font-size:14px;line-height:20px">Ajoutez l'URL MCP dans le client. Il s'enregistre seul, vous vous connectez avec votre code 2FA puis choisissez les profils sur la page d'autorisation.</p>${mcpField()}</section>
-      <section class="card pad" aria-labelledby="hKeyInfo"><h3 id="hKeyInfo">Clé API</h3>
-        <p class="hint" style="font-size:14px;line-height:20px">Pour les scripts et clients sans OAuth. Limitée à un profil de préférence, expiration obligatoire, affichée une seule fois. Envoyée en <code>Authorization: Bearer arb_k_…</code> ou <code>x-api-key</code>.</p></section>
+      <section class="card pad" aria-labelledby="hOauth"><div class="row"><h3 id="hOauth">OAuth</h3><span class="pill green">recommended</span></div>
+        <p class="hint" style="font-size:14px;line-height:20px">Add the MCP URL to the client. It registers itself. You sign in with your 2FA code, then pick the profiles on the consent page.</p>${mcpField()}</section>
+      <section class="card pad" aria-labelledby="hKeyInfo"><h3 id="hKeyInfo">API key</h3>
+        <p class="hint" style="font-size:14px;line-height:20px">For scripts and clients without OAuth. Scope it to one profile when you can. Expiry is required and the key is shown only once. Send it as <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>.</p></section>
     </div>
-    <section class="card" aria-labelledby="hActive"><div class="tblhead"><h2 id="hActive">Accès actifs</h2></div>
-      <div id="ctable"><p class="empty">Chargement…</p></div>
-      <div class="tblfoot"><p class="hint">Révoquer coupe immédiatement les jetons et libère les baux de l'agent.</p></div></section>`);
+    <section class="card" aria-labelledby="hActive"><div class="tblhead"><h2 id="hActive">Active access</h2></div>
+      <div id="ctable"><p class="empty">Loading…</p></div>
+      <div class="tblfoot"><p class="hint">Revoking cuts the tokens right away and releases the agent's leases.</p></div></section>`);
   wireMcp();
   $('#bNewKey').onclick = () => openKeyDialog();
   refreshClients();
 }
 async function refreshClients() {
-  let d; try { d = await api('/api/clients'); } catch (e) { if (page === 'acces') toast(e.message, 'error'); return; }
+  let d; try { d = await api('/api/clients'); } catch (e) { if (page === 'access') toast(e.message, 'error'); return; }
   clients = d;
   const n = nClients();
   setText($('#nClients'), String(n)); setText($('#sClients'), String(n));
-  if (page !== 'acces') return;
-  setText($('#hActive'), `Accès actifs · ${n}`);
+  if (page !== 'access') return;
+  setText($('#hActive'), `Active access · ${n}`);
   const rows = [
     ...d.oauth.map((c) => ({ kind: 'clients', id: c.id, name: c.name || c.id, sub: c.id, type: '<span class="pill agent">OAuth</span>',
       scope: (c.scopes || '').split(',').filter(Boolean), created: ago(c.createdAt), extra: '',
-      used: c.lastToken ? ago(c.lastToken) : 'jamais', usedSub: '', ts: c.createdAt })),
-    ...d.keys.map((k) => ({ kind: 'keys', id: k.id, name: k.name, sub: `${k.start}…`, type: '<span class="pill">Clé API</span>',
+      used: c.lastToken ? ago(c.lastToken) : 'never', usedSub: '', ts: c.createdAt })),
+    ...d.keys.map((k) => ({ kind: 'keys', id: k.id, name: k.name, sub: `${k.start}…`, type: '<span class="pill">API key</span>',
       scope: k.scope ? [k.scope] : [], created: ago(k.createdAt),
-      extra: k.noExpiry ? '<span class="pill warn dot">sans expiration : à remplacer</span>' : `expire le ${esc(day(k.expiresAt))}`,
-      used: k.lastRequest ? ago(k.lastRequest) : 'jamais', usedSub: k.lastIp || '', ts: k.createdAt })),
+      extra: k.noExpiry ? '<span class="pill warn dot">no expiry: replace it</span>' : `expires ${esc(day(k.expiresAt))}`,
+      used: k.lastRequest ? ago(k.lastRequest) : 'never', usedSub: k.lastIp || '', ts: k.createdAt })),
   ].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
   patch('ctable', [rows, Math.floor(Date.now() / 60000)], () => rows.length
-    ? `<div class="tbl"><table><tr><th>Agent</th><th>Type</th><th>Portée</th><th>Créé</th><th>Dernier usage</th><th><span class="sr">Révoquer</span></th></tr>${rows.map((r) => `
+    ? `<div class="tbl"><table><tr><th>Agent</th><th>Type</th><th>Scope</th><th>Created</th><th>Last used</th><th><span class="sr">Revoke</span></th></tr>${rows.map((r) => `
       <tr><td><b>${esc(r.name)}</b><span class="s mono">${esc(r.sub)}</span></td><td>${r.type}</td>
-      <td>${r.scope.length ? r.scope.map(scopePill).join(' ') : '<span class="hint">jamais utilisé · supprimé après 24 h</span>'}</td>
+      <td>${r.scope.length ? r.scope.map(scopePill).join(' ') : '<span class="hint">never used · deleted after 24 h</span>'}</td>
       <td class="nw">${esc(r.created)}<span class="s">${r.extra}</span></td>
       <td class="nw">${esc(r.used)}<span class="s mono">${esc(r.usedSub)}</span></td>
-      <td class="act"><button type="button" class="btn btn-sm btn-dl" data-revoke="${r.kind}" data-id="${esc(r.id)}" data-name="${esc(r.name)}">Révoquer</button></td></tr>`).join('')}</table></div>`
-    : '<p class="empty">Aucun accès. Ajoutez l\'URL MCP dans un client (OAuth) ou créez une clé API.</p>')
+      <td class="act"><button type="button" class="btn btn-sm btn-dl" data-revoke="${r.kind}" data-id="${esc(r.id)}" data-name="${esc(r.name)}">Revoke</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">No access yet. Add the MCP URL to a client (OAuth) or create an API key.</p>')
     && $$('[data-revoke]').forEach((b) => { b.onclick = () => act(b, async () => {
-      if (!await confirmSensitive({ title: `Révoquer « ${b.dataset.name} » ?`, desc: 'Ses jetons sont coupés tout de suite et ses baux libérés. L\'agent devra être reconnecté.', label: 'Révoquer', danger: true })) return false;
+      if (!await confirmSensitive({ title: `Revoke "${b.dataset.name}"?`, desc: 'Its tokens are cut right away and its leases released. The agent will need to reconnect.', label: 'Revoke', danger: true })) return false;
       await api(`/api/${b.dataset.revoke}/${encodeURIComponent(b.dataset.id)}/revoke`, 'POST'); refreshClients();
-    }, 'Accès révoqué.'); });
+    }, 'Access revoked.'); });
 }
 
 // API key: created in a dialog, shown once, closable only after the "saved it" box is ticked.
@@ -910,29 +910,29 @@ async function openKeyDialog(profileId) {
   let s = {}; try { s = await api('/api/session'); } catch {}
   const opts = computers.map((c) => `<option value="profile:${esc(c.id)}"${c.id === profileId ? ' selected' : ''}>${esc(c.id)}</option>`).join('');
   d.innerHTML = `<form>
-    <div><h2 id="keyT">Créer une clé API</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">Pour un script ou un client MCP sans OAuth.</p></div>
-    <label class="f">Nom<input class="in" name="name" placeholder="ci-agent" pattern="[\\w .\\-]{1,60}" maxlength="60" required autocomplete="off"></label>
-    <fieldset class="radios"><legend class="lbl">Portée</legend>
-      <label class="opt"><input type="radio" name="kind" value="profile" ${computers.length ? 'checked' : 'disabled'}><span class="grow"><b>Un profil</b><span class="hint">La clé ne voit que ce navigateur.</span>
-        <select class="in" name="profile" style="margin-top:8px" aria-label="Profil" ${computers.length ? '' : 'disabled'}>${opts}</select></span></label>
-      <label class="opt"><input type="radio" name="kind" value="global" ${computers.length ? '' : 'checked'}><span><b>Tous les profils</b><span class="hint">Gère et loue tous les profils, présents et futurs.</span></span></label>
+    <div><h2 id="keyT">Create an API key</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">For a script or an MCP client without OAuth.</p></div>
+    <label class="f">Name<input class="in" name="name" placeholder="ci-agent" pattern="[\\w .\\-]{1,60}" maxlength="60" required autocomplete="off"></label>
+    <fieldset class="radios"><legend class="lbl">Scope</legend>
+      <label class="opt"><input type="radio" name="kind" value="profile" ${computers.length ? 'checked' : 'disabled'}><span class="grow"><b>One profile</b><span class="hint">The key only sees this browser.</span>
+        <select class="in" name="profile" style="margin-top:8px" aria-label="Profile" ${computers.length ? '' : 'disabled'}>${opts}</select></span></label>
+      <label class="opt"><input type="radio" name="kind" value="global" ${computers.length ? '' : 'checked'}><span><b>All profiles</b><span class="hint">Manages and leases every profile, current and future.</span></span></label>
     </fieldset>
-    <div class="alert a-danger" id="gWarn" hidden><p>Une clé globale fuitée donne accès à toutes vos sessions connectées. Préférez une clé par profil.</p></div>
-    <fieldset class="radios"><legend class="lbl">Expiration</legend>
-      <div class="seg">${[['30d', '30 jours'], ['90d', '90 jours', 1], ['1y', '1 an'], ['date', 'Date précise']].map(([v, l, c]) => `<label><input type="radio" name="exp" value="${v}"${c ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div>
-      <input class="in" type="date" name="date" min="${isoDay(1)}" max="${isoDay(364)}" aria-label="Date d'expiration" hidden>
+    <div class="alert a-danger" id="gWarn" hidden><p>A leaked global key gives access to all your signed-in sessions. Prefer one key per profile.</p></div>
+    <fieldset class="radios"><legend class="lbl">Expiry</legend>
+      <div class="seg">${[['30d', '30 days'], ['90d', '90 days', 1], ['1y', '1 year'], ['date', 'Specific date']].map(([v, l, c]) => `<label><input type="radio" name="exp" value="${v}"${c ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <input class="in" type="date" name="date" min="${isoDay(1)}" max="${isoDay(364)}" aria-label="Expiry date" hidden>
       <p class="hint" id="expText"></p>
     </fieldset>
-    <p class="hint">${s.stepUpRemainingS > 0 ? `Code 2FA vérifié : plus de code demandé pendant ${Math.ceil(s.stepUpRemainingS / 60)} min.` : 'Votre code 2FA sera demandé à la création.'}</p>
+    <p class="hint">${s.stepUpRemainingS > 0 ? `2FA code verified: no code needed for the next ${Math.ceil(s.stepUpRemainingS / 60)} min.` : 'You will be asked for your 2FA code when you create the key.'}</p>
     <p class="msg err" aria-live="polite"></p>
-    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn btn-p">Créer la clé</button></div></form>`;
+    <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn btn-p">Create key</button></div></form>`;
   d.setAttribute('aria-labelledby', 'keyT');
   const f = $('form', d);
   const sync = () => {
     $('#gWarn').hidden = f.kind.value !== 'global'; f.profile.disabled = f.kind.value !== 'profile';
     const exp = f.exp.value; f.date.hidden = exp !== 'date'; f.date.required = exp === 'date';
     const at = exp === 'date' ? (f.date.value ? new Date(f.date.value + 'T23:59:59') : null) : new Date(Date.now() + { '30d': 30, '90d': 90, '1y': 365 }[exp] * 86400000);
-    setText($('#expText'), `${at ? `Expire le ${day(at)}.` : 'Choisissez une date (1 à 364 jours).'} Pas d'option « jamais ».`);
+    setText($('#expText'), `${at ? `Expires ${day(at)}.` : 'Pick a date (1 to 364 days).'} There is no "never" option.`);
   };
   f.onchange = sync; sync();
   $('[data-cancel]', f).onclick = () => d.close();
@@ -950,12 +950,12 @@ async function openKeyDialog(profileId) {
 function showKey(r, body) {
   const d = $('#keyDlg');
   d.innerHTML = `<div class="dlg">
-    <div><h2 id="keyT">Clé créée : copiez-la maintenant</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">${esc(body.name)} · ${body.scope === 'global' ? 'tous les profils' : esc(body.scope.replace(/^profile:/, 'profil '))} · expire le ${esc(day(r.expiresAt))}</p></div>
-    <div class="alert a-warn"><p>Elle ne sera plus jamais affichée : le serveur ne garde qu'une empreinte. Perdue = révoquez-la et créez-en une autre.</p></div>
-    <div class="urlbar"><input class="in mono" id="keyVal" readonly aria-label="Clé API"><button type="button" class="btn btn-p" id="bCopyKey">Copier</button></div>
-    <div class="stack" style="gap:4px"><span class="lbl">Configuration MCP (la clé dans la variable ARB_KEY)</span><pre class="term" id="keyCfg"></pre></div>
-    <label class="check"><input type="checkbox" id="keySaved"><span>J'ai enregistré la clé dans un endroit sûr</span></label>
-    <div class="actions"><button type="button" class="btn btn-p" id="bKeyDone" disabled>Fermer</button></div></div>`;
+    <div><h2 id="keyT">Key created: copy it now</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">${esc(body.name)} · ${body.scope === 'global' ? 'all profiles' : esc(body.scope.replace(/^profile:/, 'profile '))} · expires ${esc(day(r.expiresAt))}</p></div>
+    <div class="alert a-warn"><p>It will never be shown again: the server only keeps a hash. If you lose it, revoke it and create a new one.</p></div>
+    <div class="urlbar"><input class="in mono" id="keyVal" readonly aria-label="API key"><button type="button" class="btn btn-p" id="bCopyKey">Copy</button></div>
+    <div class="stack" style="gap:4px"><span class="lbl">MCP config (the key goes in the ARB_KEY variable)</span><pre class="term" id="keyCfg"></pre></div>
+    <label class="check"><input type="checkbox" id="keySaved"><span>I saved the key somewhere safe</span></label>
+    <div class="actions"><button type="button" class="btn btn-p" id="bKeyDone" disabled>Close</button></div></div>`;
   $('#keyVal').value = r.key;
   setText($('#keyCfg'), JSON.stringify({ url: mcpUrl(), headers: { Authorization: 'Bearer $ARB_KEY' } }, null, 2));
   $('#bCopyKey').onclick = (e) => copy(e.currentTarget, r.key);
@@ -965,36 +965,36 @@ function showKey(r, body) {
   $('#keyVal').focus(); $('#keyVal').select();
 }
 
-// ---- Sécurité: 2FA is managed on the host (CLI), this page only explains how -----------
+// ---- Security: 2FA is managed on the host (CLI), this page only explains how -----------
 function showSecurity() {
-  const email = me.email || 'admin@exemple.com', reset = `docker compose exec gateway node src/cli.ts admin reset-2fa ${email}`;
-  setPage('securite', `
-    <div class="head"><div><h1>Sécurité du compte</h1><p class="sub">La double authentification se gère depuis la machine hôte, en ligne de commande. Avoir accès au terminal du serveur prouve que c'est bien vous.</p></div></div>
+  const email = me.email || 'admin@example.com', reset = `docker compose exec gateway node src/cli.ts admin reset-2fa ${email}`;
+  setPage('security', `
+    <div class="head"><div><h1>Account security</h1><p class="sub">Two-factor authentication is managed from the host machine, on the command line. Access to the server's terminal proves it's you.</p></div></div>
     <section class="card pad" aria-labelledby="hStatus" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:20px">
       <span class="tile" style="width:48px;height:48px;background:var(--green-soft);color:var(--primary)"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-      <div class="grow" style="flex-basis:260px"><h2 id="hStatus">Double authentification active</h2><span class="hint" style="font-size:14px">Application d'authentification (TOTP) · ${esc(email)}</span></div>
+      <div class="grow" style="flex-basis:260px"><h2 id="hStatus">Two-factor authentication is on</h2><span class="hint" style="font-size:14px">Authenticator app (TOTP) · ${esc(email)}</span></div>
       <dl class="row" style="margin:0;gap:8px 32px">
-        <div><dt class="lbl">Activée</dt><dd style="margin:0;font-weight:600">par la CLI, à la création du compte</dd></div>
-        <div><dt class="lbl">Codes de secours</dt><dd style="margin:0;font-weight:600">10 générés, usage unique</dd></div>
-        <div><dt class="lbl">Verrouillage</dt><dd style="margin:0;font-weight:600">5 essais, puis 15 min</dd></div>
+        <div><dt class="lbl">Enabled</dt><dd style="margin:0;font-weight:600">by the CLI, when the account was created</dd></div>
+        <div><dt class="lbl">Backup codes</dt><dd style="margin:0;font-weight:600">10 generated, single use</dd></div>
+        <div><dt class="lbl">Lockout</dt><dd style="margin:0;font-weight:600">5 attempts, then 15 min</dd></div>
       </dl></section>
     <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
-      <section class="card pad" aria-labelledby="hReset"><div><h2 id="hReset">Changer de téléphone ou régénérer les codes</h2><p class="hint" style="font-size:14px;line-height:20px">Aussi en cas de perte : téléphone et codes de secours introuvables.</p></div>
-        <div class="stack" style="gap:4px"><span class="lbl">Sur la machine hôte</span><div class="urlbar"><pre class="term grow" id="resetCmd"></pre><button type="button" class="btn" id="bCopyReset">Copier</button></div></div>
+      <section class="card pad" aria-labelledby="hReset"><div><h2 id="hReset">Change phone or regenerate codes</h2><p class="hint" style="font-size:14px;line-height:20px">Also if you have lost both your phone and your backup codes.</p></div>
+        <div class="stack" style="gap:4px"><span class="lbl">On the host machine</span><div class="urlbar"><pre class="term grow" id="resetCmd"></pre><button type="button" class="btn" id="bCopyReset">Copy</button></div></div>
         <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px">
-          <li>Demande un nouveau mot de passe (12 caractères minimum)</li>
-          <li>Affiche une fois le lien otpauth:// à ajouter dans l'application</li>
-          <li>Vérifie un premier code, puis affiche 10 nouveaux codes de secours</li>
-          <li>Ferme toutes les sessions admin : <strong>vous serez déconnecté ici</strong></li>
+          <li>Asks for a new password (12 characters minimum)</li>
+          <li>Shows the otpauth:// link to add to your authenticator app, once</li>
+          <li>Checks a first code, then shows 10 new backup codes</li>
+          <li>Ends all admin sessions: <strong>you will be signed out here</strong></li>
         </ol></section>
-      <aside class="card pad" aria-labelledby="hTips"><h2 id="hTips">Bonnes pratiques</h2>
-        <p style="margin:0">Gardez les codes de secours hors ligne, ailleurs que sur le téléphone.</p>
-        <p style="margin:0">Le lien otpauth:// contient le secret : ne le collez dans aucun chat ni ticket.</p>
-        <p style="margin:0">Pas d'accès au serveur ? Personne ne peut réinitialiser la 2FA depuis le navigateur, c'est voulu.</p>
-        <p style="margin:0">Les actions sensibles (domaines, identifiants, clés, suppression) redemandent un code toutes les 15 min. Cinq codes faux ferment la session.</p>
-        <details style="border-top:1px solid var(--line3);padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:var(--primary)">Installation neuve : créer l'admin</summary>
-          <pre class="term" style="margin-top:10px">docker compose exec gateway node src/cli.ts admin create vous@exemple.com</pre>
-          <p class="hint" style="margin-top:6px">Un seul admin par passerelle. Même déroulé : mot de passe, lien otpauth://, premier code, codes de secours.</p></details>
+      <aside class="card pad" aria-labelledby="hTips"><h2 id="hTips">Good practices</h2>
+        <p style="margin:0">Keep backup codes offline, somewhere other than your phone.</p>
+        <p style="margin:0">The otpauth:// link contains the secret: never paste it into a chat or a ticket.</p>
+        <p style="margin:0">No server access? Nobody can reset 2FA from the browser. That is by design.</p>
+        <p style="margin:0">Sensitive actions (domains, saved logins, keys, deletion) ask for a code again every 15 min. Five wrong codes end the session.</p>
+        <details style="border-top:1px solid var(--line3);padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:var(--primary)">Fresh install: create the admin</summary>
+          <pre class="term" style="margin-top:10px">docker compose exec gateway node src/cli.ts admin create you@example.com</pre>
+          <p class="hint" style="margin-top:6px">One admin per gateway. Same steps: password, otpauth:// link, first code, backup codes.</p></details>
       </aside>
     </div>`);
   setText($('#resetCmd'), reset);
@@ -1008,9 +1008,9 @@ async function refreshList() {
   if (page === 'profiles') renderProfiles();
   if (page === 'profile') { if (selected && !computers.some((c) => c.id === selected)) return route(); renderProfile(); }
 }
-setInterval(() => { if (view) { setText($('#vfps'), `${view.frames} img/s`); view.frames = 0; } tickLease(); }, 1000);
+setInterval(() => { if (view) { setText($('#vfps'), `${view.frames} fps`); view.frames = 0; } tickLease(); }, 1000);
 setInterval(() => authed && refreshList(), 3000);
-setInterval(() => { if (!authed) return; refreshDetail(); if (page === 'acces') refreshClients(); }, 5000);
+setInterval(() => { if (!authed) return; refreshDetail(); if (page === 'access') refreshClients(); }, 5000);
 fetch('/api/auth/get-session').then((r) => r.json()).then((s) => s?.user?.twoFactorEnabled ? showApp() : showLogin(), showLogin);
 </script>
 </body>
