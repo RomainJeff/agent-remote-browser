@@ -16,7 +16,7 @@ process.env.STATE_FILE = join(dir, 'state.json');
 process.env.LOGIN_KEY_FILE = join(dir, 'login.key');
 delete process.env.PUBLIC_URL;
 const { state } = await import('../../store.mjs');
-const { hash } = await import('../../policy.mjs');
+const { hash } = await import('../../src/policy.ts');
 
 const token = randomBytes(32).toString('hex');
 const redirect_uri = 'https://example.com/callback';

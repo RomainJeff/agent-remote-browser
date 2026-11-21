@@ -3,7 +3,7 @@ import http from 'node:http';
 import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
-import { urlAllowed } from './policy.mjs';
+import { urlAllowed } from './src/policy.ts';
 
 export function publicIPv4(address) {
   if (!net.isIPv4(address)) return false;

@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY *.mjs admin.html ./
+COPY src ./src
 # Test suite runs at build time (fake docker, no daemon needed); test/ is bind-mounted, never shipped.
 RUN --mount=type=bind,source=test,target=/app/test node --test "test/**/*.test.ts"
 EXPOSE 8787 8788

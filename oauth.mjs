@@ -2,7 +2,7 @@
 // Registration (RFC 7591), authorization code + PKCE S256, refresh token rotation.
 // The consent page asks for an access token: a profile token (-> that profile) or the global token.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { hash, redirectUriOk, pkceOk, windowBudget } from './policy.mjs';
+import { hash, redirectUriOk, pkceOk, windowBudget } from './src/policy.ts';
 import { state, save, principalForStatic, issueTokens } from './store.mjs';
 
 const rand = () => randomBytes(24).toString('base64url');

@@ -3,7 +3,7 @@
 // Saved login envelopes bind the password to its profile, site, URL and username.
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { randomBytes, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
-import { hash } from './policy.mjs';
+import { hash } from './src/policy.ts';
 
 const FILE = process.env.STATE_FILE || new URL('./data/state.json', import.meta.url).pathname;
 const state = existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : {};

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { urlAllowed, slug, validId, validDomain, redirectUriOk, pkceOk, localRequest, windowBudget } from '../../policy.mjs';
+import { urlAllowed, slug, validId, parseProfileId, validDomain, redirectUriOk, pkceOk, localRequest, windowBudget } from '../../src/policy.ts';
 
 test('urlAllowed: exact domain or subdomain, http(s) only, no credentials or port', () => {
   const allow = ['example.com'];
@@ -21,6 +21,8 @@ test('slug and validId', () => {
   for (const id of ['notion-demo', 'a', '0', 'a'.repeat(40)]) assert.equal(validId(id), true, id);
   for (const id of ['__proto__', '-x', 'A', '', 'a'.repeat(41), '../x', 'a b', 'a.b', 42, null, undefined])
     assert.equal(validId(id), false, String(id));
+  assert.equal(parseProfileId('shop'), 'shop');
+  assert.equal(parseProfileId('../x'), null);
 });
 
 test('validDomain refuses IPs, internal TLDs and lists', () => {

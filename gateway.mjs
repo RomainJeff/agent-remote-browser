@@ -7,7 +7,7 @@ import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { urlAllowed, localRequest, slug, validId, validDomain, hash } from './policy.mjs';
+import { urlAllowed, localRequest, slug, validId, validDomain, hash } from './src/policy.ts';
 import { state, save, profile, principalFor, decryptLogin, encryptLogin, revoke, newToken } from './store.mjs';
 import { oauth, wwwAuthenticate } from './oauth.mjs';
 
