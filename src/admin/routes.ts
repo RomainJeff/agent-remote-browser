@@ -164,7 +164,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (session === false) return send(res, 403, { error: 'forbidden' });
       if (!session) return send(res, 401, { error: 'Sign in first' });
       const sid = session.session.id;
-      if (path === '/api/session') return send(res, 200, { email: session.user.email, stepUpRemainingS: stepUpLeft(sid) });
+      if (path === '/api/session') return send(res, 200, { email: session.user.email, stepUpRemainingS: stepUpLeft(sid), mcpUrl: `${cfg.publicUrl}/mcp` });
       if (path === '/api/step-up' && post) {
         const b = (await readJson(req)) || {}, field = typeof b.code === 'string' ? 'code' : typeof b.backupCode === 'string' ? 'backupCode' : null;
         if (!field) return send(res, 400, { error: 'code (TOTP) or backupCode required' });

@@ -436,10 +436,10 @@ function setPage(p, html) {
   scrollTo(0, 0);
 }
 const MCP_KEY = 'agentComputer.mcpUrl';
-const mcpUrl = () => { let v = null; try { v = localStorage.getItem(MCP_KEY); } catch {} return v || `${location.protocol}//${location.hostname}:${+location.port - 1}/mcp` /* MCP port = admin port - 1 */; };
+const mcpUrl = () => { let v = null; try { v = localStorage.getItem(MCP_KEY); } catch {} return v || me.mcpUrl || ''; /* server side: PUBLIC_URL + /mcp */ };
 const mcpField = () => `<div class="stack" style="gap:4px"><label class="lbl" for="mcpUrl">MCP server URL</label>
   <div class="urlbar"><input class="in mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" class="btn" id="bCopyUrl">Copy</button></div>
-  <p class="hint">Remote client (Notion…): the tunnel's public URL (<code>docker compose logs tunnel</code>) + <code>/mcp</code>. Your edit stays in this browser.</p></div>`;
+  <p class="hint"><code>PUBLIC_URL</code> + <code>/mcp</code>. Your edit stays in this browser.</p></div>`;
 function wireMcp() {
   const u = $('#mcpUrl'); if (!u) return;
   u.value = mcpUrl();
