@@ -12,8 +12,10 @@ const dir = mkdtempSync(join(tmpdir(), 'arb-eng-'));
 const socket = join(dir, 'docker.sock');
 const id = parseProfileId('shop')!;
 let log: { method: string; url: string; body?: any }[] = [];
-let running = false;
-const volumes = new Set(['ac-profile-shop']);
+// name -> container: created ones keep the labels of their spec; arb-gateway-1 stands for compose's own gateway.
+const containers = new Map<string, { Labels: Record<string, string> | null; running: boolean }>(
+  [['arb-gateway-1', { Labels: { 'com.docker.compose.service': 'gateway' }, running: true }]]);
+const volumes = new Map<string, Record<string, string> | null>([['ac-profile-shop', null], ['arb-profile-gateway-1', null]]);
 let copyExit = 0;
 
 const frame = (stream: number, s: string) => {
@@ -29,17 +31,23 @@ const server = http.createServer((req, res) => {
     const url = req.url!, method = req.method!;
     log.push({ method, url, ...(raw && { body: JSON.parse(raw) }) });
     const reply = (status: number, body?: object) => res.writeHead(status, { 'content-type': 'application/json' }).end(body && JSON.stringify(body));
-    if (method === 'GET' && url === '/v1.47/containers/arb-shop/json')
-      return running ? reply(200, { State: { Running: true, StartedAt: '2026-01-01T00:00:00Z' }, HostConfig: { NetworkMode: 'none' } }) : reply(404, { message: 'No such container: arb-shop' });
-    if (url === '/v1.47/containers/arb-shop/start') { running = true; return reply(204); }
+    const [, name, action] = url.match(/^\/v1\.47\/containers\/([\w-]+)(?:\/(\w+)|\?force=true)?$/) ?? [];
+    const c = name && containers.get(name);
+    if (method === 'GET' && action === 'json') return c
+      ? reply(200, { Config: { Labels: c.Labels }, State: { Running: c.running, StartedAt: '2026-01-01T00:00:00Z' } })
+      : reply(404, { message: 'No such container' });
+    if (action === 'start' && c) { c.running = true; return reply(204); }
+    if (method === 'DELETE' && name) { containers.delete(name); return reply(204); }
+    const created = url.match(/^\/v1\.47\/containers\/create\?name=([\w-]+)$/)?.[1];
+    if (created) containers.set(created, { Labels: JSON.parse(raw).Labels ?? null, running: false });
     if (url === '/v1.47/containers/arb-shop/exec') return reply(201, { Id: 'e1' });
     if (url === '/v1.47/exec/e1/json') return reply(200, { Running: false, ExitCode: 3 });
     if (url.startsWith('/v1.47/containers/json')) return reply(200, [
       { Labels: { 'arb-computer': 'shop' }, State: 'running', Created: 1 }, { Labels: { 'arb-computer': 'old' }, State: 'exited', Created: 2 }]);
-    const vol = url.match(/^\/v1\.47\/volumes\/([\w-]+)$/)?.[1];
-    if (vol && method === 'GET') return volumes.has(vol) ? reply(200, { Name: vol }) : reply(404, { message: 'no such volume' });
+    const vol = url.match(/^\/v1\.47\/volumes\/([\w-]+)(?:\?force=true)?$/)?.[1];
+    if (vol && method === 'GET') return volumes.has(vol) ? reply(200, { Name: vol, Labels: volumes.get(vol) }) : reply(404, { message: 'no such volume' });
     if (vol && method === 'DELETE') { volumes.delete(vol); return reply(204); }
-    if (url === '/v1.47/volumes/create') volumes.add(JSON.parse(raw).Name);
+    if (url === '/v1.47/volumes/create') volumes.set(JSON.parse(raw).Name, JSON.parse(raw).Labels ?? null);
     if (url === '/v1.47/containers/arb-migrate-shop/wait') return reply(200, { StatusCode: copyExit });
     if (method === 'DELETE') return reply(204);
     reply(201, {});
@@ -81,8 +89,13 @@ test('ensure on a missing computer: volume, fixed hardened spec, start', async (
   assert.deepEqual(log[1].body, { Name: 'arb-profile-shop', Labels: { 'arb-computer': 'shop' } });
   const spec = log[2].body;
   assert.equal(spec.Image, 'arb-computer:dev');
-  assert.deepEqual(spec.Labels, { 'arb-computer': 'shop' });
+  assert.equal(spec.Labels['arb-computer'], 'shop');
+  assert.match(spec.Labels['arb-spec'], /^[0-9a-f]{16}$/);
   const h = spec.HostConfig;
+  assert.equal(h.ReadonlyRootfs, true);
+  assert.deepEqual(Object.keys(h.Tmpfs), ['/tmp', '/home/agent']);
+  assert.equal(h.Privileged, undefined);
+  assert.equal(h.Binds, undefined);
   assert.equal(h.NetworkMode, 'none');
   assert.deepEqual(h.CapDrop, ['ALL']);
   assert.deepEqual(h.SecurityOpt, ['no-new-privileges']);
@@ -95,14 +108,38 @@ test('ensure on a missing computer: volume, fixed hardened spec, start', async (
   log = [];
   await driver.ensure(id, { egressDir: '/unused' });
   assert.deepEqual(log.map((l) => l.method), ['GET'], 'running computer: inspect only');
+
+  containers.get('arb-shop')!.Labels!['arb-spec'] = 'older';
+  log = [];
+  await driver.ensure(id, { egressDir: '/unused' });
+  assert.deepEqual(log.map((l) => `${l.method} ${l.url}`).slice(0, 4), [
+    'GET /v1.47/containers/arb-shop/json', 'GET /v1.47/containers/arb-shop/json',
+    'DELETE /v1.47/containers/arb-shop?force=true', 'POST /v1.47/volumes/create'], 'older spec: recreated, volume kept');
+  assert.ok(!log.some((l) => l.method === 'DELETE' && l.url.includes('/volumes/')));
+});
+
+test('a container of the same name without our label is never touched', async () => {
+  const other = parseProfileId('gateway-1')!;
+  log = [];
+  await assert.rejects(driver.ensure(other, { egressDir: '' }), /not a computer of this stack/);
+  await assert.rejects(driver.exec(other, ['true'], { timeoutMs: 1000 }), /not a computer of this stack/);
+  await assert.rejects(driver.stream(other), /not a computer of this stack/);
+  await assert.rejects(driver.stop(other), /not a computer of this stack/);
+  await assert.rejects(driver.remove(other, { keepVolume: false }), /not a computer of this stack/);
+  assert.ok(log.every((l) => l.method === 'GET'), 'reads only');
+  // No foreign container, but an unlabeled volume of the same name: not deleted either.
+  containers.delete('arb-gateway-1');
+  await assert.rejects(driver.remove(other, { keepVolume: false }), /not a profile volume of this stack/);
+  assert.ok(volumes.has('arb-profile-gateway-1'));
 });
 
 test('exec: stdin sent then closed, stdout and stderr demuxed, exit code read', async () => {
   log = [];
   const r = await driver.exec(id, ['cat'], { stdin: 'secret', timeoutMs: 5000 });
   assert.deepEqual(r, { code: 3, stdout: 'got:secret', stderr: 'warn' });
-  assert.deepEqual(log[0].body, { Cmd: ['cat'], AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: false });
-  assert.equal(log[1].url, '/v1.47/exec/e1/start');
+  assert.equal(log[0].url, '/v1.47/containers/arb-shop/json');
+  assert.deepEqual(log[1].body, { Cmd: ['timeout', '-k', '5', '5', 'cat'], AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: false });
+  assert.equal(log[2].url, '/v1.47/exec/e1/start');
 });
 
 test('list maps the prefix label; remove deletes container and volume', async () => {
@@ -112,7 +149,9 @@ test('list maps the prefix label; remove deletes container and volume', async ()
   log = [];
   await driver.remove(id, { keepVolume: false });
   assert.deepEqual(log.map((l) => `${l.method} ${l.url}`),
-    ['DELETE /v1.47/containers/arb-shop?force=true', 'DELETE /v1.47/volumes/arb-profile-shop?force=true']);
+    ['GET /v1.47/containers/arb-shop/json', 'DELETE /v1.47/containers/arb-shop?force=true',
+      'GET /v1.47/volumes/arb-profile-shop', 'DELETE /v1.47/volumes/arb-profile-shop?force=true']);
+  assert.equal(volumes.has('arb-profile-shop'), false);
 });
 
 test('copyVolume: read-only source, no network, throwaway container removed; never overwrites', async () => {
