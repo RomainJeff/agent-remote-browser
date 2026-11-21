@@ -89,6 +89,27 @@ assert.match(snap.text, /untrusted_page_content origin="https:\/\/example\.com/)
 assert.ok((await call('open', { url: 'https://example.org/' })).error, 'outside the allowlist');
 log('MCP open + snapshot ok, example.org refused');
 
+// 4b. Lot 7b admin UX: step-up window open after the TOTP sign-in, key expiry and last IP listed, saved-login
+// test through the real agent-browser (example.com has no form: ok or not, the shape and the secrecy are what count).
+const me = await admin('GET', '/api/session');
+assert.ok(me.json.stepUpRemainingS > 0 && me.json.stepUpRemainingS <= 900, me.text);
+const keys = (await admin('GET', '/api/clients')).json.keys;
+assert.equal(keys.length, 1);
+assert.ok(keys[0].expiresAt && keys[0].noExpiry === false && keys[0].lastIp, JSON.stringify(keys[0]));
+const sitePw = randomBytes(18).toString('base64url');
+assert.equal((await admin('POST', '/api/computers/smoke/login-save', { site: 'main', url: 'https://example.com/', username: 'smoke', password: sitePw })).status, 200);
+const t = await admin('POST', '/api/computers/smoke/login-test', { site: 'main' });
+assert.equal(t.status, 200, t.text);
+assert.equal(typeof t.json.ok, 'boolean');
+assert.match(t.json.url, /^https:\/\/example\.com/);
+const tested = (await admin('GET', '/api/computers/smoke')).json.logins[0];
+assert.equal(tested.lastResult, t.json.ok ? 'ok' : 'fail');
+assert.ok(!JSON.stringify(tested).includes(sitePw));
+assert.ok(!compose('logs', '--no-color').includes(sitePw), 'password in the logs');
+assert.ok(!compose('exec', '-T', 'gateway', 'cat', '/data/audit.jsonl').includes(sitePw), 'password in the audit');
+assert.equal((await admin('POST', '/api/computers/smoke/login-delete', { site: 'main' })).status, 200);
+log(`step-up ${me.json.stepUpRemainingS}s, key expiry + last IP listed, login test: ok=${t.json.ok} on ${t.json.url}`);
+
 // 5. The computer as created by the runner: read-only rootfs, writable tmpfs, the expected runtime.
 const name = `${P}-smoke`;
 const hc = JSON.parse(docker('inspect', '--format', '{{json .HostConfig}}', name));
