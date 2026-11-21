@@ -27,6 +27,12 @@ const DRAIN_MS = 8_000;
 const timeout = <T>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(Error('timeout')), ms).unref())]);
 
+/** Rate limits key on Cf-Connecting-IP (better-auth.ts). Kept only behind the tunnel (TRUST_PROXY=cloudflare), else
+ *  overwritten with the socket address: a direct client cannot pick its own IP. */
+export function clientIp(req: http.IncomingMessage, trust: boolean) {
+  if (!trust || !req.headers['cf-connecting-ip']) req.headers['cf-connecting-ip'] = req.socket.remoteAddress || 'unknown';
+}
+
 const listen = (server: http.Server, port: number, host: string) =>
   new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, () => resolve()));
 
@@ -52,6 +58,7 @@ export async function start(cfg: Config, driver: HostDriver) {
 
   const opts = { requestTimeout: 30_000, headersTimeout: 10_000 };
   const mcp = http.createServer(opts, async (req, res) => {
+    clientIp(req, cfg.trustProxy);
     try {
       // Probes: unauthenticated, no details.
       if (req.url === '/healthz') return res.end('ok');
@@ -81,7 +88,7 @@ export async function start(cfg: Config, driver: HostDriver) {
   });
 
   if (cfg.adminPublic) mcp.on('upgrade', (req, sock, head) => admin.upgrade(req, sock, head, true));
-  const adminServer = http.createServer(opts, (req, res) => admin.handle(req, res, false))
+  const adminServer = http.createServer(opts, (req, res) => { clientIp(req, false); admin.handle(req, res, false); })
     .on('upgrade', (req, sock, head) => admin.upgrade(req, sock, head, false));
 
   await listen(mcp, cfg.port, cfg.bindAddr);

@@ -46,7 +46,7 @@ export function createAuth(db: DatabaseSync, o: AuthOptions) {
     emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
     session: { expiresIn: 12 * 3600, updateAge: 3600 },
     advanced: {
-      // Behind Cloudflare. ponytail: spoofable when the listener is reached directly; the TOTP lockout still bounds guessing.
+      // Set by the listener (clientIp in server.ts): Cloudflare's value behind the tunnel, else the socket address.
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
       useSecureCookies: o.baseURL.startsWith('https://'),
     },

@@ -41,19 +41,19 @@ const env = () => ({
   PORT: String(PORT), ADMIN_PORT: String(ADMIN), PUBLIC_URL: base, DATA_DIR: f.data, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
   LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, RUNNER_SOCKET: runnerSock, BETTER_AUTH_SECRET: 'synthetic-' + 'x'.repeat(40),
 });
-const boot = () => start(loadConfig(env()), new RunnerDriver(runnerSock));
+const boot = (extra = {}) => start(loadConfig({ ...env(), ...extra }), new RunnerDriver(runnerSock));
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); });
 });
 
 /** Graceful close, then boot on new ports: fetch's keep-alive pool may hold a socket the old server closed. */
-async function restart() {
+async function restart(extra: Record<string, string> = {}) {
   await app.close();
   fake.calls = [];
   [PORT, ADMIN] = [await freePort(), await freePort()];
   base = `http://127.0.0.1:${PORT}`;
-  app = await boot();
+  app = await boot(extra);
 }
 
 before(async () => {
@@ -487,4 +487,16 @@ test('a lease survives a gateway restart', async () => {
   const viaLease = await call(tokens.global, 'open', { lease, url: 'https://example.com/' });
   assert.ok(!viaLease.error, viaLease.text);
   assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', { lease })).text), { released: true });
+});
+
+test('client IP: Cf-Connecting-IP is ignored unless TRUST_PROXY=cloudflare', async () => {
+  const register = (ip: string) => fetch(base + '/api/auth/oauth2/register', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
+    body: JSON.stringify({ redirect_uris: ['http://127.0.0.1:9/cb'], token_endpoint_auth_method: 'none' }) });
+  // Direct clients: a fresh fake IP per call does not escape the 5 per minute per IP rule (keyed on the socket).
+  const direct = [];
+  for (let i = 0; i < 6; i++) direct.push((await register(`203.0.113.${i + 1}`)).status);
+  assert.ok(direct.includes(429), direct.join());
+  // Behind the tunnel (the listener is reachable through cloudflared only), Cloudflare's header is the client.
+  await restart({ TRUST_PROXY: 'cloudflare' });
+  for (let i = 0; i < 6; i++) assert.equal((await register(`203.0.113.${i + 101}`)).status, 201, `client ${i + 1}`);
 });

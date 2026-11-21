@@ -27,8 +27,7 @@ export function rawBody(req: IncomingMessage, max = 64e3): Promise<Buffer> {
 export async function callAuth(auth: Auth, base: string, req: IncomingMessage, path: string, body?: object) {
   const headers = toHeaders(req.headers);
   headers.delete('host'); headers.delete('content-length'); headers.delete('connection');
-  // Rate limits key on the client IP: Cloudflare's header, else the socket (tunnel-less dev, admin port).
-  if (!headers.has('cf-connecting-ip')) headers.set('cf-connecting-ip', req.socket.remoteAddress || 'unknown');
+  // Cf-Connecting-IP (the rate limit key) was settled by the listener: see clientIp in server.ts.
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
   if (body) headers.set('content-type', 'application/json');
   return auth.handler(new Request(base + path, {

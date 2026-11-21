@@ -33,6 +33,9 @@ const schema = z.object({
    *  Required with ADMIN_PUBLIC=1. */
   ACCESS_AUD: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   ACCESS_TEAM: z.string().regex(/^[a-z0-9-]{1,63}$/).optional(),
+  /** cloudflare = the client IP comes from Cf-Connecting-IP (set it only when the listener is reachable through the
+   *  tunnel alone: compose.tunnel.yaml). Empty = the socket address; client IP headers are ignored. */
+  TRUST_PROXY: z.enum(['', 'cloudflare']).default(''),
   /** Append-only JSON lines: who called which tool, when, ok or not. Never arguments. */
   AUDIT_FILE: z.string().min(1).default(root('audit.jsonl')),
   /** If this file exists, every tool call is refused. */
@@ -86,7 +89,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     production: c.NODE_ENV === 'production',
     bindAddr: c.BIND_ADDR, port: c.PORT, adminPort: c.ADMIN_PORT, publicUrl: (c.PUBLIC_URL ?? `http://localhost:${c.PORT}`).replace(/\/$/, ''),
     authSecret: c.BETTER_AUTH_SECRET, authSecretFile: c.BETTER_AUTH_SECRET_FILE, adminPublic: c.ADMIN_PUBLIC,
-    access: c.ACCESS_AUD && c.ACCESS_TEAM ? { aud: c.ACCESS_AUD, team: c.ACCESS_TEAM } : null,
+    access: c.ACCESS_AUD && c.ACCESS_TEAM ? { aud: c.ACCESS_AUD, team: c.ACCESS_TEAM } : null, trustProxy: c.TRUST_PROXY === 'cloudflare',
     dataDir: c.DATA_DIR, loginKeyFile: c.LOGIN_KEY_FILE, auditFile: c.AUDIT_FILE, killFile: c.KILL_FILE,
     idleMs: c.IDLE_MIN * 60_000, prefix: c.ARB_PREFIX, egressDir: c.EGRESS_DIR, runnerSocket: c.RUNNER_SOCKET,
   };
