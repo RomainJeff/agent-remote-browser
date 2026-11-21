@@ -31,6 +31,7 @@ test('lifecycle: request -> take -> done; one open per profile; lease frozen the
   assert.equal(h.request('p', lh, 'again', 30), null);
   assert.ok(leases.of('p')!.exp >= r.deadline + MIN, 'frozen until the deadline');
   assert.ok(leases.use(token)!.exp >= r.deadline + MIN, 'use() does not shorten a frozen lease');
+  assert.ok(leases.extend('p', 1)!.exp >= r.deadline + MIN, 'admin extend does not shorten a frozen lease');
   assert.equal(h.take(r.id)?.state, 'taken');
   assert.equal(h.take(r.id), null);
   assert.equal(h.open('p')?.state, 'taken');

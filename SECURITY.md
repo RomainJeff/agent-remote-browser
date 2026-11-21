@@ -27,7 +27,7 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 - **Handoff Done / Failed are not step-up gated.** A stolen session can end a request (and Take over unlocks live input on that profile until it ends).
 - **Handoff link is relayed by the agent.** It carries no secret, but a manipulated agent can hand over another link instead: check the host before signing in.
 - **TOTP replay** within its 30 s window, for sign-in and step-up.
-- **Lease `extend` is not step-up gated** (bounded at 120 minutes from now; release is one click). It sets the expiry from now, so it can shorten a lease frozen by an open handoff, which is then cancelled when the lease ends.
+- **Lease `extend` is not step-up gated** (bounded at 120 minutes from now; release is one click).
 - **Backup codes** are as strong as where the admin keeps them.
 - **API keys without expiry** created before Lot 7b keep working. They are flagged `noExpiry` in the admin list: rotate them.
 - **Session tokens** are stored as is in `arb.db` (Better Auth), valid 12 h.

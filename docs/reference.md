@@ -111,7 +111,7 @@ JSON in and out (`content-type: application/json` on every POST), session cookie
 | `POST /api/computers/:id/login-save` (step-up) | `{site, url, username, password}` | `{saved}` (clears the last test result) |
 | `POST /api/computers/:id/login-delete` (step-up) | `{site}` | `{deleted}` |
 | `POST /api/computers/:id/login-test` | `{site}` | `{ok, url}`: same fill as the agent's `login` tool; `ok` = form filled and submitted, `url` = where the browser ended up (judge success from it). 404 unknown site, 409 while an agent holds the lease |
-| `POST /api/computers/:id/extend` | `{minutes}` (integer 1 to 120) | `{leasedUntil}` = now + minutes; the agent's next calls keep sliding by that duration. 404 without a live lease |
+| `POST /api/computers/:id/extend` | `{minutes}` (integer 1 to 120) | `{leasedUntil}` = now + minutes, or later if it already ends later (a handoff freezes it); the agent's next calls keep sliding by that duration. 404 without a live lease |
 | `POST /api/computers/:id/handoff-take` | `{}` | `{state: "taken"}`. 409 without an open handoff |
 | `POST /api/computers/:id/handoff-{done,fail}` | `{note}` (optional for done, required for fail; max 1000) | `{state}` (`done` or `failed`). 409 without an open handoff; 400 empty note on fail |
 | `POST /api/computers/:id/delete` (step-up) | `{}` | `{deleted}` |

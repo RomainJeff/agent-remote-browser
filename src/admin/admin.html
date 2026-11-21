@@ -670,7 +670,7 @@ function renderProfile() {
 function wireLease() {
   const p = `/api/computers/${encodeURIComponent(selected)}`;
   if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/release`, 'POST'); refreshList(); }, 'Lease released. The agent has to take a new one.');
-  if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); refreshList(); }, 'Lease extended to 30 min from now.');
+  if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); refreshList(); }, 'Lease extended to at least 30 min from now.');
 }
 function tickLease() {
   const c = computers.find((x) => x.id === selected), el = $('#leaseLeft');
