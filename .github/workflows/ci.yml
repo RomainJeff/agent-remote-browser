@@ -1,0 +1,143 @@
+# Unit/integration tests on Node 24 and 26, compose rules, image scan, and the full stack under gVisor.
+# No repository secret: every credential below is synthetic, generated in the job.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [24, 26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "${{ matrix.node }}", cache: npm }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run check:compose
+
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: |
+          docker build -t arb-gateway:ci -f Dockerfile.gateway .
+          docker build -t arb-computer:ci .
+      - run: .github/trivy.sh arb-gateway:ci arb-computer:ci
+
+  # The stack as deployed: browsers under gVisor (runsc), no ALLOW_NO_SANDBOX. Then the POC migration, a backup and
+  # the restore procedures of deploy/runbook.md (section 10), run as written.
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SANDBOX_RUNTIME: runsc
+      MCP_PORT: 18787
+      ADMIN_PORT: 18788
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+
+      - name: Install gVisor (official apt repository, signed) and register runsc with Docker
+        run: |
+          curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
+            | sudo tee /etc/apt/sources.list.d/gvisor.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq runsc restic
+          sudo runsc install            # adds "runsc" to /etc/docker/daemon.json
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}' | grep -q '"runsc"'
+          runsc --version
+
+      - name: Synthetic secrets
+        run: |
+          mkdir -m 700 secrets
+          head -c 32 /dev/urandom > secrets/login_key
+          openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret
+          chmod 644 secrets/*           # read by uid 1000 (node) through the compose secret bind mount
+          echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)" >> "$GITHUB_ENV"
+
+      - name: Stack up (runsc, sandbox required)
+        run: |
+          docker compose up -d --build
+          for _ in $(seq 60); do curl -fs localhost:18787/readyz && break; sleep 2; done
+          curl -fs localhost:18787/readyz
+
+      - name: Smoke (MCP, hardening under runsc, metrics, hostile runner requests, backup-db)
+        run: npm run smoke
+        env: { EXPECT_RUNTIME: runsc }
+
+      - name: Migrate from a synthetic POC (ac-profile-legacy, created here only)
+        run: |
+          img=$(sed -n "s/^export const COPY_IMAGE = '\(.*\)';$/\1/p" src/host/docker.ts)
+          node test/e2e/poc-fixture.ts "$RUNNER_TEMP/poc"
+          docker volume create ac-profile-legacy
+          docker run --rm -v ac-profile-legacy:/v "$img" sh -c 'echo legacy-cookies > /v/marker'
+          ALLOW_POC_MIGRATION=1 docker compose up -d runner
+          docker compose stop gateway
+          docker compose run --rm --no-deps -v "$RUNNER_TEMP/poc:/poc:ro" gateway \
+            node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key --apply | tee "$RUNNER_TEMP/migrate.out"
+          grep -q 'Imported 1 profile(s), 1 login(s)' "$RUNNER_TEMP/migrate.out"
+          grep -q 'ac-profile-legacy -> arb-profile-legacy: copied' "$RUNNER_TEMP/migrate.out"
+          test "$(docker run --rm --network none -v arb-profile-legacy:/v:ro "$img" cat /v/marker)" = legacy-cookies
+          docker compose up -d          # flag unset again: runner recreated without copyVolume
+          for _ in $(seq 30); do curl -fs localhost:18787/readyz && break; sleep 2; done
+          docker compose exec -T runner sh -c 'test -z "$ALLOW_POC_MIGRATION"'
+
+      - name: Backup with restic, then the runbook's drill and restores
+        env:
+          RESTIC_REPOSITORY: ${{ runner.temp }}/restic
+          RESTIC_PASSWORD_FILE: ${{ runner.temp }}/restic-password
+        run: |
+          umask 077
+          openssl rand -base64 32 > "$RESTIC_PASSWORD_FILE"
+          restic init
+          BACKUP_PROFILES=1 deploy/backup.sh
+          restic ls --tag arb latest | tee "$RUNNER_TEMP/ls.out"
+          grep -qx /var/tmp/arb-backup/arb.db "$RUNNER_TEMP/ls.out"
+          grep -qx /var/tmp/arb-backup/profiles/arb-profile-legacy.tar "$RUNNER_TEMP/ls.out"
+          grep -qx /var/tmp/arb-backup/profiles/arb-profile-smoke.tar "$RUNNER_TEMP/ls.out"
+          expect='2 profile(s), 1 login(s), integrity ok.'
+
+          # Drill: the snapshot in a throw-away container, with the current key.
+          restic dump --tag arb latest /var/tmp/arb-backup/arb.db > /var/tmp/arb.db
+          docker compose run --rm --no-deps -T -e DATA_DIR=/tmp/drill gateway \
+            sh -c 'mkdir /tmp/drill && cat > /tmp/drill/arb.db && node src/cli.ts backup-db /tmp/check.db' < /var/tmp/arb.db | tee "$RUNNER_TEMP/drill.out"
+          grep -qF "$expect" "$RUNNER_TEMP/drill.out"
+
+          # Real restore of arb.db, gateway stopped; it starts again only if the key matches.
+          docker compose stop gateway
+          docker compose run --rm --no-deps -T gateway \
+            sh -c 'cat > /data/arb.db.new && rm -f /data/arb.db-wal /data/arb.db-shm && mv /data/arb.db.new /data/arb.db && chmod 600 /data/arb.db' < /var/tmp/arb.db
+          rm /var/tmp/arb.db
+          docker compose start gateway
+          for _ in $(seq 30); do curl -fs localhost:18787/readyz && break; sleep 2; done
+          docker compose exec -T gateway sh -c 'node src/cli.ts backup-db /tmp/after.db; s=$?; rm -f /tmp/after.db; exit $s' | grep -qF "$expect"
+
+          # A profile volume, from its tar.
+          docker volume rm arb-profile-legacy
+          docker volume create --label arb-computer=legacy arb-profile-legacy
+          restic dump --tag arb latest /var/tmp/arb-backup/profiles/arb-profile-legacy.tar \
+            | docker run --rm -i --network none -v arb-profile-legacy:/v alpine:3.22 tar -C /v -xpf -
+          test "$(docker run --rm --network none -v arb-profile-legacy:/v:ro alpine:3.22 cat /v/marker)" = legacy-cookies
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
