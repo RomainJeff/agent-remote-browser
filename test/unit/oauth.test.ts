@@ -1,6 +1,6 @@
 // OAuth server edge cases in-process (no gateway, no Docker). The happy path through the real
-// gateway lives in test/integration/gateway.test.ts. Budgets are module state: each budget test
-// imports a fresh oauth.mjs instance (store.mjs stays shared).
+// gateway lives in test/integration/gateway.test.ts. Budgets are per OAuth instance: each test gets
+// a fresh one over the same store.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -10,23 +10,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
+import { openStore } from '../../src/store/state.ts';
+import { hash } from '../../src/policy.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-oauth-'));
-process.env.STATE_FILE = join(dir, 'state.json');
-process.env.LOGIN_KEY_FILE = join(dir, 'login.key');
 delete process.env.PUBLIC_URL;
-const { state } = await import('../../store.mjs');
-const { hash } = await import('../../src/policy.ts');
+const store = openStore(join(dir, 'state.json'), join(dir, 'login.key'));
+const { state } = store;
 
 const token = randomBytes(32).toString('hex');
 const redirect_uri = 'https://example.com/callback';
 const servers: http.Server[] = [];
-before(() => { state.profiles.fixture = { tokenHash: hash(token) }; });
+before(() => { state.profiles.fixture = { allow: [], tokenHash: hash(token), logins: {}, createdAt: 0 }; });
 after(() => { for (const s of servers) s.close(); rmSync(dir, { recursive: true, force: true }); });
 
 let n = 0;
 async function serve() {
-  const { oauth } = await import(new URL(`../../oauth.mjs?${++n}`, import.meta.url).href);
+  const { createOAuth } = await import(new URL(`../../oauth.mjs?${++n}`, import.meta.url).href);
+  const oauth = createOAuth(store);
   const server = http.createServer((req, res) => oauth(req, res, { audit() {} }).catch(() => res.writeHead(500).end()));
   servers.push(server);
   server.listen(0, '127.0.0.1');

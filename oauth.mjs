@@ -3,7 +3,9 @@
 // The consent page asks for an access token: a profile token (-> that profile) or the global token.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { hash, redirectUriOk, pkceOk, windowBudget } from './src/policy.ts';
-import { state, save, principalForStatic, issueTokens } from './store.mjs';
+let state, save, principalForStatic, issueTokens;
+/** Binds the OAuth routes to the store. ponytail: module-level binding, one store per process; becomes a closure in TS. */
+export function createOAuth(store) { ({ state, save, principalForStatic, issueTokens } = store); return oauth; }
 
 const rand = () => randomBytes(24).toString('base64url');
 const pending = new Map(); // id -> authorization request waiting for the token (memory, 10 min)
