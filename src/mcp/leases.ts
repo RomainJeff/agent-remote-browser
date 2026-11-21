@@ -20,8 +20,8 @@ export function createLeases(db: DatabaseSync) {
       db.prepare('INSERT INTO leases (id_hash, profile, exp, ms) VALUES (?, ?, ?, ?)').run(hash(token), id, exp, ms);
       return { token, exp };
     },
-    /** A live lease by token; its expiry slides with each use. */
-    use: (token: string) => (db.prepare('UPDATE leases SET exp = ? + ms WHERE id_hash = ? AND exp >= ? RETURNING profile, exp, ms')
+    /** A live lease by token; its expiry slides with each use (never shortens one frozen by a handoff). */
+    use: (token: string) => (db.prepare('UPDATE leases SET exp = MAX(exp, ? + ms) WHERE id_hash = ? AND exp >= ? RETURNING profile, exp, ms')
       .get(Date.now(), hash(token), Date.now()) as Lease | undefined) ?? null,
     /** Admin: the live lease on a profile now ends `minutes` from now, and slides by that much on each use. */
     extend: (id: string, minutes: number) => (db.prepare('UPDATE leases SET exp = ?, ms = ? WHERE profile = ? AND exp >= ? RETURNING profile, exp, ms')

@@ -18,7 +18,7 @@ import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|release|extend|delete';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -36,8 +36,10 @@ function keyTtl(expiresIn: unknown, expiresAt: unknown) {
   return s >= 86400 && s <= 365 * 86400 ? s : null;
 }
 
-export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, computers: pc, driver }: Ctx) {
+export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, handoffs, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
+  // A human may drive a leased browser only while handling the agent's request (paste, saved-login fill, live input).
+  const driving = (id: string) => !leases.of(id) || handoffs.open(id)?.state === 'taken';
   const pubUrl = new URL(cfg.publicUrl);
   // Public listener: the https instance. Admin port: the http one (server.ts), so its cookies work on localhost.
   const authOf = (pub: boolean) => pub ? pubAuth : adminAuth;
@@ -95,7 +97,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     const log = audit.read();
     return store.profiles().map((p) => {
       const id = p.id;
-      const c = running.get(id), last = log.findLast((l) => l.agent === id), l = leases.of(id);
+      const c = running.get(id), last = log.findLast((l) => l.agent === id), l = leases.of(id), h = handoffs.open(id);
       return {
         id, container: `${cfg.prefix}-${id}`,
         state: c ? (c.running ? 'running' : 'exited') : 'none',
@@ -105,6 +107,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         leasedUntil: l ? new Date(l.exp).toISOString() : null,
         lastCall: last ? { ts: last.ts, tool: last.tool, ok: last.ok } : null,
         idleStopInS: pc.idleStopInS(id), viewers: pc.viewers(id),
+        handoff: h && { id: h.id, state: h.state, reason: h.reason, created: new Date(h.created).toISOString(), deadline: new Date(h.deadline).toISOString() },
       };
     });
   }
@@ -227,6 +230,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (act === 'paste') {
         const t = body.text;
         if (typeof t !== 'string' || !t || t.length > 5000) return send(res, 400, { error: 'Text required, 5000 characters max' });
+        if (!driving(id)) return send(res, 409, { error: 'Leased by an agent: take over its request or force release' });
         const [, dashes, rest] = t.match(/^(-*)([\s\S]*)$/)!; // a leading dash would read as a flag
         await pc.serial(id, async () => { for (const s of [...dashes, rest]) if (s) await pc.ab(id, ['keyboard', 'inserttext', s]); });
         return send(res, 200, { pasted: true });
@@ -266,8 +270,8 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const c = Object.hasOwn(p.logins, body.site) ? p.logins[body.site] : null;
         if (!c) return send(res, 404, { error: 'unknown site' });
         if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return send(res, 400, { error: 'Login URL is outside the allowlist' });
-        if (leases.of(id)) return send(res, 409, { error: 'Leased by an agent: release it or wait' });
         const here = act === 'login-fill';
+        if (here ? !driving(id) : leases.of(id)) return send(res, 409, { error: 'Leased by an agent: release it or wait' });
         // ponytail: "ok" = the fill went through (form found, submitted); whether the site accepted it shows in the URL.
         const r = await pc.serial(id, async () => {
           try { return { ok: true, url: await fillLogin(pc, id, body.site, c, decryptLogin(id, body.site, c), here) }; }
@@ -287,6 +291,15 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!Number.isInteger(n) || n < 1 || n > 120) return send(res, 400, { error: 'minutes: 1 to 120' });
         const l = leases.extend(id, n);
         return l ? send(res, 200, { leasedUntil: new Date(l.exp).toISOString() }) : send(res, 404, { error: 'no live lease' });
+      }
+      if (act.startsWith('handoff-')) {
+        const h = handoffs.open(id), note = typeof body.note === 'string' ? body.note.trim() : '';
+        if (!h) return send(res, 409, { error: 'No open request from the agent' });
+        if (act === 'handoff-take') { handoffs.take(h.id); return send(res, 200, { state: 'taken' }); } // already taken: same
+        if (note.length > 1000) return send(res, 400, { error: 'Note: 1000 characters max' });
+        if (act === 'handoff-fail' && !note) return send(res, 400, { error: 'Tell the agent what went wrong' });
+        const r = handoffs.finish(h.id, act === 'handoff-done' ? 'done' : 'failed', note || null);
+        return r ? send(res, 200, { state: r.state }) : send(res, 409, { error: 'No open request from the agent' });
       }
       if (act === 'delete') { await pc.serial(id, () => deleteProfile(id)); return send(res, 200, { deleted: id }); }
     } catch (e) {

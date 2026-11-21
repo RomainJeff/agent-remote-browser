@@ -3,12 +3,13 @@
 import { existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { urlAllowed, slug, validId, cleanAllow, sitesOf, type Principal, type ProfileId } from '../policy.ts';
+import { urlAllowed, slug, validId, cleanAllow, sitesOf, hash, type Principal, type ProfileId } from '../policy.ts';
 import type { Profile } from '../store/store.ts';
 import type { LoginRef } from '../store/logins-crypto.ts';
 import { log } from '../audit.ts';
 import { count } from '../metrics.ts';
 import type { Ctx } from '../server.ts';
+import type { Handoff } from './handoffs.ts';
 
 const untrusted = (origin: unknown, text: string) =>
   `<untrusted_page_content origin="${origin}">\n${text}\n</untrusted_page_content>\n` +
@@ -43,13 +44,13 @@ export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: strin
   return (await pc.ab(id, ['get', 'url'])).url as string;
 }
 
-export function buildServer(principal: Principal, { cfg, store, audit, leases, computers: pc }: Ctx) {
+export function buildServer(principal: Principal, { cfg, store, audit, leases, handoffs, computers: pc, driver }: Ctx) {
   const server = new McpServer({ name: 'agent-remote-browser', version: '0.2.0' });
   const { profile, decryptLogin } = store;
   const g = !!principal.global;
 
   // Which profile this call drives: the token's own, or the one behind the lease.
-  const resolve = (a: { lease?: string }): ProfileId => {
+  const owner = (a: { lease?: string }): ProfileId => {
     if (!g) {
       const l = leases.of(principal.profile!);
       if (l) throw new PolicyError(`This browser is leased until ${new Date(l.exp).toISOString()}. Retry later.`);
@@ -59,19 +60,27 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
     if (!l) throw new PolicyError('Unknown or expired lease. Call lease_profile first.');
     return l.profile as ProfileId;
   };
+  // Browser tools also pause while a human handles a handoff on this profile.
+  const resolve = (a: { lease?: string }, pause: boolean) => {
+    const id = owner(a), h = pause && handoffs.open(id);
+    if (h) throw new PolicyError(`Waiting for a human (${h.id}) until ${new Date(h.deadline).toISOString()}. Call handoff_status.`);
+    return id;
+  };
 
   // Every tool: kill switch -> resolve profile -> per-profile queue -> audit line + log line.
+  // Handoff tools resolve the profile but skip the pause and the queue: a 25 s long-poll there would block the admin.
   type Run = (a: any, id: ProfileId, p: Profile) => Promise<Result>;
-  const wrap = (name: string, run: Run, browser: boolean) => async (a: any): Promise<Result> => {
+  type Mode = 'browser' | 'handoff' | 'global';
+  const wrap = (name: string, run: Run, mode: Mode) => async (a: any): Promise<Result> => {
     const t0 = Date.now();
     let ok = true, id: ProfileId | undefined;
     try {
       if (existsSync(cfg.killFile)) throw new PolicyError('agent-remote-browser is disabled (kill switch)');
-      const r = browser ? await (async () => {
-        id = resolve(a);
+      const r = mode !== 'global' ? await (async () => {
+        id = resolve(a, mode === 'browser');
         const p = profile(id);
         if (!p) throw new PolicyError('This profile was deleted');
-        return pc.serial(id, () => run(a, id!, p));
+        return mode === 'browser' ? pc.serial(id, () => run(a, id!, p)) : run(a, id, p);
       })() : await (run as (a: any) => Promise<Result>)(a);
       if (r.isError) ok = false;
       return r;
@@ -87,10 +96,10 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       log(ok ? 'info' : 'warn', 'tool call', { profile: agent, tool: name, ms, ok });
     }
   };
-  const tool = (name: string, description: string, shape: z.ZodRawShape, run: Run) =>
-    server.registerTool(name, { description, inputSchema: g ? { lease: LEASE, ...shape } : shape }, wrap(name, run, true) as any);
+  const tool = (name: string, description: string, shape: z.ZodRawShape, run: Run, mode: Mode = 'browser') =>
+    server.registerTool(name, { description, inputSchema: g ? { lease: LEASE, ...shape } : shape }, wrap(name, run, mode) as any);
   const gtool = (name: string, description: string, shape: z.ZodRawShape, run: (a: any) => Promise<Result>) =>
-    server.registerTool(name, { description, inputSchema: shape }, wrap(name, run, false) as any);
+    server.registerTool(name, { description, inputSchema: shape }, wrap(name, run as Run, 'global') as any);
 
   const own = !g ? profile(principal.profile!) : null;
   const allowList = own ? own.allow.join(', ') : 'those returned by lease_profile';
@@ -134,6 +143,41 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       return txt({ submitted: true, url, hint: 'Check with snapshot that you are logged in.' });
     });
 
+  // Handoff: the agent asks a human to act in this browser, and waits.
+  const link = (h: Handoff) => `${cfg.adminPublic ? cfg.publicUrl : `http://localhost:${cfg.adminPort}`}/#/handoff/${h.id}`;
+  const leaseOf = (a: { lease?: string }) => (g ? hash(a.lease ?? '') : null);
+  const OPEN_STATES = ['pending', 'taken'];
+
+  tool('request_human', 'Ask a human to act in this browser (captcha, 2FA code, consent screen, broken login). Returns a url: ' +
+    'give it to your user so they can take over. Your browser tools pause until they finish. Then call handoff_status.',
+    { reason: z.string().min(1).max(500).describe('What you need the human to do'), minutes: z.number().int().min(1).max(120).default(30).describe('Minutes before the request expires') },
+    async ({ reason, minutes, ...a }, id) => {
+      if (!(await driver.list()).some((c) => c.id === id && c.running)) return fail('Open a page first: the browser is not running');
+      const clean = reason.replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (!clean) return fail('Give a reason');
+      const h = handoffs.request(id, leaseOf(a), clean, minutes);
+      if (!h) return fail('A request is already open on this browser. Call handoff_status.');
+      return txt({ handoff: h.id, state: h.state, deadline: new Date(h.deadline).toISOString(), url: link(h),
+        next: 'Send this url to your user and tell them what you need. Browser tools are paused. ' +
+          'Call handoff_status with wait_s=25 until state is done, failed, expired or cancelled.' });
+    }, 'handoff');
+
+  tool('handoff_status', 'State of your last request_human. Waits up to wait_s seconds for it to end.',
+    { wait_s: z.number().int().min(0).max(25).default(20) },
+    async ({ wait_s, ...a }, id) => {
+      const until = Date.now() + wait_s * 1000;
+      let h = handoffs.last(id, leaseOf(a));
+      // ponytail: polls the db every second; an EventEmitter if 1 s of latency matters.
+      while (h && OPEN_STATES.includes(h.state) && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, Math.min(1000, until - Date.now())));
+        h = handoffs.last(id, leaseOf(a));
+      }
+      if (!h) return txt({ state: 'none' });
+      const open = OPEN_STATES.includes(h.state);
+      return txt({ handoff: h.id, state: h.state, ...(h.note && { note: h.note }), ...(open && { url: link(h) }),
+        next: open ? 'Still waiting for the human. Call handoff_status again.' : 'Browser tools work again. Take a snapshot: the page may have changed.' });
+    }, 'handoff');
+
   if (!g) return server;
 
   // Global scope only: manage and lease profiles.
@@ -159,7 +203,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
     { profile: z.string().optional(), domain: z.string().max(253).optional(), minutes: z.number().int().min(1).max(120).default(15).describe('Idle minutes before the lease expires') },
     async ({ profile: want, domain, minutes }) => {
       const id = (want ? [want] : store.profiles().map((p) => p.id))
-        .find((i) => profile(i) && !leases.of(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i)!.allow)));
+        .find((i) => profile(i) && !leases.of(i) && !handoffs.open(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i)!.allow)));
       if (!id) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
       const { token: lease, exp } = leases.take(id, minutes), p = profile(id)!;
       return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), expiresAt: new Date(exp).toISOString(),

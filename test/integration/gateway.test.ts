@@ -219,7 +219,7 @@ test('admin creates profiles and scoped API keys; MCP without a valid bearer get
 
 test('profile key: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
-  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'login', 'open', 'press', 'screenshot', 'snapshot']);
+  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'press', 'request_human', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
     const r = await call(tokens.shop, 'open', { url });
     assert.ok(r.error, url);
@@ -337,7 +337,8 @@ test('kill switch refuses every tool until removed', async () => {
 
 test('a lease locks the profile key; the global key drives the profile through the lease', async () => {
   assert.deepEqual(await toolNames(tokens.global),
-    ['back', 'click', 'create_profile', 'fill', 'get_text', 'lease_profile', 'list_profiles', 'login', 'open', 'press', 'release_profile', 'screenshot', 'snapshot']);
+    ['back', 'click', 'create_profile', 'fill', 'get_text', 'handoff_status', 'lease_profile', 'list_profiles', 'login', 'open', 'press', 'release_profile',
+      'request_human', 'screenshot', 'snapshot']);
   assert.match((await call(tokens.global, 'open', { lease: 'arb_l_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
   assert.match((await call(tokens.global, 'lease_profile', { domain: 'example.org' })).text, /No free profile/);
 
@@ -623,6 +624,75 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
 });
 
+const DONE_NEXT = 'Browser tools work again. Take a snapshot: the page may have changed.';
+
+test('handoff: request_human pauses the agent until the admin ends it; paste and login-fill only once taken', async () => {
+  const { lease } = JSON.parse((await call(tokens.global, 'lease_profile', { profile: 'shop', minutes: 5 })).text);
+  const ask = (args: Record<string, unknown>) => call(tokens.global, 'request_human', { lease, ...args });
+  const status = (wait_s = 0) => call(tokens.global, 'handoff_status', { lease, wait_s });
+  const act = (a: string, body: object = {}) => admin('POST', `/api/computers/shop/${a}`, { body });
+  const row = async () => (await admin('GET', '/api/computers')).json.find((c: any) => c.id === 'shop');
+  assert.deepEqual(JSON.parse((await status()).text), { state: 'none' });
+  assert.equal((await act('handoff-take')).status, 409);
+  fake.computers.get('shop')!.running = false;
+  assert.deepEqual(await ask({ reason: 'x' }), { error: true, text: 'Open a page first: the browser is not running' });
+  fake.computers.get('shop')!.running = true;
+
+  const r = await ask({ reason: 'Solve\u0007 the   captcha\u202e please' });
+  assert.ok(!r.error, r.text);
+  const h = JSON.parse(r.text);
+  assert.match(h.handoff, /^h_[\w-]{16}$/);
+  assert.equal(h.state, 'pending');
+  assert.equal(h.url, `http://localhost:${ADMIN}/#/handoff/${h.handoff}`);
+  assert.match((await ask({ reason: 'again' })).text, /already open/);
+  assert.deepEqual(await call(tokens.global, 'open', { lease, url: 'https://example.com/' }),
+    { error: true, text: `Waiting for a human (${h.handoff}) until ${h.deadline}. Call handoff_status.` });
+  const listed = (await row()).handoff;
+  assert.deepEqual({ ...listed, created: 0 }, { id: h.handoff, state: 'pending', reason: 'Solve the captcha please', created: 0, deadline: h.deadline });
+  assert.equal(JSON.parse((await status()).text).url, h.url);
+
+  assert.equal((await act('paste', { text: 'x' })).status, 409);
+  assert.equal((await act('login-fill', { site: 'main' })).status, 409);
+  assert.equal((await act('handoff-fail')).status, 400, 'note required');
+  assert.equal((await act('handoff-done', { note: 'x'.repeat(1001) })).status, 400);
+  assert.deepEqual((await act('handoff-take')).json, { state: 'taken' });
+  assert.equal((await act('paste', { text: 'x' })).status, 200);
+  assert.equal((await act('login-fill', { site: 'main' })).status, 200);
+
+  const t0 = Date.now();
+  const [st, done] = await Promise.all([status(5), new Promise((ok) => setTimeout(ok, 300)).then(() => act('handoff-done', { note: 'Captcha solved' }))]);
+  assert.equal(done.status, 200);
+  assert.ok(Date.now() - t0 < 4500, 'long-poll returns before wait_s');
+  assert.deepEqual(JSON.parse(st.text), { handoff: h.handoff, state: 'done', note: 'Captcha solved', next: DONE_NEXT }, 'no url once ended');
+  assert.equal((await act('paste', { text: 'x' })).status, 409, 'the agent drives again');
+  assert.equal((await call(tokens.global, 'open', { lease, url: 'https://example.com/' })).error, false);
+
+  // release_profile cancels an open request.
+  assert.equal((await ask({ reason: 'again' })).error, false);
+  assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', { lease })).text), { released: true });
+  assert.equal((await row()).handoff, null);
+  assert.ok(readFileSync(f.audit, 'utf8').includes('"tool":"handoff:cancelled"'));
+
+  // Profile key: same tools without a lease. Deadline passed -> expired, tools work again.
+  const p = JSON.parse((await call(tokens.shop, 'request_human', { reason: '2FA code', minutes: 1 })).text);
+  assert.match((await call(tokens.shop, 'open', { url: 'https://example.com/' })).text, /^Waiting for a human/);
+  sql((db) => db.prepare('UPDATE handoffs SET deadline = ? WHERE id = ?').run(Date.now() - 1, p.handoff));
+  assert.equal(JSON.parse((await call(tokens.shop, 'handoff_status', { wait_s: 0 })).text).state, 'expired');
+  assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
+  const q = JSON.parse((await call(tokens.shop, 'request_human', { reason: 'consent screen' })).text);
+  assert.equal((await act('handoff-take')).status, 200);
+  assert.equal((await act('handoff-fail', { note: 'Wrong account' })).status, 200);
+  assert.equal((await act('handoff-fail', { note: 'again' })).status, 409);
+  assert.deepEqual(JSON.parse((await call(tokens.shop, 'handoff_status', { wait_s: 0 })).text),
+    { handoff: q.handoff, state: 'failed', note: 'Wrong account', next: DONE_NEXT });
+
+  const m = await (await fetch(`http://127.0.0.1:${ADMIN}/metrics`)).text();
+  for (const line of ['arb_handoff_total{outcome="done"} 1', 'arb_handoff_seconds_count{outcome="done"} 1', 'arb_handoffs_open 0'])
+    assert.ok(m.split('\n').includes(line), line);
+  assert.match(m, /^arb_handoff_seconds_sum\{outcome="done"\} \d+(\.\d+)?$/m);
+  for (const t of [readFileSync(f.audit, 'utf8'), m]) assert.ok(!/captcha|Wrong account|consent/i.test(t), 'reason and note never in audit or metrics');
+});
+
 test('deleting a profile removes its computer, volume, keys and grants', async () => {
   const scoped = () => dump().match(/profile:(shop|other)\b/g) ?? [];
   assert.ok(scoped().length > 0);
@@ -778,4 +848,14 @@ test('https PUBLIC_URL: the admin port (http, localhost) gets plain cookies and 
   for (const c of all) assert.ok(!/^__Secure-|;\s*secure/i.test(c), c);
   session = jar(ok.cookies, jar(half.cookies));
   assert.equal((await admin('GET', '/api/computers')).status, 200);
+});
+
+test('handoff url: PUBLIC_URL base with ADMIN_PUBLIC=1', async () => {
+  await restart({ ADMIN_PUBLIC: '1', PUBLIC_URL: 'https://arb.example.test', ACCESS_AUD: 'a'.repeat(64), ACCESS_TEAM: 'team' });
+  const { lease } = JSON.parse((await call(tokens.global, 'lease_profile', { profile: 'shop2', minutes: 5 })).text);
+  const h = JSON.parse((await call(tokens.global, 'request_human', { lease, reason: 'captcha' })).text);
+  assert.equal(h.url, `https://arb.example.test/#/handoff/${h.handoff}`);
+  assert.equal((await admin('POST', '/api/computers/shop2/handoff-fail', { body: { note: 'n' } })).status, 200);
+  assert.equal(JSON.parse((await call(tokens.global, 'handoff_status', { lease, wait_s: 0 })).text).url, undefined);
+  await call(tokens.global, 'release_profile', { lease });
 });

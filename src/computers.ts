@@ -10,7 +10,8 @@ import { AB_FLAGS } from './runner/protocol.ts';
 
 export type Computers = ReturnType<typeof createComputers>;
 
-export function createComputers(driver: HostDriver, store: Store, { egressDir, idleMs }: { egressDir: string; idleMs: number }) {
+export function createComputers(driver: HostDriver, store: Store, { egressDir, idleMs, busy = () => false }:
+  { egressDir: string; idleMs: number; busy?: (id: string) => boolean }) {
   const proxies = new Map<string, Proxy>();
   const queues = new Map<string, Promise<unknown>>();
   const lastUsed = new Map<string, number>(); // profile id -> ms
@@ -82,7 +83,7 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
 
     reap() {
       for (const [id, t] of lastUsed) {
-        if (watching.get(id) || Date.now() - t < idleMs) continue;
+        if (watching.get(id) || busy(id) || Date.now() - t < idleMs) continue;
         lastUsed.delete(id);
         serial(id, () => stop(id as ProfileId).then(() => log('info', 'stopped idle computer', { profile: id })));
       }

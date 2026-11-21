@@ -14,6 +14,7 @@ import { createAuthRoutes } from './auth/routes.ts';
 import { principal, purgeClients } from './auth/guards.ts';
 import { createAudit, log, type Audit } from './audit.ts';
 import { createLeases, type Leases } from './mcp/leases.ts';
+import { createHandoffs, type Handoffs } from './mcp/handoffs.ts';
 import { buildServer } from './mcp/tools.ts';
 import { createAdmin } from './admin/routes.ts';
 import { createComputers, type Computers } from './computers.ts';
@@ -22,7 +23,7 @@ import { count, render } from './metrics.ts';
 import { RunnerDriver } from './host/runner.ts';
 import type { HostDriver } from './host/driver.ts';
 
-export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; auth: Auth; adminAuth: Auth; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
+export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; auth: Auth; adminAuth: Auth; audit: Audit; leases: Leases; handoffs: Handoffs; computers: Computers; driver: HostDriver }
 
 const DRAIN_MS = 8_000;
 const timeout = <T>(p: Promise<T>, ms: number) =>
@@ -62,8 +63,9 @@ export async function start(cfg: Config, driver: HostDriver) {
   const { auth, pending } = a;
   const audit = createAudit(cfg.auditFile);
   const leases = createLeases(db);
-  const computers = createComputers(driver, store, { egressDir: cfg.egressDir, idleMs: cfg.idleMs });
-  const ctx: Ctx = { cfg, db, store, auth, adminAuth, audit, leases, computers, driver };
+  const handoffs = createHandoffs(db, audit);
+  const computers = createComputers(driver, store, { egressDir: cfg.egressDir, idleMs: cfg.idleMs, busy: (id) => !!handoffs.open(id) });
+  const ctx: Ctx = { cfg, db, store, auth, adminAuth, audit, leases, handoffs, computers, driver };
   const authRoutes = createAuthRoutes(db, auth, pending, cfg.publicUrl);
   const admin = createAdmin(ctx);
   // The header tells MCP clients where to start OAuth (protected resource metadata -> DCR -> authorize).
@@ -122,6 +124,7 @@ export async function start(cfg: Config, driver: HostDriver) {
       arb_runner_up: { help: 'Runner and Docker reachable (1) or not (0).', value: list ? 1 : 0 },
       ...(list && { arb_computers_running: { help: 'Browser containers running.', value: list.filter((c) => c.running).length } }),
       arb_leases_active: { help: 'Unexpired profile leases.', value: leases },
+      arb_handoffs_open: { help: 'Agent→human handoffs pending or taken.', value: store.profiles().filter((p) => handoffs.open(p.id)).length },
     }));
   };
   const adminServer = http.createServer(opts, (req, res) => {
