@@ -1,0 +1,31 @@
+# Agent Remote Browser stack behind a Cloudflare named tunnel: compose.yaml with no published port, plus cloudflared.
+# The gateway is reachable only through the tunnel, so its Cf-Connecting-IP header can be trusted (TRUST_PROXY).
+# The admin UI stays off the tunnel unless ADMIN_PUBLIC=1 with Cloudflare Access (the gateway refuses to boot otherwise).
+#   secrets/cloudflared_token: the tunnel token, readable by uid 65532 only (deploy/runbook.md)   # once
+#   docker compose -f compose.tunnel.yaml up -d --build
+# The tunnel's public hostname routes to http://gateway:18787 (set in the Cloudflare dashboard). No quick tunnel.
+name: ${ARB_PREFIX:-arb}
+include:
+  - compose.yaml
+
+services:
+  gateway:
+    ports: !reset []
+    environment:
+      TRUST_PROXY: cloudflare
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    command: ["tunnel", "--no-autoupdate", "run"]   # remotely managed tunnel: ingress rules live in Cloudflare
+    restart: unless-stopped
+    depends_on: [gateway]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TUNNEL_TOKEN_FILE: /run/secrets/cloudflared_token   # never TUNNEL_TOKEN: it would show in `docker inspect`
+    secrets: [cloudflared_token]
+
+secrets:
+  cloudflared_token:
+    file: ./secrets/cloudflared_token   # the tunnel token; readable by uid 65532 (cloudflared's user) on Linux
