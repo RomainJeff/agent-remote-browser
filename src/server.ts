@@ -21,7 +21,7 @@ import { readJson, send } from './http.ts';
 import { RunnerDriver } from './host/runner.ts';
 import type { HostDriver } from './host/driver.ts';
 
-export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; auth: Auth; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
+export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; auth: Auth; adminAuth: Auth; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
 
 const DRAIN_MS = 8_000;
 const timeout = <T>(p: Promise<T>, ms: number) =>
@@ -38,13 +38,20 @@ const listen = (server: http.Server, port: number, host: string) =>
 
 export async function start(cfg: Config, driver: HostDriver) {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
-  let store: Store, a: ReturnType<typeof createAuth>;
-  try { store = openStore(db, cfg.loginKeyFile); a = createAuth(db, authOptions(cfg)); } catch (e) { db.close(); throw e; }
+  let store: Store, a: ReturnType<typeof createAuth>, adminAuth: Auth;
+  try {
+    store = openStore(db, cfg.loginKeyFile);
+    const o = authOptions(cfg);
+    a = createAuth(db, o);
+    // The admin port is plain http on localhost: the Secure (__Secure-) cookies of an https PUBLIC_URL do not stick
+    // there in every browser. Same database and secret, http base URL; the admin port only reaches sign-in/session.
+    adminAuth = o.baseURL.startsWith('https://') ? createAuth(db, { ...o, baseURL: `http://localhost:${cfg.adminPort}` }).auth : a.auth;
+  } catch (e) { db.close(); throw e; }
   const { auth, pending } = a;
   const audit = createAudit(cfg.auditFile);
   const leases = createLeases(db);
   const computers = createComputers(driver, store, { egressDir: cfg.egressDir, idleMs: cfg.idleMs });
-  const ctx: Ctx = { cfg, db, store, auth, audit, leases, computers, driver };
+  const ctx: Ctx = { cfg, db, store, auth, adminAuth, audit, leases, computers, driver };
   const authRoutes = createAuthRoutes(db, auth, pending, cfg.publicUrl);
   const admin = createAdmin(ctx);
   // The header tells MCP clients where to start OAuth (protected resource metadata -> DCR -> authorize).

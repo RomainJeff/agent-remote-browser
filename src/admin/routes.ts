@@ -20,9 +20,12 @@ const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
 const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 
-export function createAdmin({ cfg, db, store, auth, audit, leases, computers: pc, driver }: Ctx) {
+export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
   const pubUrl = new URL(cfg.publicUrl);
+  // Public listener: the https instance. Admin port: the http one (server.ts), so its cookies work on localhost.
+  const authOf = (pub: boolean) => pub ? pubAuth : adminAuth;
+  const baseOf = (pub: boolean) => pub ? cfg.publicUrl : `http://localhost:${cfg.adminPort}`;
   const access = cfg.access && createAccessVerifier(cfg.access);
   // Admin port: localhost Host/Origin. Public listener: only with ADMIN_PUBLIC, public Host/Origin.
   const allowed = (req: IncomingMessage, pub: boolean) => pub
@@ -39,7 +42,7 @@ export function createAdmin({ cfg, db, store, auth, audit, leases, computers: pc
   async function gate(req: IncomingMessage, pub: boolean) {
     const email = await reach(req, pub);
     if (email === false) return false;
-    const s = await requireAdmin(auth, req.headers);
+    const s = await requireAdmin(authOf(pub), req.headers);
     return s && (email === undefined || s.user.email.toLowerCase() === email) ? s : null;
   }
 
@@ -103,7 +106,7 @@ export function createAdmin({ cfg, db, store, auth, audit, leases, computers: pc
         return send(res, 415, { error: 'JSON content type required' });
       if (path === '/' || AUTH_API.has(path)) {
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
-        if (path !== '/') return await reply(res, await callAuth(auth, cfg.publicUrl, req, path));
+        if (path !== '/') return await reply(res, await callAuth(authOf(pub), baseOf(pub), req, path));
         const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
         res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));
@@ -128,7 +131,7 @@ export function createAdmin({ cfg, db, store, auth, audit, leases, computers: pc
         if (typeof name !== 'string' || !/^[\w .-]{1,60}$/.test(name)) return send(res, 400, { error: 'Name: letters, digits, spaces, dots, dashes (max 60)' });
         const pid = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
         if (scope !== 'global' && !(pid && profile(pid))) return send(res, 400, { error: 'Scope: global or an existing profile' });
-        const k = await auth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope } } });
+        const k = await pubAuth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope } } });
         audit({ agent: pid ?? 'global', tool: 'admin:api-key', ok: true });
         return send(res, 201, { id: k.id, key: k.key });
       }

@@ -500,3 +500,17 @@ test('client IP: Cf-Connecting-IP is ignored unless TRUST_PROXY=cloudflare', asy
   await restart({ TRUST_PROXY: 'cloudflare' });
   for (let i = 0; i < 6; i++) assert.equal((await register(`203.0.113.${i + 101}`)).status, 201, `client ${i + 1}`);
 });
+
+test('https PUBLIC_URL: the admin port (http, localhost) gets plain cookies and a working session', async () => {
+  await restart({ PUBLIC_URL: 'https://arb.example.test' });
+  session = '';
+  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: owner.password }, headers: adminOrigin() });
+  assert.equal(half.status, 200);
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', { body: { code: totp(owner.uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) } });
+  assert.equal(ok.status, 200);
+  const all = [...half.cookies, ...ok.cookies];
+  assert.ok(all.length > 0);
+  for (const c of all) assert.ok(!/^__Secure-|;\s*secure/i.test(c), c);
+  session = jar(ok.cookies, jar(half.cookies));
+  assert.equal((await admin('GET', '/api/computers')).status, 200);
+});
