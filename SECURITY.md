@@ -27,14 +27,14 @@ A gateway compromise yields:
 
 - **The browsers and their data, as today.** Drive any profile, read its pages, session file and screenshots, use its saved logins. Control egress (the proxies and allowlists live in the gateway). Read `arb.db` and the login key, so decrypt saved passwords.
 - **Availability of this stack.** Stop or remove any computer of the stack, and delete any profile volume carrying the stack's label (cookies lost). Create computers for any valid profile id, up to `MAX_COMPUTERS` running at once (default 4, enforced by the runner), each limited to 1 GiB, 1 CPU and 512 pids. Holding the slots denies browsers to the other agents.
-- **Nothing beyond that, as long as the runner holds.** No image choice (the pinned `${ARB_PREFIX}-computer:dev` image only), no mount (only the profile's volume and its read-only egress subpath), no host option (runtime, no network, no caps, read-only rootfs and resource limits are fixed). No command line: `exec` accepts the exact `agent-browser` calls the gateway makes and three helpers, with no NUL, no leading-dash value, and a `timeout -k 5` that kills the process in the container. No container or volume without the stack's label: compose's own `arb-gateway-1` / `arb-runner-1` match the profile id format but are refused, and so are the POC's `ac-*` resources.
+- **Nothing beyond that, as long as the runner holds.** No image choice (the computer image the operator configured, `IMAGE` in the runner's environment), no mount (only the profile's volume and its read-only egress subpath), no host option (runtime, no network, no caps, read-only rootfs and resource limits are fixed). No command line: `exec` accepts the exact `agent-browser` calls the gateway makes and three helpers, with no NUL, no leading-dash value, and a `timeout -k 5` that kills the process in the container. No container or volume without the stack's label: compose's own `arb-gateway-1` / `arb-runner-1` match the profile id format but are refused, and so are the POC's `ac-*` resources.
 - **POC profiles only during the migration.** `copyVolume` (source fixed to `ac-profile-<id>`) is refused unless the runner runs with `ALLOW_POC_MIGRATION=1`. Leave it unset outside the migration run.
 
 Runner compromise = host compromise: it holds the Docker socket. Its attack surface is one JSON line per connection (64 KiB max, 10 s to send it), parsed by zod, and no network (`network_mode: none`).
 
 Auth between the two is the socket's file mode, not a shared secret: only uid 1000 in containers mounting `arb-runner` can connect, and a secret would sit in the gateway anyway. Anything that runs as uid 1000 on that volume (or as root on the host) is the gateway, for the runner.
 
-Not yet verified: the computers' read-only rootfs and tmpfs mounts under gVisor (`runsc`); macOS dev runs the default runtime. To check in Lot 7 (CI e2e on Linux).
+Verified in CI (Lot 7, e2e job on Linux): under gVisor (`runsc`) a computer has a read-only rootfs, writable `/tmp` and `/home/agent` tmpfs, no network, and the runner refuses and logs hostile requests sent from the gateway container. gVisor runs with `--host-uds=open` so the browser can connect to its egress socket, created outside the sandbox; the only such socket mounted into a computer is its own, read-only.
 
 ## Authentication model
 
@@ -54,7 +54,7 @@ Better Auth 1.7.27 (pinned) on `arb.db`. One human, the admin; every agent crede
 
 ## Deployment (Lot 6)
 
-Two compose files (operator guide: [deploy/runbook.md](deploy/runbook.md)). `compose.yaml` publishes MCP on `BIND_ADDR` (default loopback) and the admin on loopback. `compose.tunnel.yaml` publishes nothing: inbound traffic arrives through a Cloudflare named tunnel whose token is a Docker secret (`TUNNEL_TOKEN_FILE`, never in the environment or `docker inspect`), and cloudflared runs read-only with no capabilities. Every image is pinned by digest. `npm run check:compose` asserts these rules on the resolved configuration.
+Two setups (operator guide: [deploy/runbook.md](deploy/runbook.md)). `compose.yaml` publishes MCP on `BIND_ADDR` (default loopback) and the admin on loopback. `compose.tunnel.yaml`, an override of it, publishes nothing: inbound traffic arrives through a Cloudflare named tunnel whose token is a Docker secret (`TUNNEL_TOKEN_FILE`, never in the environment or `docker inspect`), and cloudflared runs read-only with no capabilities. Every image is pinned by digest. `npm run check:compose` asserts these rules on the resolved configuration.
 
 Residual:
 
@@ -62,10 +62,17 @@ Residual:
 - Behind a reverse proxy on `compose.yaml`, every client shares the proxy's rate-limit budget: a stranger can slow the admin's sign-in or new client registrations (availability only).
 - The runner serializes every `ensure` behind one queue so the cap holds: a slow container start delays the others (deliberate ceiling; per-profile locks plus a counter if it matters).
 - The agent sees `Too many computers running (MAX_COMPUTERS=N)`: it discloses the cap, nothing else. Other failures stay masked as `Browser operation failed`.
-- Digests do not update themselves: base-image security fixes need a commit (Renovate or equivalent, Lot 7).
+- Digests do not update themselves: Renovate opens the PRs (weekly group for minor, patch and digests), a human merges them. Until merged, base-image fixes are not deployed.
 - A browser container is recreated when its image changes (the image ID is part of its spec hash), but only when the gateway starts or the profile is next used: an idle stopped container keeps the old image on disk until then.
 - Browser containers and their volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
 - The Cloudflare Access path rules in the runbook (admin protected, agent paths bypassed) are documented, not tested against a live account. A missing rule fails closed: the gateway refuses admin requests without a valid Access token.
+
+## Supply chain and operations (Lot 7)
+
+- **CI** (`.github/workflows/ci.yml`): every action pinned by commit SHA, `contents: read` only, checkout without persisted credentials, no repository secret. Trivy is a release binary checked against a pinned sha256 (not the Trivy action), and fails the build on a CRITICAL vulnerability that has a fix, on both images.
+- **Releases** (`release.yml`, on a `v*` tag): the same Trivy gate on the amd64 build, then amd64 + arm64 pushed to GHCR with `GITHUB_TOKEN` (`packages: write` on that job only), an SBOM and a provenance attestation. Residual: the arm64 image is not scanned separately; release images are selected by tag in `.env`, not by digest, so a re-pushed tag would be pulled (only this repository's workflow can push).
+- **Metrics** (`/metrics`, Prometheus text): admin listener only (404 on the public one), GET only, Host must be an IP or single-label name (a scraper on the host or the stack's network). No auth: anything that can reach port 18788 reads counters (requests, tool calls by name and outcome, auth failures, egress denials, running computers, leases). No profile id, token or URL is ever a label.
+- **Backups** (`deploy/backup.sh`, restic): a consistent `arb.db` snapshot and, with `BACKUP_PROFILES=1`, a tar of each profile volume. The restic repository is encrypted, but a restored profile tar is plaintext cookies, as the volume is. The login key and `BETTER_AUTH_SECRET` are deliberately not in the restic repository: a backup holding both `arb.db` and the key would hold every saved password. They, and the restic password, are kept elsewhere (runbook, section 10).
 
 ## State at rest
 
