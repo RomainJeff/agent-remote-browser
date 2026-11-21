@@ -15,6 +15,7 @@ import { startProxy } from './src/egress/proxy.ts';
 import { bridge } from './src/egress/bridge.ts';
 import { loadConfig } from './src/config.ts';
 import { createAudit, log } from './src/audit.ts';
+import { createLeases } from './src/mcp/leases.ts';
 const cfg = loadConfig();
 const proxies = new Map();
 const here = (f) => new URL(f, import.meta.url).pathname;
@@ -102,17 +103,8 @@ const at = (r) => (r.startsWith('@') ? r : '@' + r);
 
 const audit = createAudit(cfg.auditFile);
 
-// Leases: a global-token holder gets exclusive use of a profile for a while. While leased, the profile's own token
-// is refused. ponytail: in memory, a gateway restart frees every lease. Upgrade: persist in state if it matters.
-const leases = new Map(); // lease id -> { profile, exp, ms }
-function leaseOf(id) {
-  for (const [k, l] of leases) {
-    if (l.exp < Date.now()) leases.delete(k);
-    else if (l.profile === id) return l;
-  }
-  return null;
-}
-const dropLeases = (id) => { for (const [k, l] of leases) if (l.profile === id) leases.delete(k); };
+const leases = createLeases();
+const leaseOf = leases.of, dropLeases = leases.drop;
 
 /** Allowlist from user input: lowercased domains, 1 to 50. Returns null when invalid. */
 function cleanAllow(allow) {
@@ -135,9 +127,8 @@ function buildServer(principal) {
       if (l) throw new PolicyError(`This browser is leased until ${new Date(l.exp).toISOString()}. Retry later.`);
       return principal.profile;
     }
-    const l = leases.get(a.lease);
-    if (!l || l.exp < Date.now()) throw new PolicyError('Unknown or expired lease. Call lease_profile first.');
-    l.exp = Date.now() + l.ms; // sliding expiry
+    const l = leases.use(a.lease);
+    if (!l) throw new PolicyError('Unknown or expired lease. Call lease_profile first.');
     return l.profile;
   };
 
@@ -253,14 +244,13 @@ function buildServer(principal) {
       const id = (want ? [want] : Object.keys(state.profiles))
         .find((i) => profile(i) && !leaseOf(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i).allow)));
       if (!id) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
-      const lease = `acl_${randomBytes(18).toString('base64url')}`, ms = minutes * 60_000, p = profile(id);
-      leases.set(lease, { profile: id, exp: Date.now() + ms, ms });
-      return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), expiresAt: new Date(Date.now() + ms).toISOString(),
+      const { token: lease, exp } = leases.take(id, minutes), p = profile(id);
+      return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), expiresAt: new Date(exp).toISOString(),
         note: 'Expiry slides with each call. Call release_profile when done.' });
     });
 
   gtool('release_profile', 'Give a leased profile back.', { lease: LEASE }, async ({ lease }) =>
-    txt({ released: leases.delete(lease) }));
+    txt({ released: leases.release(lease) }));
 
   return server;
 }
