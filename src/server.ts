@@ -1,4 +1,5 @@
 // agent-remote-browser gateway: remote MCP (Streamable HTTP) -> one sandboxed browser computer per profile.
+// Host access goes through the runner (src/runner/server.ts); this process never holds the Docker socket.
 // Run: node src/server.ts   (config from env, see config.ts)
 import http from 'node:http';
 import { join } from 'node:path';
@@ -17,7 +18,7 @@ import { buildServer } from './mcp/tools.ts';
 import { createAdmin } from './admin/routes.ts';
 import { createComputers, type Computers } from './computers.ts';
 import { readJson, send } from './http.ts';
-import { DockerDriver } from './host/docker.ts';
+import { RunnerDriver } from './host/runner.ts';
 import type { HostDriver } from './host/driver.ts';
 
 export interface Ctx { cfg: Config; db: DatabaseSync; store: Store; auth: Auth; audit: Audit; leases: Leases; computers: Computers; driver: HostDriver }
@@ -110,8 +111,7 @@ export async function start(cfg: Config, driver: HostDriver) {
 if (import.meta.main) {
   let cfg: Config;
   try { cfg = loadConfig(); } catch (e) { console.error((e as Error).message); process.exit(1); }
-  const driver = new DockerDriver({ socket: cfg.dockerSocket, prefix: cfg.prefix, image: cfg.image, runtime: cfg.runtime });
-  const app = await start(cfg, driver);
+  const app = await start(cfg, new RunnerDriver(cfg.runnerSocket));
   for (const sig of ['SIGTERM', 'SIGINT'] as const) process.once(sig, async () => {
     log('info', 'shutting down');
     await app.close();

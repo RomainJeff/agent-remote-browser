@@ -1,21 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig } from '../../src/config.ts';
+import { loadConfig, loadRunnerConfig } from '../../src/config.ts';
 
 const dev = { ALLOW_NO_SANDBOX: '1' };
 
-test('defaults: loopback bind, POC ports, prefixed image', () => {
+test('defaults: loopback bind, POC ports, runner socket; runner: prefixed image', () => {
   const c = loadConfig(dev);
   assert.equal(c.bindAddr, '127.0.0.1');
-  assert.deepEqual([c.port, c.adminPort, c.idleMs, c.prefix, c.image], [8787, 8788, 300_000, 'arb', 'arb-computer:dev']);
-  assert.equal(loadConfig({ ...dev, ARB_PREFIX: 'x1', PORT: '', PUBLIC_URL: 'https://arb.example.com/' }).image, 'x1-computer:dev');
+  assert.deepEqual([c.port, c.adminPort, c.idleMs, c.prefix, c.runnerSocket], [8787, 8788, 300_000, 'arb', '/run/arb-runner/runner.sock']);
   assert.equal(loadConfig({ ...dev, PUBLIC_URL: 'https://arb.example.com/' }).publicUrl, 'https://arb.example.com');
+  const r = loadRunnerConfig(dev);
+  assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock']);
+  assert.equal(loadRunnerConfig({ ...dev, ARB_PREFIX: 'x1', IMAGE: '' }).image, 'x1-computer:dev');
+  assert.throws(() => loadRunnerConfig({ ...dev, ARB_PREFIX: 'Bad_' }), /- ARB_PREFIX:/);
 });
 
-test('sandbox runtime required unless explicitly waived', () => {
-  assert.throws(() => loadConfig({}), /SANDBOX_RUNTIME=runsc is required/);
-  assert.throws(() => loadConfig({ SANDBOX_RUNTIME: 'runc' }), /SANDBOX_RUNTIME=runsc is required/);
-  assert.equal(loadConfig({ SANDBOX_RUNTIME: 'runsc' }).runtime, 'runsc');
+test('runner: sandbox runtime required unless explicitly waived', () => {
+  assert.throws(() => loadRunnerConfig({}), /SANDBOX_RUNTIME=runsc is required/);
+  assert.throws(() => loadRunnerConfig({ SANDBOX_RUNTIME: 'runc' }), /SANDBOX_RUNTIME=runsc is required/);
+  assert.equal(loadRunnerConfig({ SANDBOX_RUNTIME: 'runsc' }).runtime, 'runsc');
 });
 
 test('production needs PUBLIC_URL and refuses quick tunnels', () => {

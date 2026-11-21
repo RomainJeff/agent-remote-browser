@@ -1,5 +1,6 @@
-// The real gateway in-process, on free ports, with temp state and an in-memory FakeDriver (records every host
-// call, returns canned agent-browser output). Tests share one gateway and run in order: later tests rely on the
+// The real gateway in-process, on free ports, with temp state, driving a real runner (src/runner/server.ts) over its
+// Unix socket; the runner drives an in-memory FakeDriver (records every host call, returns canned agent-browser
+// output). Every host call thus crosses the runner's validation, as in production. Tests share one gateway and run in order: later tests rely on the
 // admin session, profiles and keys created by earlier ones. Every secret here is synthetic.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +17,8 @@ import { start } from '../../src/server.ts';
 import { main } from '../../src/cli.ts';
 import { loadConfig } from '../../src/config.ts';
 import { FakeDriver } from '../../src/host/fake.ts';
+import { RunnerDriver } from '../../src/host/runner.ts';
+import { serveRunner } from '../../src/runner/server.ts';
 import { parseProfileId } from '../../src/policy.ts';
 import { purgeClients } from '../../src/auth/guards.ts';
 import { totp } from '../totp.ts';
@@ -26,6 +29,8 @@ const f = {
   key: join(dir, 'login.key'), egress: join(dir, 'egress'),
 };
 const fake = new FakeDriver();
+const runnerSock = join(dir, 'runner.sock');
+let runner: net.Server;
 let app: Awaited<ReturnType<typeof start>>, PORT = 0, ADMIN = 0, base = '';
 const tokens = { global: '', shop: '' };
 const owner = { email: 'admin@example.test', password: randomBytes(12).toString('base64url'), uri: '' };
@@ -34,9 +39,9 @@ let session = '';
 
 const env = () => ({
   PORT: String(PORT), ADMIN_PORT: String(ADMIN), PUBLIC_URL: base, DATA_DIR: f.data, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
-  LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: 'synthetic-' + 'x'.repeat(40),
+  LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, RUNNER_SOCKET: runnerSock, BETTER_AUTH_SECRET: 'synthetic-' + 'x'.repeat(40),
 });
-const boot = () => start(loadConfig(env()), fake);
+const boot = () => start(loadConfig(env()), new RunnerDriver(runnerSock));
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); });
@@ -64,9 +69,10 @@ before(async () => {
   assert.equal(lines.filter((l) => l.includes(owner.password)).length, 0, 'password never printed');
   // A stopped leftover of an unknown profile: startup must not touch it.
   fake.computers.set('ghost', { id: 'ghost', running: true });
+  runner = await serveRunner(fake, runnerSock);
   app = await boot();
 });
-after(async () => { await app?.close(); rmSync(dir, { recursive: true, force: true }); });
+after(async () => { await app?.close(); runner?.close(); rmSync(dir, { recursive: true, force: true }); });
 
 /** name=value pairs of Set-Cookie headers, merged over an existing Cookie header (cleared cookies dropped). */
 function jar(setCookies: string[], cookie = '') {

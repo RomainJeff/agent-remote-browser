@@ -14,17 +14,17 @@ import { loadConfig, type Config } from './config.ts';
 import { openDb, tx } from './store/db.ts';
 import { openStore } from './store/store.ts';
 import { decryptLogin, type Envelope } from './store/logins-crypto.ts';
-import { DockerDriver, COPY_IMAGE } from './host/docker.ts';
+import { COPY_IMAGE } from './host/docker.ts';
+import { RunnerDriver } from './host/runner.ts';
+import { pocVolume } from './runner/protocol.ts';
 import { parseProfileId, cleanAllow, type ProfileId } from './policy.ts';
 import { createAuth, authOptions } from './auth/better-auth.ts';
 
 type Out = (line: string) => void;
-type Copier = Pick<DockerDriver, 'copyVolume'>;
+type Copier = Pick<RunnerDriver, 'copyVolume'>;
 /** Reads one line, without echo on a TTY. */
 type Ask = (prompt: string) => Promise<string>;
 
-/** Volume prefix of the POC (agent-computer). */
-const POC_PREFIX = 'ac';
 const USAGE = 'Usage: node src/cli.ts rotate-login-key | migrate-from-poc <state.json> <poc-login.key> [--apply] | admin create|reset-2fa <email>';
 
 function withStore<T>(cfg: Config, fn: (store: ReturnType<typeof openStore>, db: ReturnType<typeof openDb>) => T): T {
@@ -96,13 +96,13 @@ async function migrateFromPoc(cfg: Config, stateFile: string, keyFile: string, a
 
   let failed = 0;
   for (const [raw] of poc) {
-    const id = raw as ProfileId, from = `${POC_PREFIX}-profile-${id}`, to = `${cfg.prefix}-profile-${id}`;
+    const id = raw as ProfileId, from = pocVolume(id), to = `${cfg.prefix}-profile-${id}`;
     if (!apply) {
       out(`docker volume create --label ${cfg.prefix}-computer=${id} ${to}`);
       out(`docker run --rm --network none -v ${from}:/from:ro -v ${to}:/to ${COPY_IMAGE} cp -a /from/. /to/`);
       continue;
     }
-    try { out(`${from} -> ${to}: ${await docker!.copyVolume(from, id)}`); }
+    try { out(`${from} -> ${to}: ${await docker!.copyVolume(id)}`); }
     catch (e) { failed++; out(`${from} -> ${to}: failed (${(e as Error).message})`); }
   }
   if (!apply) out('Dry run: no profile imported, no volume touched. Re-run with --apply (gateway stopped) to import and copy the volumes.');
@@ -164,7 +164,7 @@ function stdinAsk(): Ask {
   };
 }
 
-/** Returns the exit code. `docker` replaces the Docker Engine client, `ask` the stdin reader (tests). */
+/** Returns the exit code. `docker` replaces the runner client, `ask` the stdin reader (tests). */
 export async function main(args: string[], env: NodeJS.ProcessEnv, out: Out, docker?: Copier, ask?: Ask): Promise<number> {
   const cfg = loadConfig(env);
   const [cmd, ...rest] = args;
@@ -176,7 +176,7 @@ export async function main(args: string[], env: NodeJS.ProcessEnv, out: Out, doc
   const files = rest.filter((a) => a !== '--apply');
   if (cmd === 'migrate-from-poc' && files.length === 2) {
     const apply = rest.includes('--apply');
-    docker ??= new DockerDriver({ socket: cfg.dockerSocket, prefix: cfg.prefix, image: cfg.image, runtime: cfg.runtime });
+    docker ??= new RunnerDriver(cfg.runnerSocket); // the runner does the copy: this process has no Docker socket
     return migrateFromPoc(cfg, files[0], files[1], apply, out, docker);
   }
   out(USAGE);

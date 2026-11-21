@@ -12,9 +12,9 @@ import { readJson, send } from '../http.ts';
 import { requireAdmin } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
+import { SESSION } from '../runner/protocol.ts';
 import type { Ctx } from '../server.ts';
 
-const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json'; // --restore state, saved every 30 s
 const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);

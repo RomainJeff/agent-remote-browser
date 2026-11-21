@@ -6,12 +6,7 @@ import type { ProfileId } from './policy.ts';
 import type { Store } from './store/store.ts';
 import { startProxy, type Proxy } from './egress/proxy.ts';
 import { log } from './audit.ts';
-
-// Chrome profile (IndexedDB, persistent cookies) + --restore state (session cookies, localStorage), both on the volume.
-const PROFILE = '/home/agent/.agent-browser/profile';
-const FLAGS = ['--json', '--profile', PROFILE, '--restore', 'agent',
-  // --no-sandbox: the container is the sandbox (Chrome's own needs caps we dropped).
-  '--args', '--no-sandbox,--proxy-server=http://127.0.0.1:3128,--proxy-bypass-list=<-loopback>,--disable-quic'];
+import { AB_FLAGS } from './runner/protocol.ts';
 
 export type Computers = ReturnType<typeof createComputers>;
 
@@ -36,7 +31,7 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
 
   /** One agent-browser command on an already running computer, without touching its idle timer. Returns `data` or throws. */
   async function exec(id: ProfileId, args: string[], { stdin }: { stdin?: string } = {}): Promise<Record<string, any>> {
-    const r = await driver.exec(id, ['agent-browser', ...FLAGS, ...args], { stdin, timeoutMs: 90_000 });
+    const r = await driver.exec(id, ['agent-browser', ...AB_FLAGS, ...args], { stdin, timeoutMs: 90_000 });
     if (r.code !== 0 && !r.stdout) throw Error((r.stderr || `exit ${r.code}`).slice(0, 500));
     const out = JSON.parse(r.stdout);
     if (out.error || out.success === false) throw Error(String(out.error));

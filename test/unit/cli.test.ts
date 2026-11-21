@@ -79,8 +79,8 @@ function pocFixture(dir: string) {
   return { state: join(dir, 'state.json'), key: join(dir, 'poc.key'), secrets: [key, pw.a, pw.b, ...tokens], pw };
 }
 const fakeDocker = () => {
-  const copies: [string, string][] = [];
-  return { copies, copyVolume: async (from: string, id: string) => { copies.push([from, id]); return 'copied' as const; } };
+  const copies: string[] = [];
+  return { copies, copyVolume: async (id: string) => { copies.push(id); return 'copied'; } };
 };
 
 test('migrate-from-poc dry run: verifies everything, writes nothing, prints the docker commands', async () => {
@@ -97,7 +97,8 @@ test('migrate-from-poc dry run: verifies everything, writes nothing, prints the 
 test('migrate-from-poc --apply: profiles, allowlists, re-encrypted logins; no token or OAuth data; volumes copied', async () => {
   const t = fresh(), poc = pocFixture(t.dir), docker = fakeDocker();
   assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key, '--apply'], docker), 0);
-  assert.deepEqual(docker.copies, [['ac-profile-shop', 'shop'], ['ac-profile-news', 'news']]);
+  assert.deepEqual(docker.copies, ['shop', 'news']);
+  assert.ok(t.lines.includes('ac-profile-shop -> arb-profile-shop: copied'));
   t.withStore((s) => {
     assert.deepEqual(s.profiles().map((p) => [p.id, p.allow, p.createdAt]),
       [['shop', ['example.com'], 1_700_000_000_000], ['news', ['example.org'], 1_700_000_000_001]]);

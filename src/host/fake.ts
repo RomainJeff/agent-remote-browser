@@ -3,7 +3,7 @@ import { Duplex } from 'node:stream';
 import type { ProfileId } from '../policy.ts';
 import type { Computer, ExecResult, HostDriver } from './driver.ts';
 
-export interface Call { op: 'ensure' | 'exec' | 'stream' | 'stop' | 'remove' | 'list'; id?: string; argv?: string[]; stdin?: string; keepVolume?: boolean }
+export interface Call { op: 'ensure' | 'exec' | 'stream' | 'stop' | 'remove' | 'list' | 'copyVolume'; id?: string; argv?: string[]; stdin?: string; keepVolume?: boolean; from?: string }
 
 const origin = 'https://example.com';
 
@@ -61,5 +61,10 @@ export class FakeDriver implements HostDriver {
   async list() {
     this.calls.push({ op: 'list' });
     return [...this.computers.values()];
+  }
+
+  async copyVolume(from: string, id: ProfileId) {
+    this.calls.push({ op: 'copyVolume', id, from });
+    return 'copied';
   }
 }
