@@ -2,6 +2,7 @@
   "name": "agent-remote-browser",
   "version": "0.2.0",
   "private": true,
+  "license": "MIT",
   "description": "One sandboxed browser per AI agent, behind a remote MCP gateway",
   "type": "module",
   "engines": {
