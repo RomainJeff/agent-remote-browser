@@ -6,6 +6,17 @@ An agent (e.g. a Notion Custom Agent) connects over MCP with OAuth 2.1 or an API
 
 Status: imported from the `agent-computer` POC, on its way to production. See the production plan (`projects/agent-computer/production-plan.md` in the parent workspace) and [SECURITY.md](SECURITY.md).
 
+**Running it on a server: [deploy/runbook.md](deploy/runbook.md)** (prerequisites, secrets, tunnel or not, agents, upgrades, uninstall).
+
+## Deploy
+
+Two compose files, same stack:
+
+- `compose.yaml`: no tunnel. MCP published on `${BIND_ADDR:-127.0.0.1}:18787`, admin on `127.0.0.1:18788` whatever `BIND_ADDR` is. TLS is yours (reverse proxy, runbook section 3).
+- `compose.tunnel.yaml`: `include: compose.yaml`, then `ports: !reset []` on the gateway (nothing published) and a `cloudflared` named tunnel (`tunnel run`, token in the `cloudflared_token` Docker secret, never a quick tunnel). The gateway runs with `NODE_ENV=production` (`PUBLIC_URL` required) and `TRUST_PROXY=cloudflare`.
+
+`TRUST_PROXY=cloudflare` is the only setting under which `Cf-Connecting-IP` (the rate-limit key) is read from the request; otherwise the gateway overwrites it with the TCP peer address. The admin UI is never on the tunnel unless `ADMIN_PUBLIC=1`, which requires Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`): the gateway refuses to boot without it. The runner starts at most `MAX_COMPUTERS` browsers at once (default 4); past that the agent gets `Too many computers running`. Every image is pinned by digest (`node` and `alpine` in the source, `cloudflared` in `compose.tunnel.yaml`); `npm run check:compose` validates both files and these exposure rules.
+
 ## Dev
 
 Requires Node >= 24 (target runtime: Node 26) and Docker. TypeScript runs as-is (Node type stripping), no build step.
@@ -29,7 +40,7 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 ## Layout
 
 - `src/server.ts`: entry point (`npm start`). Two listeners, graceful SIGTERM (drains, leaves browsers running), reconnects running browsers at startup.
-- `src/config.ts`: every env var, validated with zod (`loadConfig` for the gateway, `loadRunnerConfig` for the runner). Invalid config = exit 1. The runner refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production, the gateway requires `PUBLIC_URL` and refuses quick tunnels.
+- `src/config.ts`: every env var, validated with zod (`loadConfig` for the gateway, `loadRunnerConfig` for the runner). Invalid config = exit 1. The runner refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production (`NODE_ENV=production`, set by `compose.tunnel.yaml`), the gateway requires `PUBLIC_URL` and refuses quick tunnels.
 - `src/host/`: the `HostDriver` contract. `RunnerDriver` (gateway side) speaks the runner RPC; `DockerDriver` (runner side) talks to the Engine API (`/v1.47`) over the Docker socket, no docker CLI. `FakeDriver` backs the tests.
 - `src/runner/`: the runner (`server.ts`) and its RPC (`protocol.ts`: one JSON line per connection, zod-validated, argv allowlist).
 - `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
@@ -37,6 +48,7 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
 - `src/cli.ts`: operator commands (`admin create`, `admin reset-2fa`, `rotate-login-key`, `migrate-from-poc`).
 - `src/egress/`, `src/policy.ts`, `src/audit.ts`: egress proxy, allowlist rules, audit file and JSON logs.
+- `deploy/`: operator runbook, `check-compose.ts` (`npm run check:compose`).
 
 Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
 
@@ -45,7 +57,7 @@ Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments o
 Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-only root filesystem, all capabilities dropped:
 
 - **gateway**: MCP, admin UI, OAuth, egress proxies, `arb.db`. No Docker socket. On Linux, `secrets/login_key` must be readable by uid 1000.
-- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`, `copyVolume`), never an image, mount, container name or free command line. Containers are created from the pinned `${ARB_PREFIX}-computer:dev` image with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
+- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It starts at most `MAX_COMPUTERS` computers at once (default 4; ensures are serialized so the count holds). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`, `copyVolume`), never an image, mount, container name or free command line. Containers are created from the `${ARB_PREFIX}-computer:dev` image with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
 - Healthcheck: `node src/runner/server.ts check` (one `list` round trip). The gateway starts once the runner is healthy.
 
 ## State
@@ -62,8 +74,8 @@ Better Auth `1.7.27` (pinned, with `@better-auth/oauth-provider`, `@better-auth/
 
 - **Agents, OAuth 2.1**: `/.well-known/oauth-protected-resource` points to the issuer `${PUBLIC_URL}/api/auth`. Dynamic client registration (or a CIMD client id URL), PKCE S256 only, access tokens `arb_at_` (1 h), refresh tokens `arb_rt_` (30 days, rotated). The admin signs in on `/login` (password + TOTP) and picks on `/consent` which scope the client gets: `profile:<id>` or `global`. Signups are disabled.
 - **Agents, API keys**: `arb_k_...`, created in the admin UI with a scope (`profile:<id>` or `global`), shown once. Send as `Authorization: Bearer` or `x-api-key`.
-- **Admin**: one admin per gateway, email + password (12 to 128 characters) + mandatory TOTP. Session cookie, 12 h. Host and Origin checked on every call. Admin UI on `:18788` (localhost) only, unless `ADMIN_PUBLIC=1` (then also on `PUBLIC_URL`, ideally behind Cloudflare Access: set `ACCESS_AUD` and `ACCESS_TEAM`; the Access email must be the admin's).
-- **Limits** (stored in `rateLimit`, per client IP from `cf-connecting-ip`): sign-in 5/min, TOTP 5/min (then 15 min lockout after 5 failures), consent 10/min, token 30/min. Client registration: 5/min per IP, 20/h and 1000 clients overall; clients never granted anything are purged after 24 h.
+- **Admin**: one admin per gateway, email + password (12 to 128 characters) + mandatory TOTP. Session cookie, 12 h. Host and Origin checked on every call. Admin UI on `:18788` (localhost) only, unless `ADMIN_PUBLIC=1` (then also on `PUBLIC_URL`, behind Cloudflare Access: `ACCESS_AUD` and `ACCESS_TEAM` are required; the Access email must be the admin's). When `PUBLIC_URL` is https, the `:18788` listener uses its own Better Auth instance (same database and secret) with base URL `http://localhost:18788`, so its cookies carry no `Secure`/`__Secure-` prefix and still work through an SSH forward; the public listener's cookies are `Secure`. The Access JWKS is cached 1 h and refetched on an unknown key id (at most once a minute).
+- **Limits** (stored in `rateLimit`, per client IP: `cf-connecting-ip` with `TRUST_PROXY=cloudflare`, else the TCP peer address): sign-in 5/min, TOTP 5/min (then 15 min lockout after 5 failures), consent 10/min, token 30/min. Client registration: 5/min per IP, 20/h and 1000 clients overall; clients never granted anything are purged after 24 h.
 - `BETTER_AUTH_SECRET` (Docker secret `better_auth_secret`, at least 32 characters) signs cookies and encrypts TOTP secrets. Changing it signs everyone out and invalidates every TOTP enrolment (`admin reset-2fa`). `PUBLIC_URL` is Better Auth's base URL (`BETTER_AUTH_URL`).
 
 ### Admin
@@ -97,7 +109,7 @@ docker compose start gateway
 
 `rotate-login-key` writes a new key to `<key>.new`, re-encrypts every login in one transaction, then renames `<key>` to `<key>.old` and `<key>.new` to `<key>`. On failure nothing changes. Delete `<key>.old` once no backup of `arb.db` needs it. A crash between the commit and the renames leaves the live key in `<key>.new`: the startup error names the key id it expects.
 
-`migrate-from-poc <state.json> <poc-login.key> [--apply]` imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22 cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and asks the runner to copy each volume (never overwrites an existing target). The runner picks the source itself (`ac-profile-<id>`) and refuses `copyVolume` unless started with `ALLOW_POC_MIGRATION=1`: without the flag, a compromised gateway could pull any POC profile's cookies into this stack. Mount the POC files read-only into a one-off container:
+`migrate-from-poc <state.json> <poc-login.key> [--apply]` (runbook section 8 also covers copying the volumes by hand, flag off) imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22@sha256:... cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and asks the runner to copy each volume (never overwrites an existing target). The runner picks the source itself (`ac-profile-<id>`) and refuses `copyVolume` unless started with `ALLOW_POC_MIGRATION=1`: without the flag, a compromised gateway could pull any POC profile's cookies into this stack. Mount the POC files read-only into a one-off container:
 
 ```sh
 P="-v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro"
