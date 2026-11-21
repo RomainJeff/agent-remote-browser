@@ -1,4 +1,4 @@
-// Pure policy helpers (no I/O) — tested by check.mjs.
+// Pure policy helpers (no I/O) — tested by test/unit/policy.test.ts.
 import { createHash } from 'node:crypto';
 
 /** Tokens are stored as sha256 hex, never in clear. Lookup by hash: no timing oracle on a 256-bit random secret. */

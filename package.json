@@ -11,7 +11,6 @@
     "start": "node gateway.mjs",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "check": "node check.mjs",
     "smoke": "node smoke.mjs"
   },
   "dependencies": {
