@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { urlAllowed, slug, validId, parseProfileId, validDomain, redirectUriOk, pkceOk, localRequest, windowBudget } from '../../src/policy.ts';
+import { urlAllowed, slug, validId, parseProfileId, validDomain, localRequest, windowBudget } from '../../src/policy.ts';
 
 test('urlAllowed: exact domain or subdomain, http(s) only, no credentials or port', () => {
   const allow = ['example.com'];
@@ -30,25 +29,6 @@ test('validDomain refuses IPs, internal TLDs and lists', () => {
   for (const d of ['localhost', '1.2.3.4', 'a.com, *', '*.example.com', 'example', 'foo.local', 'x.internal', 'nas.lan',
     'router.home.arpa', 'Example.com', 'example.com.', '', 7])
     assert.equal(validDomain(d), false, String(d));
-});
-
-test('redirectUriOk: https anywhere, http loopback only, no fragment or credentials', () => {
-  for (const u of ['https://www.notion.so/oauth/callback', 'http://localhost:3000/cb', 'http://127.0.0.1/cb', 'http://[::1]:9/cb'])
-    assert.equal(redirectUriOk(u), true, u);
-  for (const u of ['http://evil.com/cb', 'https://a.com/cb#x', 'https://example.com/cb#', 'javascript:alert(1)',
-    'https://user@example.com/cb', 'https://a.com/c b', 'https://a.com/c\\b', 'https://a.com/' + 'x'.repeat(2048), 'not a url'])
-    assert.equal(redirectUriOk(u), false, u);
-});
-
-test('pkceOk: S256 of a 43-128 char verifier', () => {
-  const s256 = (v: string) => createHash('sha256').update(v).digest('base64url');
-  const verifier = 'a'.repeat(43);
-  assert.equal(pkceOk(verifier, s256(verifier)), true);
-  assert.equal(pkceOk('b'.repeat(43), s256(verifier)), false);
-  assert.equal(pkceOk(undefined, s256(verifier)), false);
-  assert.equal(pkceOk('short', s256('short')), false);
-  assert.equal(pkceOk('a'.repeat(129), s256('a'.repeat(129))), false);
-  assert.equal(pkceOk(verifier, verifier), false); // "plain" method refused
 });
 
 test('localRequest: loopback Host on the admin port, same-origin only', () => {

@@ -1,5 +1,5 @@
 // End-to-end smoke test through the MCP gateway, like Notion would call it.
-// Usage: TOKEN=acp_... npm run smoke   (profile token from the admin UI; gateway running)
+// Usage: TOKEN=arb_k_... npm run smoke   (profile-scoped API key or OAuth access token; gateway running)
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 

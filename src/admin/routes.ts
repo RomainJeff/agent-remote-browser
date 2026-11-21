@@ -1,22 +1,54 @@
-// Admin UI: list computers, live view, human takeover. Separate port, bound to localhost by compose,
-// never behind the tunnel. ponytail: no auth beyond "localhost only" (Host + Origin checked against
-// DNS rebinding / CSRF / cross-site WebSocket). Lot 4 puts Better Auth in front.
+// Admin UI: list computers, live view, human takeover, connected clients. Own port, bound to localhost by compose;
+// also on the public listener when ADMIN_PUBLIC=1 (then optionally behind Cloudflare Access).
+// Every API call and the live view need the admin's Better Auth session (password + TOTP). Host + Origin are
+// checked on top (DNS rebinding, CSRF, cross-site WebSocket).
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { urlAllowed, localRequest, validId, cleanAllow, sitesOf, hash, type ProfileId } from '../policy.ts';
-import { newToken, type Profile } from '../store/store.ts';
+import { urlAllowed, localRequest, validId, cleanAllow, sitesOf, parseProfileId, type ProfileId } from '../policy.ts';
+import type { Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
+import { requireAdmin } from '../auth/guards.ts';
+import { callAuth, reply } from '../auth/routes.ts';
+import { createAccessVerifier } from '../auth/access-jwt.ts';
 import type { Ctx } from '../server.ts';
 
 const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json'; // --restore state, saved every 30 s
-const ACTIONS = 'start|stop|open|token|config|login-save|login-delete|release|delete';
+const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
+// Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
+const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 
-export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }: Ctx) {
+export function createAdmin({ cfg, db, store, auth, audit, leases, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
-  const localReq = (req: IncomingMessage) => localRequest(req.headers, cfg.adminPort);
+  const pubUrl = new URL(cfg.publicUrl);
+  const access = cfg.access && createAccessVerifier(cfg.access);
+  // Admin port: localhost Host/Origin. Public listener: only with ADMIN_PUBLIC, public Host/Origin.
+  const allowed = (req: IncomingMessage, pub: boolean) => pub
+    ? cfg.adminPublic && req.headers.host === pubUrl.host && (req.headers.origin === undefined || req.headers.origin === pubUrl.origin)
+    : localRequest(req.headers, cfg.adminPort);
+
+  /** False = refused. Else the Cloudflare Access email when the request needs one (public listener + ACCESS_*). */
+  async function reach(req: IncomingMessage, pub: boolean) {
+    if (!allowed(req, pub)) return false;
+    return pub && access ? (await access(req.headers['cf-access-jwt-assertion'])) ?? false : undefined;
+  }
+  /** The admin session; null = sign in first, false = refused (Host/Origin). Behind Access, the Access identity
+   *  must be the admin's own email. */
+  async function gate(req: IncomingMessage, pub: boolean) {
+    const email = await reach(req, pub);
+    if (email === false) return false;
+    const s = await requireAdmin(auth, req.headers);
+    return s && (email === undefined || s.user.email.toLowerCase() === email) ? s : null;
+  }
+
+  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest
+    FROM apikey ORDER BY createdAt DESC`).all());
+  const listClients = () => (db.prepare(`SELECT c.clientId id, c.name, c.createdAt,
+    (SELECT group_concat(DISTINCT referenceId) FROM oauthConsent WHERE clientId = c.clientId) scopes,
+    (SELECT max(createdAt) FROM oauthAccessToken WHERE clientId = c.clientId) lastToken
+    FROM oauthClient c ORDER BY c.createdAt DESC`).all());
 
   async function listComputers() {
     const running = new Map((await driver.list()).map((c) => [c.id, c]));
@@ -29,7 +61,7 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
         state: c ? (c.running ? 'running' : 'exited') : 'none',
         status: c ? (c.running ? 'running' : 'exited') : 'never started',
         // ponytail: volume presence inferred from the container; a volume orphaned by hand shows as missing.
-        profile: !!c, allow: p.allow, logins: sitesOf(p), hasToken: !!p.tokenHash,
+        profile: !!c, allow: p.allow, logins: sitesOf(p),
         leasedUntil: l ? new Date(l.exp).toISOString() : null,
         lastCall: last ? { ts: last.ts, tool: last.tool, ok: last.ok } : null,
         idleStopInS: pc.idleStopInS(id), viewers: pc.viewers(id),
@@ -57,43 +89,58 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
 
   async function deleteProfile(id: ProfileId) {
     await pc.remove(id).catch(() => {});
-    store.deleteProfile(id); // cascades to its logins, leases and OAuth tokens
+    store.deleteProfile(id); // cascades to its logins, leases, OAuth grants and API keys
   }
 
-  async function handle(req: IncomingMessage, res: ServerResponse) {
+  async function handle(req: IncomingMessage, res: ServerResponse, pub: boolean) {
     try {
       res.setHeader('cache-control', 'no-store');
       res.setHeader('referrer-policy', 'no-referrer');
       res.setHeader('x-frame-options', 'DENY');
       res.setHeader('x-content-type-options', 'nosniff');
-      if (!localReq(req)) return send(res, 403, { error: 'localhost only' });
       const path = req.url!.split('?')[0], post = req.method === 'POST';
       if (post && req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json')
         return send(res, 415, { error: 'JSON content type required' });
-      if (path === '/') {
-        const nonce = randomBytes(18).toString('base64');
-        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ws://${req.headers.host}`);
+      if (path === '/' || AUTH_API.has(path)) {
+        if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
+        if (path !== '/') return await reply(res, await callAuth(auth, cfg.publicUrl, req, path));
+        const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
+        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));
       }
+      const session = await gate(req, pub);
+      if (session === false) return send(res, 403, { error: 'forbidden' });
+      if (!session) return send(res, 401, { error: 'Sign in first' });
       if (path === '/api/computers') return send(res, 200, await listComputers());
-      if (path === '/api/settings') return send(res, 200, { globalToken: !!store.globalTokenHash() });
-      // Tokens are returned once, here, and stored as hashes. Regenerating one revokes its OAuth tokens.
-      if (path === '/api/global-token' && post) {
-        const token = newToken('acg');
-        store.setGlobalTokenHash(hash(token));
-        store.revokeTokens({ global: true });
-        audit({ agent: 'global', tool: 'admin:global-token', ok: true });
-        return send(res, 200, { token });
-      }
       if (path === '/api/profiles' && post) {
         const { id, allow } = (await readJson(req)) || {}, a = cleanAllow(allow);
         if (!validId(id)) return send(res, 400, { error: 'Invalid id: lowercase letters, digits, dashes, max 40' });
         if (profile(id)) return send(res, 409, { error: 'This profile already exists' });
         if (!a) return send(res, 400, { error: 'Invalid allow list: plain domains like example.com' });
-        const token = newToken('acp');
-        store.createProfile(id, a, hash(token));
+        store.createProfile(id, a);
         audit({ agent: id, tool: 'admin:create', ok: true });
-        return send(res, 201, { id, token });
+        return send(res, 201, { id });
+      }
+      // Connected clients: OAuth clients (with the scopes granted) and API keys. A key is shown once, at creation.
+      if (path === '/api/clients' && !post) return send(res, 200, { oauth: listClients(), keys: listKeys() });
+      if (path === '/api/keys' && post) {
+        const { name, scope } = (await readJson(req)) || {};
+        if (typeof name !== 'string' || !/^[\w .-]{1,60}$/.test(name)) return send(res, 400, { error: 'Name: letters, digits, spaces, dots, dashes (max 60)' });
+        const pid = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
+        if (scope !== 'global' && !(pid && profile(pid))) return send(res, 400, { error: 'Scope: global or an existing profile' });
+        const k = await auth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope } } });
+        audit({ agent: pid ?? 'global', tool: 'admin:api-key', ok: true });
+        return send(res, 201, { id: k.id, key: k.key });
+      }
+      const rv = path.match(/^\/api\/(keys|clients)\/([^/]+)\/revoke$/);
+      if (rv && post) {
+        const target = decodeURIComponent(rv[2]);
+        // Deleting the client cascades to its tokens and consents (foreign keys).
+        const n = rv[1] === 'keys' ? db.prepare('DELETE FROM apikey WHERE id = ?').run(target).changes
+          : db.prepare('DELETE FROM oauthClient WHERE clientId = ?').run(target).changes;
+        if (!n) return send(res, 404, { error: 'not found' });
+        audit({ agent: 'admin', tool: `admin:revoke-${rv[1] === 'keys' ? 'key' : 'client'}`, ok: true });
+        return send(res, 200, { revoked: target });
       }
       const m = path.match(new RegExp(`^/api/computers/([^/]+)(?:/(${ACTIONS}))?$`));
       const raw = m && decodeURIComponent(m[1]), id = validId(raw) ? raw : null, p = id && profile(id);
@@ -113,12 +160,6 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
         // `stream status` launches Chrome if needed and tells us the in-container stream port.
         const { port } = await pc.serial(id, () => pc.ab(id, ['stream', 'status']));
         return send(res, 200, { started: true, port });
-      }
-      if (act === 'token') {
-        const token = newToken('acp');
-        store.setProfileToken(id, hash(token));
-        store.revokeTokens({ profile: id });
-        return send(res, 200, { token });
       }
       if (act === 'config') {
         const a = cleanAllow(body.allow);
@@ -156,10 +197,12 @@ export function createAdmin({ cfg, store, audit, leases, computers: pc, driver }
 
   // Live view: agent-browser's stream WebSocket listens on 127.0.0.1 inside the computer. The driver relays raw
   // bytes to it (no network between gateway and computers, no WebSocket library).
-  async function upgrade(req: IncomingMessage, sock: Duplex, head: Buffer) {
+  async function upgrade(req: IncomingMessage, sock: Duplex, head: Buffer, pub: boolean) {
     const m = req.url!.match(/^\/api\/computers\/([^/?]+)\/stream(\?[\w=&]*)?$/);
     const id = m && validId(m[1]) ? m[1] : null, key = req.headers['sec-websocket-key'];
-    if (!m || !id || !profile(id) || !localReq(req) || !/^[\w+/=]+$/.test(key || '')) return sock.destroy();
+    if (!m || !id || !profile(id) || !/^[\w+/=]+$/.test(key || '')) return sock.destroy();
+    // Browsers send the Origin on WebSocket upgrades: gate() refuses cross-site ones.
+    if (!await gate(req, pub).catch(() => null)) return sock.destroy();
     let port: number, relay: Duplex;
     try {
       ({ port } = await pc.exec(id, ['stream', 'status']));

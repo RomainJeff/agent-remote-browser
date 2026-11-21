@@ -4,10 +4,8 @@ import type { IncomingHttpHeaders } from 'node:http';
 
 /** A validated profile id. Only parseProfileId() makes one, so a driver never receives a raw string. */
 export type ProfileId = string & { readonly __brand: 'ProfileId' };
-/** Who is calling /mcp: one profile (profile token), or the global token (manage + lease profiles). */
+/** Who is calling /mcp: one profile, or global (manage + lease profiles). From the OAuth grant or API key scope. */
 export type Principal = { global: true; profile?: never } | { profile: ProfileId; global?: never };
-/** OAuth scope a principal maps to. ponytail: declared for lot 4 (Better Auth scopes), unused until then. */
-export type Scope = 'global' | `profile:${string}`;
 
 /** Tokens are stored as sha256 hex, never in clear. Lookup by hash: no timing oracle on a 256-bit random secret. */
 export const hash = (s: unknown) => createHash('sha256').update(String(s)).digest('hex');
@@ -30,7 +28,6 @@ export const validId = (id: unknown): id is ProfileId => typeof id === 'string' 
 export const parseProfileId = (id: unknown): ProfileId | null => (validId(id) ? id : null);
 export const validDomain = (d: unknown): d is string => typeof d === 'string' && !/(^|\.)(localhost|internal|local|lan|home\.arpa)$/.test(d) && /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d);
 
-/** OAuth redirect URIs: https anywhere, http only to loopback (native clients). No fragment. */
 /** Allowlist from user input: lowercased domains, 1 to 50. Returns null when invalid. */
 export function cleanAllow(allow: unknown) {
   if (!Array.isArray(allow)) return null;
@@ -38,19 +35,6 @@ export function cleanAllow(allow: unknown) {
   return a.length && a.length <= 50 && a.every(validDomain) ? a : null;
 }
 export const sitesOf = (p: { logins?: Record<string, unknown> }) => Object.keys(p.logins || {});
-
-export function redirectUriOk(raw: unknown) {
-  if (typeof raw !== 'string') return false;
-  let u: URL;
-  try { u = new URL(raw); } catch { return false; }
-  if (raw.length > 2048 || raw.includes('#') || u.username || u.password || /[\\\s]/.test(raw)) return false;
-  return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname));
-}
-
-/** PKCE S256: base64url(sha256(verifier)) === challenge. */
-export const pkceOk = (verifier: unknown, challenge: unknown) =>
-  typeof verifier === 'string' && /^[\w.~-]{43,128}$/.test(verifier) &&
-  createHash('sha256').update(verifier).digest('base64url') === challenge;
 
 export function localRequest(headers: IncomingHttpHeaders, port: number) {
   const host = headers.host;

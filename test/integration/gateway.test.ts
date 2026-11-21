@@ -1,6 +1,6 @@
 // The real gateway in-process, on free ports, with temp state and an in-memory FakeDriver (records every host
 // call, returns canned agent-browser output). Tests share one gateway and run in order: later tests rely on the
-// profile and tokens created by earlier ones.
+// admin session, profiles and keys created by earlier ones. Every secret here is synthetic.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -13,9 +13,12 @@ import { randomBytes, createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { start } from '../../src/server.ts';
+import { main } from '../../src/cli.ts';
 import { loadConfig } from '../../src/config.ts';
 import { FakeDriver } from '../../src/host/fake.ts';
 import { parseProfileId } from '../../src/policy.ts';
+import { purgeClients } from '../../src/auth/guards.ts';
+import { totp } from '../totp.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-gw-'));
 const f = {
@@ -25,11 +28,15 @@ const f = {
 const fake = new FakeDriver();
 let app: Awaited<ReturnType<typeof start>>, PORT = 0, ADMIN = 0, base = '';
 const tokens = { global: '', shop: '' };
+const owner = { email: 'admin@example.test', password: randomBytes(12).toString('base64url'), uri: '' };
+/** Cookie header of the signed-in admin, sent by admin() unless a test overrides it. */
+let session = '';
 
-const boot = () => start(loadConfig({
-  PORT: String(PORT), ADMIN_PORT: String(ADMIN), DATA_DIR: f.data, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
-  LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, ALLOW_NO_SANDBOX: '1',
-}), fake);
+const env = () => ({
+  PORT: String(PORT), ADMIN_PORT: String(ADMIN), PUBLIC_URL: base, DATA_DIR: f.data, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
+  LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: 'synthetic-' + 'x'.repeat(40),
+});
+const boot = () => start(loadConfig(env()), fake);
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); });
@@ -47,25 +54,44 @@ async function restart() {
 before(async () => {
   [PORT, ADMIN] = [await freePort(), await freePort()];
   base = `http://127.0.0.1:${PORT}`;
+  // The admin, created like an operator would: password then the code from the authenticator app.
+  const lines: string[] = [];
+  const answers = [() => owner.password, () => totp(owner.uri)];
+  assert.equal(await main(['admin', 'create', owner.email], env(), (l) => {
+    lines.push(l);
+    if (l.startsWith('otpauth://')) owner.uri = l;
+  }, undefined, async () => answers.shift()!()), 0);
+  assert.equal(lines.filter((l) => l.includes(owner.password)).length, 0, 'password never printed');
   // A stopped leftover of an unknown profile: startup must not touch it.
   fake.computers.set('ghost', { id: 'ghost', running: true });
   app = await boot();
 });
 after(async () => { await app?.close(); rmSync(dir, { recursive: true, force: true }); });
 
-/** Raw admin request: full control over Host, Origin and fetch metadata headers. */
+/** name=value pairs of Set-Cookie headers, merged over an existing Cookie header (cleared cookies dropped). */
+function jar(setCookies: string[], cookie = '') {
+  const m = new Map(cookie.split('; ').filter(Boolean).map((kv) => [kv.slice(0, kv.indexOf('=')), kv]));
+  for (const c of setCookies) {
+    const kv = c.split(';')[0], name = kv.slice(0, kv.indexOf('='));
+    if (kv.length > name.length + 1) m.set(name, kv); else m.delete(name);
+  }
+  return [...m.values()].join('; ');
+}
+
+/** Raw admin request: full control over Host, Origin, Cookie and fetch metadata headers. */
 function admin(method: string, path: string, { body, headers = {} }: { body?: unknown, headers?: Record<string, string> } = {}) {
-  return new Promise<{ status: number, json: any }>((resolve, reject) => {
+  return new Promise<{ status: number, json: any, cookies: string[] }>((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port: ADMIN, method, path,
-      headers: { host: `127.0.0.1:${ADMIN}`, ...(body !== undefined && { 'content-type': 'application/json' }), ...headers } }, (res) => {
+      headers: { host: `127.0.0.1:${ADMIN}`, ...(session && { cookie: session }), ...(body !== undefined && { 'content-type': 'application/json' }), ...headers } }, (res) => {
       let raw = '';
       res.on('data', (d) => { raw += d; });
-      res.on('end', () => { let json; try { json = JSON.parse(raw); } catch {} resolve({ status: res.statusCode!, json }); });
+      res.on('end', () => { let json; try { json = JSON.parse(raw); } catch {} resolve({ status: res.statusCode!, json, cookies: [res.headers['set-cookie'] ?? []].flat() }); });
     });
     req.on('error', reject);
     req.end(body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body));
   });
 }
+const adminOrigin = () => ({ origin: `http://127.0.0.1:${ADMIN}`, cookie: '' });
 
 async function mcp<T>(token: string, fn: (c: Client) => Promise<T>) {
   const client = new Client({ name: 'test', version: '0' });
@@ -78,12 +104,14 @@ const call = (token: string, name: string, args: Record<string, unknown> = {}) =
   return { error: !!r.isError, text: r.content[0].text };
 });
 const toolNames = (token: string) => mcp(token, async (c) => (await c.listTools()).tools.map((t) => t.name).sort());
+const mcpStatus = async (headers: Record<string, string>) =>
+  (await fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' })).status;
 const dbFile = () => join(f.data, 'arb.db');
 /** Every row of every table, read through a second connection (sees WAL content). */
 function dump() {
   const db = new DatabaseSync(dbFile(), { readOnly: true });
   try {
-    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name);
+    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'rateLimit'").all() as { name: string }[]).map((r) => r.name);
     return JSON.stringify(names.map((n) => [n, db.prepare(`SELECT * FROM "${n}"`).all()]));
   } finally { db.close(); }
 }
@@ -101,32 +129,72 @@ test('startup lists its computers, leaves unknown ones alone; probes answer with
   fake.computers.delete('ghost');
 });
 
-test('admin issues tokens, MCP without a valid bearer gets the OAuth hint', async () => {
-  const g = await admin('POST', '/api/global-token', { body: {} });
-  assert.equal(g.status, 200);
-  tokens.global = g.json.token;
-  assert.match(tokens.global, /^acg_/);
+test('admin API: refused without a session, without TOTP, and with a wrong password; no public signup', async () => {
+  assert.equal((await admin('GET', '/api/computers')).status, 401);
+  assert.equal((await admin('POST', '/api/profiles', { body: { id: 'x', allow: ['example.com'] } })).status, 401);
+  assert.equal((await admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: 'wrong-password' }, headers: adminOrigin() })).status, 401);
+  // Password alone: Better Auth answers with a two-factor challenge and no session.
+  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: owner.password }, headers: adminOrigin() });
+  assert.equal(half.status, 200);
+  assert.equal(half.json.twoFactorRedirect, true);
+  assert.equal((await admin('GET', '/api/computers', { headers: { cookie: jar(half.cookies) } })).status, 401);
+  const wrongCode = String((Number(totp(owner.uri)) + 1) % 1e6).padStart(6, '0');
+  assert.equal((await admin('POST', '/api/auth/two-factor/verify-totp', { body: { code: wrongCode },
+    headers: { ...adminOrigin(), cookie: jar(half.cookies) } })).status, 401);
+  // Signup is neither routed nor enabled.
+  assert.equal((await admin('POST', '/api/auth/sign-up/email', { body: { email: 'x@example.test', password: 'y'.repeat(16), name: 'x' }, headers: adminOrigin() })).status, 401);
+  const signup = await fetch(base + '/api/auth/sign-up/email', { method: 'POST', headers: { 'content-type': 'application/json', origin: base },
+    body: JSON.stringify({ email: 'x@example.test', password: 'y'.repeat(16), name: 'x' }) });
+  assert.equal(signup.status, 404);
+  assert.ok(!dump().includes('x@example.test'));
+
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', { body: { code: totp(owner.uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) } });
+  assert.equal(ok.status, 200);
+  session = jar(ok.cookies, jar(half.cookies));
+  assert.equal((await admin('GET', '/api/computers')).status, 200);
+});
+
+test('admin creates profiles and scoped API keys; MCP without a valid bearer gets the OAuth hint', async () => {
   const p = await admin('POST', '/api/profiles', { body: { id: 'shop', allow: ['Example.com'] } });
-  assert.equal(p.status, 201);
-  tokens.shop = p.json.token;
-  assert.match(tokens.shop, /^acp_/);
+  assert.deepEqual([p.status, p.json], [201, { id: 'shop' }]);
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'shop', allow: ['example.com'] } })).status, 409);
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'Bad', allow: ['example.com'] } })).status, 400);
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'lan', allow: ['nas.lan'] } })).status, 400);
 
+  for (const scope of ['profile:nope', 'profile:../x', 'admin', undefined])
+    assert.equal((await admin('POST', '/api/keys', { body: { name: 'k', scope } })).status, 400, String(scope));
+  const key = async (name: string, scope: string) => {
+    const r = await admin('POST', '/api/keys', { body: { name, scope } });
+    assert.equal(r.status, 201);
+    assert.match(r.json.key, /^arb_k_/);
+    return r.json as { id: string, key: string };
+  };
+  tokens.global = (await key('orchestrator', 'global')).key;
+  tokens.shop = (await key('shop agent', 'profile:shop')).key;
+  const listed = (await admin('GET', '/api/clients')).json.keys;
+  assert.deepEqual(listed.map((k: any) => `${k.name}=${k.scope}`).sort(), ['orchestrator=global', 'shop agent=profile:shop']);
+  assert.ok(listed.every((k: any) => /^arb_k_.{6}$/.test(k.start)), 'only the first characters are listed');
+
   const state = dump() + rawDb();
-  assert.ok(!state.includes(tokens.global) && !state.includes(tokens.shop), 'tokens stored as hashes only');
+  assert.ok(!state.includes(tokens.global) && !state.includes(tokens.shop), 'keys stored as hashes only');
+  assert.ok(!state.includes(owner.password), 'password stored hashed');
   assert.equal(statSync(f.data).mode & 0o777, 0o700);
   for (const s of ['', '-wal']) assert.equal(statSync(dbFile() + s).mode & 0o777, 0o600, s);
 
-  for (const authorization of [undefined, 'Bearer acp_wrong']) {
+  for (const authorization of [undefined, 'Bearer arb_k_wrong', 'Bearer arb_at_wrong', 'Bearer acp_legacy']) {
     const r = await fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...(authorization && { authorization }) }, body: '{}' });
     assert.equal(r.status, 401);
     assert.equal(r.headers.get('www-authenticate'), `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`);
   }
+  // x-api-key works too; a revoked key is refused at once.
+  const spare = await key('spare', 'profile:shop');
+  assert.notEqual(await mcpStatus({ 'x-api-key': spare.key }), 401);
+  assert.equal((await admin('POST', `/api/keys/${spare.id}/revoke`, { body: {} })).status, 200);
+  assert.equal(await mcpStatus({ authorization: `Bearer ${spare.key}` }), 401);
+  assert.equal((await admin('POST', `/api/keys/${spare.id}/revoke`, { body: {} })).status, 404);
 });
 
-test('profile token: browser tools only, open outside the allowlist never reaches the host', async () => {
+test('profile key: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
   assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'login', 'open', 'press', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
@@ -190,10 +258,10 @@ test('kill switch refuses every tool until removed', async () => {
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
 });
 
-test('a lease locks the profile token; the global token drives the profile through the lease', async () => {
+test('a lease locks the profile key; the global key drives the profile through the lease', async () => {
   assert.deepEqual(await toolNames(tokens.global),
     ['back', 'click', 'create_profile', 'fill', 'get_text', 'lease_profile', 'list_profiles', 'login', 'open', 'press', 'release_profile', 'screenshot', 'snapshot']);
-  assert.match((await call(tokens.global, 'open', { lease: 'acl_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
+  assert.match((await call(tokens.global, 'open', { lease: 'arb_l_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
   assert.match((await call(tokens.global, 'lease_profile', { domain: 'example.org' })).text, /No free profile/);
 
   const leased = await call(tokens.global, 'lease_profile', { domain: 'www.example.com', minutes: 5 });
@@ -210,16 +278,18 @@ test('a lease locks the profile token; the global token drives the profile throu
   assert.equal(last.via, 'global');
 });
 
-test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes', async () => {
+test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes, even with a session', async () => {
   const state = dump();
+  const write = { name: 'csrf', scope: 'global' };
   for (const headers of [{ origin: 'http://evil.test' }, { origin: 'null' }, { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' }, { host: `evil.test:${ADMIN}` }, { host: `127.0.0.1:${PORT}` }] as Record<string, string>[]) {
     assert.equal((await admin('GET', '/api/computers', { headers })).status, 403, JSON.stringify(headers));
-    assert.equal((await admin('POST', '/api/global-token', { body: {}, headers })).status, 403, JSON.stringify(headers));
+    assert.equal((await admin('POST', '/api/keys', { body: write, headers })).status, 403, JSON.stringify(headers));
+    assert.equal((await admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: owner.password }, headers })).status, 403, JSON.stringify(headers));
   }
   for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x'])
-    assert.equal((await admin('POST', '/api/global-token', { body: '{}', headers: { 'content-type': type } })).status, 415, type);
-  assert.equal((await admin('POST', '/api/global-token', { body: '{}', headers: { 'content-type': '' } })).status, 415);
+    assert.equal((await admin('POST', '/api/keys', { body: JSON.stringify(write), headers: { 'content-type': type } })).status, 415, type);
+  assert.equal((await admin('POST', '/api/keys', { body: JSON.stringify(write), headers: { 'content-type': '' } })).status, 415);
   assert.equal(dump(), state, 'no refused write changed state');
   assert.equal((await admin('GET', '/api/computers', { headers: { origin: `http://127.0.0.1:${ADMIN}`, 'sec-fetch-site': 'same-origin' } })).status, 200);
 });
@@ -227,7 +297,7 @@ test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes',
 test('live view WebSocket: cross-origin upgrade dropped before touching the computer', async () => {
   const upgrade = (headers: Record<string, string>) => new Promise<string>((resolve) => {
     const req = http.request({ host: '127.0.0.1', port: ADMIN, path: '/api/computers/shop/stream', headers: {
-      host: `127.0.0.1:${ADMIN}`, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13',
+      host: `127.0.0.1:${ADMIN}`, cookie: session, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13',
       'sec-websocket-key': randomBytes(16).toString('base64'), ...headers } });
     req.on('upgrade', () => resolve('upgraded'));
     req.on('response', (r) => resolve('http ' + r.statusCode));
@@ -238,6 +308,7 @@ test('live view WebSocket: cross-origin upgrade dropped before touching the comp
   const n = streams();
   assert.equal(await upgrade({ origin: 'http://evil.test' }), 'dropped');
   assert.equal(await upgrade({ host: `evil.test:${ADMIN}` }), 'dropped');
+  assert.equal(await upgrade({ cookie: '' }), 'dropped', 'no session');
   assert.equal(streams(), n, 'no host call for refused upgrades');
   const relays = calls('stream').length;
   // Same-origin reaches the computer (the fake relay exits at once, so the socket closes without a 101).
@@ -246,69 +317,148 @@ test('live view WebSocket: cross-origin upgrade dropped before touching the comp
   assert.equal(calls('stream').length, relays + 1);
 });
 
-test('OAuth: DCR, consent, PKCE, refresh rotation, revocation on token regeneration', async () => {
-  const post = (path: string, body: object) => fetch(base + path, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotation, purge, revocation', async () => {
+  assert.equal((await admin('POST', '/api/profiles', { body: { id: 'other', allow: ['example.org'] } })).status, 201);
   const meta = await (await fetch(base + '/.well-known/oauth-protected-resource')).json();
-  assert.deepEqual(meta.authorization_servers, [base]);
-  const as = await (await fetch(base + '/.well-known/oauth-authorization-server')).json();
+  assert.deepEqual([meta.resource, meta.authorization_servers], [base + '/mcp', [base + '/api/auth']]);
+  const as = await (await fetch(base + '/.well-known/oauth-authorization-server/api/auth')).json();
+  assert.equal(as.issuer, base + '/api/auth');
   assert.deepEqual(as.code_challenge_methods_supported, ['S256']);
+  assert.ok(!JSON.stringify(as).includes('/sign-up'));
 
-  const redirect_uri = 'http://127.0.0.1:9/callback';
-  const reg = await post('/register', { redirect_uris: [redirect_uri], token_endpoint_auth_method: 'none', client_name: 'test' });
-  assert.equal(reg.status, 201);
+  const redirect_uri = 'http://127.0.0.1:9/callback', resource = base + '/mcp';
+  const register = (body: object) => fetch(base + '/api/auth/oauth2/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const reg = await register({ redirect_uris: [redirect_uri], token_endpoint_auth_method: 'none', client_name: 'test client' });
+  assert.ok(reg.ok, String(reg.status));
   const { client_id } = await reg.json();
+  const abandoned = (await (await register({ redirect_uris: [redirect_uri], token_endpoint_auth_method: 'none' })).json()).client_id;
+
   const code_verifier = randomBytes(32).toString('base64url');
   const code_challenge = createHash('sha256').update(code_verifier).digest('base64url');
-  const authorize = async (token: string) => {
-    const page = await fetch(base + '/authorize?' + new URLSearchParams({ client_id, redirect_uri, response_type: 'code', code_challenge_method: 'S256', code_challenge, state: 'xyz' }));
+  const authorizeQuery = new URLSearchParams({ client_id, redirect_uri, response_type: 'code', code_challenge_method: 'S256', code_challenge,
+    state: 'xyz', scope: 'mcp offline_access', resource });
+  // A browser navigation: Better Auth only redirects those (fetch calls get JSON). Raw http: Node's fetch forces
+  // sec-fetch-mode: cors.
+  const get = (path: string, cookie = '') => new Promise<Response>((resolve, reject) => {
+    http.get(new URL(path, base), { headers: { cookie, accept: 'text/html', 'sec-fetch-mode': 'navigate' } }, (r) => {
+      let raw = '';
+      r.on('data', (d) => { raw += d; });
+      r.on('end', () => resolve(new Response(raw, { status: r.statusCode, headers: Object.entries(r.headers).filter(([k]) => k !== 'set-cookie').map(([k, v]) => [k, String(v)]) })));
+    }).on('error', reject);
+  });
+  const postForm = (path: string, form: Record<string, string>, cookie = '', origin = base) => fetch(base + path, { method: 'POST', redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', ...(origin && { origin }), ...(cookie && { cookie }) }, body: new URLSearchParams(form) });
+  const queryOf = (r: Response) => new URL(r.headers.get('location')!, base).search.slice(1);
+
+  // No session: authorize -> /login. Consent without a session sends to /login too.
+  const toLogin = await get('/api/auth/oauth2/authorize?' + authorizeQuery);
+  assert.equal(toLogin.status, 302);
+  assert.equal(new URL(toLogin.headers.get('location')!, base).pathname, '/login');
+  const q = queryOf(toLogin);
+  const noSession = await get('/consent?' + q);
+  assert.equal(noSession.status, 302);
+  assert.equal(noSession.headers.get('location'), '/login?' + q);
+  assert.equal((await postForm('/consent', { scope: 'profile:shop', accept: 'true', oauth_query: q })).status, 302);
+
+  const loginPage = await get('/login?' + q);
+  assert.equal(loginPage.status, 200);
+  assert.match(loginPage.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
+  assert.equal((await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q }, '', 'http://evil.test')).status, 403);
+  const step1 = await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q });
+  assert.equal(step1.status, 200);
+  assert.match(await step1.text(), /Two-factor code/);
+  const step2 = await postForm('/login', { code: totp(owner.uri), oauth_query: q }, jar(step1.headers.getSetCookie()));
+  assert.equal(step2.status, 302);
+  const cookie = jar(step2.headers.getSetCookie(), jar(step1.headers.getSetCookie()));
+  assert.equal(new URL(step2.headers.get('location')!, base).pathname, '/consent');
+
+  /** Consent page -> code, for a session that already signed in (authorize then goes straight to consent). */
+  const grant = async (scope: string) => {
+    const toConsent = await get('/api/auth/oauth2/authorize?' + authorizeQuery, cookie);
+    assert.equal(new URL(toConsent.headers.get('location')!, base).pathname, '/consent');
+    const cq = queryOf(toConsent);
+    const page = await get('/consent?' + cq, cookie);
     assert.equal(page.status, 200);
-    assert.match(page.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
-    const pending = (await page.text()).match(/name="pending" value="([^"]+)"/)![1];
-    const r = await post('/authorize', { pending, token });
+    const html = await page.text();
+    assert.match(html, /test client/);
+    assert.match(html, /value="profile:other"/);
+    assert.equal((await postForm('/consent', { scope: 'profile:nope', accept: 'true', oauth_query: cq }, cookie)).status, 400);
+    assert.equal((await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie, 'http://evil.test')).status, 403);
+    const r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie);
     assert.equal(r.status, 302);
     const loc = new URL(r.headers.get('location')!);
+    assert.equal(loc.origin + loc.pathname, redirect_uri);
     assert.equal(loc.searchParams.get('state'), 'xyz');
-    assert.equal(loc.searchParams.get('iss'), base);
     return loc.searchParams.get('code')!;
   };
-  const exchange = (code: string, verifier = code_verifier) => post('/token', { grant_type: 'authorization_code', client_id, redirect_uri, code, code_verifier: verifier });
+  const token = (form: Record<string, string>) => postForm('/api/auth/oauth2/token', { client_id, resource, ...form }, '', '');
+  const exchange = (code: string, verifier = code_verifier) => token({ grant_type: 'authorization_code', redirect_uri, code, code_verifier: verifier });
 
-  // PKCE failure burns the code.
-  const burnt = await authorize(tokens.shop);
+  // PKCE failure: refused.
+  const burnt = await grant('profile:shop');
   assert.equal((await exchange(burnt, randomBytes(32).toString('base64url'))).status, 400);
-  assert.equal((await exchange(burnt)).status, 400);
 
-  const code = await authorize(tokens.shop);
+  // Code replay: refused, and the tokens of that code die with it (RFC 6749 4.1.2).
+  const once = await grant('profile:shop');
+  const first = (await (await exchange(once)).json()).access_token;
+  assert.notEqual(await mcpStatus({ authorization: `Bearer ${first}` }), 401);
+  assert.equal((await exchange(once)).status, 400, 'code replay');
+  assert.equal(await mcpStatus({ authorization: `Bearer ${first}` }), 401);
+
+  const code = await grant('profile:shop');
   const ok = await exchange(code);
   assert.equal(ok.status, 200);
   const issued = await ok.json();
-  assert.match(issued.access_token, /^aca_/);
-  assert.equal((await exchange(code)).status, 400, 'code replay');
-  assert.ok((await toolNames(issued.access_token)).includes('open'));
+  assert.match(issued.access_token, /^arb_at_/);
+  assert.match(issued.refresh_token, /^arb_rt_/);
+  assert.ok(!(dump() + rawDb()).includes(issued.access_token.slice(7)), 'access token stored hashed');
 
-  const refresh = (refresh_token: string) => post('/token', { grant_type: 'refresh_token', client_id, refresh_token });
+  // The token is the profile the admin picked: browser tools on shop, nothing global, other profiles out of reach.
+  assert.deepEqual(await toolNames(issued.access_token), await toolNames(tokens.shop));
+  assert.equal((await call(issued.access_token, 'open', { url: 'https://example.com/' })).error, false);
+  assert.match((await call(issued.access_token, 'open', { url: 'https://example.org/' })).text, /^Domain not allowed/, 'example.org is other\'s');
+  assert.equal((await call(issued.access_token, 'lease_profile', { profile: 'other' })).error, true);
+  const otherCode = await grant('profile:other');
+  const otherToken = (await (await exchange(otherCode)).json()).access_token;
+  assert.equal((await call(otherToken, 'open', { url: 'https://example.org/' })).error, false);
+  assert.match((await call(otherToken, 'open', { url: 'https://example.com/' })).text, /^Domain not allowed/);
+  assert.ok(calls('ensure').some((c) => c.id === 'other'));
+
+  const refresh = (refresh_token: string) => token({ grant_type: 'refresh_token', refresh_token });
   const rotated = await refresh(issued.refresh_token);
   assert.equal(rotated.status, 200);
   const next = await rotated.json();
-  assert.equal((await refresh(issued.refresh_token)).status, 400, 'old refresh token is single use');
+  assert.match(next.access_token, /^arb_at_/);
+  assert.equal((await call(next.access_token, 'snapshot')).error, false);
 
-  const pendingCode = await authorize(tokens.shop);
-  const regen = await admin('POST', '/api/computers/shop/token', { body: {} });
-  assert.equal(regen.status, 200);
-  tokens.shop = regen.json.token;
-  assert.equal((await exchange(pendingCode)).status, 400, 'code minted with the old credential');
-  assert.equal((await refresh(next.refresh_token)).status, 400, 'refresh token revoked');
-  const old = await fetch(base + '/mcp', { method: 'POST', headers: { authorization: `Bearer ${next.access_token}`, 'content-type': 'application/json' }, body: '{}' });
-  assert.equal(old.status, 401, 'access token revoked');
+  const clients = (await admin('GET', '/api/clients')).json.oauth;
+  assert.deepEqual(clients.find((c: any) => c.id === client_id).scopes.split(',').sort(), ['profile:other', 'profile:shop']);
+
+  // Purge: only clients older than 24 h with no grant at all.
+  const db = new DatabaseSync(dbFile());
+  try {
+    db.prepare('UPDATE oauthClient SET createdAt = ?').run(new Date(Date.now() - 2 * 86400_000).toISOString());
+    assert.equal(purgeClients(db), 1);
+    assert.deepEqual((db.prepare('SELECT clientId FROM oauthClient').all() as { clientId: string }[]).map((r) => r.clientId), [client_id]);
+  } finally { db.close(); }
+  assert.notEqual(abandoned, client_id);
+
+  // Revoking the client from the admin kills its tokens.
+  assert.equal((await admin('POST', `/api/clients/${encodeURIComponent(client_id)}/revoke`, { body: {} })).status, 200);
+  assert.equal(await mcpStatus({ authorization: `Bearer ${next.access_token}` }), 401);
+  assert.equal(await mcpStatus({ authorization: `Bearer ${otherToken}` }), 401);
+  assert.equal((await refresh(next.refresh_token)).status >= 400, true);
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
 });
 
-test('deleting a profile removes its computer and volume', async () => {
-  assert.equal((await admin('POST', '/api/computers/shop/delete', { body: {} })).status, 200);
-  assert.deepEqual(calls('remove'), [{ op: 'remove', id: 'shop', keepVolume: false }]);
-  const r = await fetch(base + '/mcp', { method: 'POST', headers: { authorization: `Bearer ${tokens.shop}`, 'content-type': 'application/json' }, body: '{}' });
-  assert.equal(r.status, 401, 'token of a deleted profile');
+test('deleting a profile removes its computer, volume, keys and grants', async () => {
+  const scoped = () => dump().match(/profile:(shop|other)\b/g) ?? [];
+  assert.ok(scoped().length > 0);
+  for (const id of ['shop', 'other']) assert.equal((await admin('POST', `/api/computers/${id}/delete`, { body: {} })).status, 200);
+  assert.deepEqual(calls('remove'), [{ op: 'remove', id: 'shop', keepVolume: false }, { op: 'remove', id: 'other', keepVolume: false }]);
+  assert.equal(await mcpStatus({ authorization: `Bearer ${tokens.shop}` }), 401, 'key of a deleted profile');
   assert.equal((await admin('GET', '/api/computers/shop')).status, 404);
+  assert.deepEqual(scoped(), [], 'no key, token or consent left for the deleted profiles');
 });
 
 test('restart reconnects running computers of known profiles only', async () => {

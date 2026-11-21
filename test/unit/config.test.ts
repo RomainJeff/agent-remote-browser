@@ -30,3 +30,15 @@ test('invalid values fail fast with every problem listed', () => {
   for (const k of ['PORT', 'ARB_PREFIX', 'BIND_ADDR', 'PUBLIC_URL']) assert.match(e!, new RegExp(`- ${k}:`));
   assert.throws(() => loadConfig({ ...dev, PORT: '9000', ADMIN_PORT: '9000' }), /must differ/);
 });
+
+test('auth: Cloudflare Access needs both values, a public admin needs PUBLIC_URL, secret 32+ characters', () => {
+  const aud = 'a'.repeat(64);
+  assert.throws(() => loadConfig({ ...dev, ACCESS_AUD: aud }), /both ACCESS_AUD and ACCESS_TEAM/);
+  assert.throws(() => loadConfig({ ...dev, ACCESS_AUD: 'short', ACCESS_TEAM: 'team' }), /ACCESS_AUD/);
+  assert.deepEqual(loadConfig({ ...dev, ACCESS_AUD: aud, ACCESS_TEAM: 'team' }).access, { aud, team: 'team' });
+  assert.equal(loadConfig(dev).access, null);
+  assert.equal(loadConfig(dev).adminPublic, false);
+  assert.throws(() => loadConfig({ ...dev, ADMIN_PUBLIC: '1' }), /ADMIN_PUBLIC=1 requires PUBLIC_URL/);
+  assert.equal(loadConfig({ ...dev, ADMIN_PUBLIC: '1', PUBLIC_URL: 'https://arb.example.com' }).adminPublic, true);
+  assert.throws(() => loadConfig({ ...dev, BETTER_AUTH_SECRET: 'x'.repeat(31) }), /BETTER_AUTH_SECRET/);
+});

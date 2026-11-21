@@ -101,7 +101,12 @@
   .global { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; }
   .global > summary { color: var(--muted); font-weight: 550; }
   .global .gstate { margin-left: auto; font-weight: 400; font-size: 12px; }
-  .global .body { display: flex; flex-direction: column; gap: 9px; padding: 4px 10px 6px; }
+  .global .card { margin-top: 6px; }
+
+  /* Sign-in */
+  .login { max-width: 360px; margin: 12vh auto; padding: 0 16px; }
+  .login form { display: flex; flex-direction: column; gap: 10px; }
+  .login select, .grid-form select { font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; }
 
   /* Detail */
   #detail { padding: 0 24px 40px; min-width: 0; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 0; }
@@ -234,10 +239,24 @@
 <body>
 <header class="top">
   <h1><svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><rect x="1" y="1" width="16" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="6.5" r="1.6" fill="currentColor"/><path d="M6 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Agent Remote Browser</h1>
-  <p class="tagline">Localhost only. Cookie values and passwords are never shown. Tokens are shown once.</p>
+  <p class="tagline">Admin sign-in with two-factor code. Cookie values and passwords are never shown. API keys are shown once.</p>
   <span class="fleet" id="fleet" aria-live="polite"></span>
+  <button type="button" class="small" id="bSignOut" hidden>Sign out</button>
 </header>
-<main>
+<section class="login panel" id="login" aria-labelledby="hLogin" hidden>
+  <h3 id="hLogin">Admin sign-in</h3>
+  <form id="pwForm">
+    <label>Email<input class="f" name="email" type="email" autocomplete="username" required></label>
+    <label>Password<input class="f" name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Continue</button>
+  </form>
+  <form id="totpForm" hidden>
+    <label>Two-factor code<input class="f mono" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+    <button class="primary" type="submit">Verify</button>
+  </form>
+  <p class="msg err" id="loginMsg" aria-live="polite"></p>
+</section>
+<main id="app" hidden>
   <aside aria-label="Profiles">
     <details class="fold newbox" id="newbox"><summary>New profile</summary>
       <form id="newProfile">
@@ -252,13 +271,8 @@
     <div class="list-head"><span>Profiles</span><span id="listErr" class="msg err" aria-live="polite"></span></div>
     <div class="list" id="list"></div>
     <p class="hint" id="listEmpty" hidden>No profiles yet. Create one, then take control to log in.</p>
-    <details class="fold global" id="globalBox"><summary>Global token <span class="gstate" id="global"></span></summary>
-      <div class="body">
-        <div id="globalSecret"></div>
-        <p class="hint">Lets an agent create and lease profiles over MCP. It never gives out profile tokens.</p>
-        <div><button id="bGlobal" type="button">Generate</button></div>
-      </div>
-    </details>
+    <div class="global"><button type="button" class="card" id="bClients"><span class="c-top"><span class="c-id">Connected clients</span></span>
+      <span class="c-meta">OAuth clients and API keys, with revocation</span></button></div>
   </aside>
   <section id="detail" aria-label="Profile details"><div class="placeholder"><b>No profile selected</b>Pick a profile on the left to connect an agent, watch its browser or take control.</div></section>
 </main>
@@ -267,13 +281,20 @@
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const ago = (ts) => { if (!ts) return '—'; const s = Math.round((Date.now() - Date.parse(ts)) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
-const api = async (path, method = 'GET', body) => { const r = await fetch(path, { method, ...(method === 'POST' && { body: JSON.stringify(body || {}), headers: { 'content-type': 'application/json' } }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; };
+const api = async (path, method = 'GET', body) => {
+  const r = await fetch(path, { method, ...(method === 'POST' && { body: JSON.stringify(body || {}), headers: { 'content-type': 'application/json' } }) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && !path.startsWith('/api/auth/')) showLogin();
+  if (!r.ok) throw new Error(j.error || j.message || `HTTP ${r.status}`);
+  return j;
+};
 const setText = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
 const domains = (s) => s.split(/[\s,]+/).filter(Boolean);
 const narrow = matchMedia('(max-width: 860px)');
 
 let computers = [], selected = null, view = null; // view = { id, ws, control }
-let secret = null; // { owner: profile id | 'global', label, token, copied }
+let secret = null; // { label, token, copied }: a new API key, shown once in Connected clients
+let authed = false; // polling stops while the sign-in screen is up
 let keys = {};     // last rendered state key per section: polling only touches the DOM when data changed
 
 // ---- Feedback --------------------------------------------------------------
@@ -297,48 +318,119 @@ async function act(btn, fn, done) {
 }
 const submit = (form, fn) => { form.onsubmit = (e) => { e.preventDefault(); act(e.submitter || $('[type=submit]', form), () => fn(form)); }; };
 
+// ---- Sign-in: password, then the TOTP code (Better Auth session cookie) ----------
+function showLogin() {
+  if (!authed && !$('#login').hidden) return;
+  authed = false; closeView(); secret = null;
+  $('#app').hidden = true; $('#bSignOut').hidden = true; $('#login').hidden = false;
+  $('#pwForm').hidden = false; $('#totpForm').hidden = true; $('#pwForm').email.focus();
+}
+function showApp() {
+  authed = true; $('#login').hidden = true; $('#app').hidden = false; $('#bSignOut').hidden = false;
+  $('#pwForm').reset(); $('#totpForm').reset(); setText($('#loginMsg'), '');
+  refreshList();
+}
+submit($('#pwForm'), async (f) => {
+  try {
+    const r = await api('/api/auth/sign-in/email', 'POST', { email: f.email.value.trim(), password: f.password.value });
+    // No twoFactorRedirect = TOTP not enrolled: the server refuses that session anyway.
+    if (!r.twoFactorRedirect) throw new Error('Two-factor not enrolled: run `arb admin reset-2fa`.');
+    setText($('#loginMsg'), ''); f.hidden = true; $('#totpForm').hidden = false; $('#totpForm').code.focus();
+  } catch (e) { flash($('#loginMsg'), e.message, true); }
+});
+submit($('#totpForm'), async (f) => {
+  try { await api('/api/auth/two-factor/verify-totp', 'POST', { code: f.code.value.trim() }); showApp(); }
+  catch (e) { flash($('#loginMsg'), e.message, true); f.reset(); }
+});
+$('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/api/auth/sign-out', 'POST'); showLogin(); });
+
 // ---- One-time secret --------------------------------------------------------
-// A token is shown once, right after it is generated. The server only keeps its hash.
-function showSecret(label, token, owner) { secret = { label, token, owner, copied: false }; renderSecret(true); renderFacts(); }
+// An API key is shown once, right after it is created. The server only keeps its hash.
+function showSecret(label, token) { secret = { label, token, copied: false }; renderSecret(true); }
 function renderSecret(focus) {
-  for (const s of [$('#secret'), $('#globalSecret')]) if (s) s.innerHTML = '';
-  if (!secret) return;
-  const slot = secret.owner === 'global' ? $('#globalSecret') : secret.owner === selected ? $('#secret') : null;
+  const slot = $('#keySecret');
   if (!slot) return;
-  if (secret.owner === 'global') $('#globalBox').open = true;
+  slot.innerHTML = '';
+  if (!secret) return;
   slot.innerHTML = `<div class="secret" role="alert" tabindex="-1">
     <div class="secret-head"><b>${esc(secret.label)}</b><span>Shown once</span></div>
     <code>${esc(secret.token)}</code>
     <p>Copy it now. The server keeps only a hash, so it cannot be shown again.</p>
-    <div class="row"><button type="button" class="primary" data-copy>Copy token</button><button type="button" data-hide>Hide</button></div></div>`;
+    <div class="row"><button type="button" class="primary" data-copy>Copy key</button><button type="button" data-hide>Hide</button></div></div>`;
   const box = $('.secret', slot), s = secret;
   $('[data-copy]', box).onclick = (e) => act(e.currentTarget, async () => {
     await navigator.clipboard.writeText(s.token); s.copied = true; e.target.textContent = 'Copied';
-  }, 'Token copied.');
+  }, 'Key copied.');
   $('[data-hide]', box).onclick = () => {
-    if (!s.copied && !confirm('You have not copied this token. It cannot be shown again. Hide it anyway?')) return;
-    secret = null; renderSecret(); renderFacts();
+    if (!s.copied && !confirm('You have not copied this key. It cannot be shown again. Hide it anyway?')) return;
+    secret = null; renderSecret();
   };
   if (focus) box.focus();
 }
 
-// ---- Create profile, global token -------------------------------------------
+// ---- Create profile -----------------------------------------------------------
 submit($('#newProfile'), async (f) => {
   try {
     const r = await api('/api/profiles', 'POST', { id: f.elements.id.value.trim(), allow: domains(f.allow.value) });
     f.reset(); setText($('#newErr'), ''); $('#newbox').open = false;
     await refreshList(); select(r.id);
-    showSecret(`Token for ${r.id}`, r.token, r.id);
   } catch (err) { flash($('#newErr'), err.message, true); }
 });
-async function refreshGlobal() {
-  try { const s = await api('/api/settings'); setText($('#global'), s.globalToken ? 'Set' : 'Not set'); setText($('#bGlobal'), s.globalToken ? 'Regenerate' : 'Generate'); } catch {}
+
+// ---- Connected clients: OAuth clients (scope picked at consent) and API keys ----------
+const scopeLabel = (s) => s === 'global' ? 'Global' : s ? s.replace(/^profile:/, 'Profile ') : '—';
+function showClients() {
+  if (view) closeView();
+  selected = null; keys = {};
+  for (const b of $('#list').children) b.setAttribute('aria-pressed', 'false');
+  $('#detail').innerHTML = `
+    <div class="toolbar"><div class="tb-title"><h2 id="dTitle" tabindex="-1">Connected clients</h2></div></div>
+    <section class="panel" aria-labelledby="hKeys">
+      <div class="ph"><h3 id="hKeys">API keys</h3><span class="readout" id="rKeys"></span></div>
+      <div id="keySecret"></div>
+      <div id="keyList"></div>
+      <form class="grid-form" id="keyForm">
+        <label>Name<input class="f" name="name" placeholder="ci-agent" maxlength="60" required autocomplete="off"></label>
+        <label>Scope<select name="scope">${computers.map((c) => `<option value="profile:${esc(c.id)}">Profile ${esc(c.id)}</option>`).join('')}
+          <option value="global">Global: manage and lease every profile</option></select></label>
+        <div class="row"><button type="submit">Create key</button></div>
+        <p class="hint wide">Send it as <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>. Shown once.</p>
+      </form>
+    </section>
+    <section class="panel" aria-labelledby="hOauth">
+      <div class="ph"><h3 id="hOauth">OAuth clients</h3><span class="readout" id="rOauth"></span></div>
+      <div id="oauthList"></div>
+      <p class="hint">MCP clients register themselves, then you sign in and pick a scope on the consent page. Unused registrations are purged after 24 h.</p>
+    </section>`;
+  submit($('#keyForm'), async (f) => {
+    const r = await api('/api/keys', 'POST', { name: f.name.value.trim(), scope: f.scope.value });
+    f.reset(); showSecret(`API key ${r.key.slice(0, 10)}…`, r.key); refreshClients();
+  });
+  renderSecret(); refreshClients(); $('#dTitle').focus({ preventScroll: true });
 }
-$('#bGlobal').onclick = (e) => act(e.currentTarget, async () => {
-  if ($('#bGlobal').textContent === 'Regenerate' && !confirm('Regenerate the global token? The old one and its OAuth sessions stop working.')) return false;
-  const r = await api('/api/global-token', 'POST'); showSecret('Global token', r.token, 'global'); refreshGlobal();
-});
-refreshGlobal();
+$('#bClients').onclick = showClients;
+const revokeBtn = (kind, id, label) => `<button type="button" class="danger small" data-revoke="${kind}" data-id="${esc(id)}" aria-label="Revoke ${esc(label)}">Revoke</button>`;
+async function refreshClients() {
+  if (!$('#keyList')) return;
+  let d; try { d = await api('/api/clients'); } catch (e) { toast(e.message, 'error'); return; }
+  if (!$('#keyList')) return;
+  setText($('#rKeys'), `${d.keys.length} active`); setText($('#rOauth'), `${d.oauth.length} registered`);
+  $('#keyList').innerHTML = d.keys.length
+    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
+      <tr><td>${esc(k.name)}</td><td class="mono nw">${esc(k.start)}…</td><td class="mono">${esc(scopeLabel(k.scope))}</td><td class="num">${k.lastRequest ? ago(k.lastRequest) : 'never'}</td>
+      <td class="act">${revokeBtn('keys', k.id, k.name)}</td></tr>`).join('')}</table></div>`
+    : '<p class="empty-row">No API keys.</p>';
+  $('#oauthList').innerHTML = d.oauth.length
+    ? `<div class="tbl"><table><tr><th>Client</th><th>Scope granted</th><th>Registered</th><th>Last token</th><th><span class="sr">Revoke</span></th></tr>${d.oauth.map((c) => `
+      <tr><td>${esc(c.name || c.id)}</td><td class="mono">${esc((c.scopes || '').split(',').filter(Boolean).map(scopeLabel).join(', ') || 'none yet')}</td>
+      <td class="num">${ago(c.createdAt)}</td><td class="num">${c.lastToken ? ago(c.lastToken) : 'never'}</td>
+      <td class="act">${revokeBtn('clients', c.id, c.name || c.id)}</td></tr>`).join('')}</table></div>`
+    : '<p class="empty-row">No OAuth clients.</p>';
+  for (const b of document.querySelectorAll('[data-revoke]')) b.onclick = () => act(b, async () => {
+    if (!confirm('Revoke it? Agents using it lose access immediately.')) return false;
+    await api(`/api/${b.dataset.revoke}/${encodeURIComponent(b.dataset.id)}/revoke`, 'POST'); refreshClients();
+  }, 'Revoked.');
+}
 
 // ---- Profile list: cards are created once and updated in place ---------------
 function cardEl(id) {
@@ -403,19 +495,17 @@ function select(id, byUser) {
 
     <section class="panel" aria-labelledby="hConnect">
       <div class="ph"><h3 id="hConnect">Connect agent</h3><span class="readout">MCP over HTTPS</span></div>
-      <div id="secret"></div>
       <div class="stack">
         <label for="mcpUrl">MCP server URL</label>
         <div class="copyfield"><input class="f mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" id="bCopyUrl">Copy</button></div>
         <p class="hint">Notion needs the public tunnel URL: run <code>docker compose logs tunnel</code>, then add <code>/mcp</code>. Your edit is kept in this browser.</p>
       </div>
       <dl class="facts">
-        <dt>Profile token</dt><dd id="fToken"></dd>
         <dt>Lease</dt><dd id="fLease"></dd>
       </dl>
       <div class="methods">
-        <div class="method"><b>OAuth</b><p>Add the URL in Notion. A page opens and asks for a token: paste the profile token.</p></div>
-        <div class="method"><b>Header</b><p>Send <code>Authorization: Bearer &lt;profile token&gt;</code>. <code>x-api-key</code> also works.</p></div>
+        <div class="method"><b>OAuth</b><p>Add the URL in your MCP client. Sign in with your code, then pick this profile on the consent page.</p></div>
+        <div class="method"><b>API key</b><p>Create a key scoped to this profile in Connected clients. Send <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>.</p></div>
       </div>
     </section>
 
@@ -465,8 +555,7 @@ function select(id, byUser) {
 
     <section class="panel dz" aria-labelledby="hDanger">
       <h3 id="hDanger">Danger zone</h3>
-      <div class="drow"><div><b>Regenerate token</b><p>The old token and its OAuth sessions stop working. Agents must reconnect.</p></div><button type="button" class="danger" id="bToken">Regenerate token</button></div>
-      <div class="drow"><div><b>Delete profile</b><p>Container, cookies, saved logins and tokens are destroyed. This cannot be undone.</p></div><button type="button" class="danger solid" id="bDelete">Delete profile</button></div>
+      <div class="drow"><div><b>Delete profile</b><p>Container, cookies, saved logins, OAuth grants and API keys of this profile are destroyed. This cannot be undone.</p></div><button type="button" class="danger solid" id="bDelete">Delete profile</button></div>
     </section>`;
 
   const p = `/api/computers/${encodeURIComponent(id)}`;
@@ -503,18 +592,13 @@ function select(id, byUser) {
       f.reset(); flash($('#loginErr'), 'Saved.'); refreshDetail();
     } catch (err) { flash($('#loginErr'), err.message, true); }
   });
-  $('#bToken').onclick = (e) => act(e.currentTarget, async () => {
-    if (!confirm(`Regenerate the token of ${id}? The old one and its OAuth sessions stop working.`)) return false;
-    showSecret(`New token for ${id}`, (await api(`${p}/token`, 'POST')).token, id); refreshList();
-  });
   $('#bDelete').onclick = (e) => act(e.currentTarget, async () => {
-    if (!confirm(`Delete ${id}? Container, cookies, saved logins and tokens are destroyed. This cannot be undone.`)) return false;
+    if (!confirm(`Delete ${id}? Container, cookies, saved logins, OAuth grants and API keys of this profile are destroyed. This cannot be undone.`)) return false;
     closeView(); await api(`${p}/delete`, 'POST');
-    if (secret?.owner === id) secret = null;
     selected = null; $('#detail').innerHTML = `<div class="placeholder"><b>Profile deleted</b>${esc(id)} and its data are gone.</div>`; refreshList();
   }, `Deleted ${id}.`);
 
-  renderToolbar(); renderFacts(); renderSecret();
+  renderToolbar(); renderFacts();
   refreshList();
   refreshDetail();
   if (byUser && narrow.matches) {
@@ -548,14 +632,10 @@ function renderToolbar() {
 // Connect facts and allowlist come from the list poll: rebuilt only when their data changes.
 function renderFacts() {
   const c = computers.find((x) => x.id === selected);
-  if (!c || !$('#fToken')) return;
-  const mine = secret?.owner === c.id;
-  const k = JSON.stringify([c.hasToken, c.leasedUntil, mine]);
+  if (!c || !$('#fLease')) return;
+  const k = JSON.stringify([c.leasedUntil]);
   if (keys.facts !== k) {
     keys.facts = k;
-    $('#fToken').innerHTML = c.hasToken
-      ? `<span class="mark ok">Set</span><span class="hint">${mine ? 'Copy it from the box above. It is shown once.' : 'Shown once at creation. Lost it? Regenerate it in the danger zone.'}</span>`
-      : '<span class="mark none">None</span><span class="hint">This profile is only used through leases.</span>';
     $('#fLease').innerHTML = c.leasedUntil
       ? `<span class="mark ok">Leased</span><span>by an agent until ${esc(new Date(c.leasedUntil).toLocaleTimeString())}</span><button type="button" class="small" id="bRelease">Release</button>`
       : '<span class="mark none">Free</span>';
@@ -676,9 +756,9 @@ function wireControl() {
 }
 
 setInterval(() => { if (view) setText($('#vfps'), `${view.frames} fps`); if (view) view.frames = 0; }, 1000);
-setInterval(refreshList, 3000);
-setInterval(refreshDetail, 5000);
-refreshList();
+setInterval(() => authed && refreshList(), 3000);
+setInterval(() => authed && refreshDetail(), 5000);
+fetch('/api/auth/get-session').then((r) => r.json()).then((s) => s?.user?.twoFactorEnabled ? showApp() : showLogin(), showLogin);
 </script>
 </body>
 </html>

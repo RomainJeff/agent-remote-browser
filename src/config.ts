@@ -13,12 +13,21 @@ const schema = z.object({
   PORT: port(8787),
   /** Admin UI listener. Host must be localhost:ADMIN_PORT, so publish it on the same port number. */
   ADMIN_PORT: port(8788),
-  /** OAuth issuer and public base URL, without trailing slash. Empty = derived from the Host header (dev only). */
+  /** Public base URL, without trailing slash: MCP resource, OAuth issuer (${PUBLIC_URL}/api/auth), Better Auth baseURL.
+   *  Empty = http://localhost:${PORT} (dev only). */
   PUBLIC_URL: z.url({ protocol: /^https?$/ }).transform((u) => u.replace(/\/$/, '')).optional(),
-  /** Holds arb.db (SQLite: profiles, token hashes, encrypted logins, leases, OAuth clients and tokens). */
+  /** Holds arb.db (SQLite: profiles, encrypted logins, leases, Better Auth: admin, sessions, OAuth, API keys). */
   DATA_DIR: z.string().min(1).default(root('data')),
   /** 32-byte AES key for saved logins (a Docker secret in compose). Created on first start only if writable. Keep it out of backups of DATA_DIR. */
   LOGIN_KEY_FILE: z.string().min(1).default('/run/secrets/login_key'),
+  /** Better Auth secret (signs cookies, encrypts TOTP secrets), 32+ characters. Prefer the file (a Docker secret in compose). */
+  BETTER_AUTH_SECRET: z.string().min(32).optional(),
+  BETTER_AUTH_SECRET_FILE: z.string().min(1).default('/run/secrets/better_auth_secret'),
+  /** 1 = the admin UI is also served on the public listener (behind PUBLIC_URL). Default: admin port, localhost only. */
+  ADMIN_PUBLIC: flag,
+  /** Cloudflare Access in front of the public admin: application AUD tag and team name (<team>.cloudflareaccess.com). */
+  ACCESS_AUD: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  ACCESS_TEAM: z.string().regex(/^[a-z0-9-]{1,63}$/).optional(),
   /** Append-only JSON lines: who called which tool, when, ok or not. Never arguments. */
   AUDIT_FILE: z.string().min(1).default(root('audit.jsonl')),
   /** If this file exists, every tool call is refused. */
@@ -45,6 +54,8 @@ const schema = z.object({
     else if (/\.trycloudflare\.com$/i.test(new URL(c.PUBLIC_URL).hostname)) issue('Quick tunnels are refused in production');
   }
   if (c.PORT === c.ADMIN_PORT) issue('PORT and ADMIN_PORT must differ');
+  if (!c.ACCESS_AUD !== !c.ACCESS_TEAM) issue('Set both ACCESS_AUD and ACCESS_TEAM, or neither');
+  if (c.ADMIN_PUBLIC && !c.PUBLIC_URL) issue('ADMIN_PUBLIC=1 requires PUBLIC_URL');
 });
 
 export type Config = ReturnType<typeof loadConfig>;
@@ -57,7 +68,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const c = r.data;
   return {
     production: c.NODE_ENV === 'production',
-    bindAddr: c.BIND_ADDR, port: c.PORT, adminPort: c.ADMIN_PORT, publicUrl: c.PUBLIC_URL,
+    bindAddr: c.BIND_ADDR, port: c.PORT, adminPort: c.ADMIN_PORT, publicUrl: (c.PUBLIC_URL ?? `http://localhost:${c.PORT}`).replace(/\/$/, ''),
+    authSecret: c.BETTER_AUTH_SECRET, authSecretFile: c.BETTER_AUTH_SECRET_FILE, adminPublic: c.ADMIN_PUBLIC,
+    access: c.ACCESS_AUD && c.ACCESS_TEAM ? { aud: c.ACCESS_AUD, team: c.ACCESS_TEAM } : null,
     dataDir: c.DATA_DIR, loginKeyFile: c.LOGIN_KEY_FILE, auditFile: c.AUDIT_FILE, killFile: c.KILL_FILE,
     idleMs: c.IDLE_MIN * 60_000, prefix: c.ARB_PREFIX, image: c.IMAGE ?? `${c.ARB_PREFIX}-computer:dev`,
     egressDir: c.EGRESS_DIR, dockerSocket: c.DOCKER_SOCKET, runtime: c.SANDBOX_RUNTIME,

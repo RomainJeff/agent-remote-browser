@@ -122,7 +122,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
 
   if (!g) return server;
 
-  // Global token only: manage and lease profiles. Never returns a profile token.
+  // Global scope only: manage and lease profiles.
   gtool('list_profiles', 'List browser profiles: allowed domains, login sites, lease state.', {}, async () =>
     txt(store.profiles().map(({ id, ...p }) => {
       const l = leases.of(id);
@@ -136,7 +136,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       if (!validId(id)) return fail('Invalid id: lowercase letters, digits, dashes, max 40');
       if (profile(id)) return fail('This profile already exists');
       if (!a) return fail('Invalid allow list: plain domains like example.com');
-      store.createProfile(id, a, null);
+      store.createProfile(id, a);
       return txt({ created: id, allow: a });
     });
 

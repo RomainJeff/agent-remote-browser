@@ -1,5 +1,5 @@
 // Leases: a global-token holder gets exclusive use of a profile for a while. While leased, the profile's own token
-// is refused. Persisted (sha256 of the acl_ token only), so a gateway restart keeps them.
+// is refused. Persisted (sha256 of the arb_l_ token only), so a gateway restart keeps them.
 import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { hash } from '../policy.ts';
@@ -16,7 +16,7 @@ export function createLeases(db: DatabaseSync) {
     },
     drop: (id: string) => { db.prepare('DELETE FROM leases WHERE profile = ?').run(id); },
     take(id: string, minutes: number) {
-      const token = `acl_${randomBytes(18).toString('base64url')}`, ms = minutes * 60_000, exp = Date.now() + ms;
+      const token = `arb_l_${randomBytes(18).toString('base64url')}`, ms = minutes * 60_000, exp = Date.now() + ms;
       db.prepare('INSERT INTO leases (id_hash, profile, exp, ms) VALUES (?, ?, ?, ?)').run(hash(token), id, exp, ms);
       return { token, exp };
     },

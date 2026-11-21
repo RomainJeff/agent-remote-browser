@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { openDb, migrate } from '../../src/store/db.ts';
 import { openStore } from '../../src/store/store.ts';
 import { keyId } from '../../src/store/logins-crypto.ts';
@@ -20,24 +21,49 @@ const login = { url: 'https://example.com/login', username: 'fixture' };
 const tables = (db: ReturnType<typeof openDb>) =>
   (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
 
+const BA = ['account', 'apikey', 'oauthAccessToken', 'oauthClient', 'oauthClientAssertion', 'oauthClientResource', 'oauthConsent',
+  'oauthRefreshToken', 'oauthResource', 'rateLimit', 'session', 'twoFactor', 'user', 'verification'];
+const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() as any).user_version;
+
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
-  assert.deepEqual(tables(db), ['leases', 'logins', 'oauth_clients', 'oauth_tokens', 'profiles', 'settings']);
-  assert.equal((db.prepare('PRAGMA user_version').get() as any).user_version, 1);
+  assert.deepEqual(tables(db), [...BA, 'leases', 'logins', 'profiles'].sort());
+  assert.equal(version(db), 2);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
   migrate(db);
   db.close();
   const again = openDb(f.db);
-  assert.equal((again.prepare('PRAGMA user_version').get() as any).user_version, 1);
-  assert.equal(tables(again).length, 6);
+  assert.equal(version(again), 2);
+  assert.equal(tables(again).length, BA.length + 3);
   again.close();
+});
+
+test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens and hand-rolled OAuth gone', () => {
+  const f = fresh(), lot3 = new DatabaseSync(f.db);
+  lot3.exec(readFileSync(new URL('../../src/store/migrations/001_app.sql', import.meta.url), 'utf8'));
+  lot3.exec('PRAGMA user_version = 1');
+  lot3.prepare('INSERT INTO profiles VALUES (?, ?, ?, ?)').run('shop', '["example.com"]', hash('acp_synthetic'), 1);
+  lot3.prepare('INSERT INTO logins VALUES (?, ?, ?, ?, ?, ?)').run('shop', 'site', login.url, login.username, '{}', 'k');
+  lot3.prepare('INSERT INTO leases VALUES (?, ?, ?, ?)').run(hash('acl_synthetic'), 'shop', Date.now() + 60_000, 60_000);
+  lot3.prepare('INSERT INTO settings VALUES (?, ?)').run('global_token_hash', hash('g'));
+  lot3.prepare('INSERT INTO oauth_clients (id, redirect_uris_json, created_at) VALUES (?, ?, ?)').run('c1', '[]', 1);
+  lot3.prepare('INSERT INTO oauth_tokens VALUES (?, ?, ?, ?, ?)').run(hash('t'), 'access', 'shop', 'c1', Date.now());
+  lot3.close();
+
+  const db = openDb(f.db);
+  assert.equal(version(db), 2);
+  assert.deepEqual(tables(db), [...BA, 'leases', 'logins', 'profiles'].sort());
+  assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
+  for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);
+  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  db.close();
 });
 
 test('profiles and logins: CRUD, key_id per envelope, cascade on delete', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key);
   const pw = randomBytes(8).toString('hex');
-  s.createProfile(pid('shop'), ['example.com'], hash('t'));
+  s.createProfile(pid('shop'), ['example.com']);
   s.setAllow(pid('shop'), ['example.com', 'example.org']);
   s.saveLogin(pid('shop'), 'site', login, pw);
   const p = s.profile('shop')!;
@@ -47,39 +73,17 @@ test('profiles and logins: CRUD, key_id per envelope, cascade on delete', () => 
   const row = db.prepare('SELECT envelope, key_id FROM logins').get() as any;
   assert.equal(row.key_id, keyId(readFileSync(f.key)));
   assert.ok(!row.envelope.includes(pw));
-  assert.deepEqual(s.principalForStatic('t'), { profile: 'shop' });
-  s.setProfileToken(pid('shop'), hash('t2'));
-  assert.equal(s.principalForStatic('t'), null);
   assert.equal(s.profile('nope'), null);
   createLeases(db).take('shop', 5);
-  s.issueTokens({ profile: pid('shop') }, 'c1');
+  // OAuth grants and API keys scoped to the profile: covered end to end in test/integration/gateway.test.ts.
   s.deleteProfile(pid('shop'));
-  for (const t of ['logins', 'leases', 'oauth_tokens']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 0, t);
-  db.close();
-});
-
-test('settings, OAuth clients and tokens: global principal, refresh single use, revoke', () => {
-  const f = fresh(), db = openDb(f.db), s = openStore(db, f.key);
-  assert.equal(s.globalTokenHash(), null);
-  s.setGlobalTokenHash(hash('g'));
-  assert.deepEqual(s.principalFor('g'), { global: true });
-  s.addClient('c1', { redirect_uris: ['https://example.com/cb'], client_name: 'x', secretHash: null });
-  assert.deepEqual(s.client('c1')?.redirect_uris, ['https://example.com/cb']);
-  assert.equal(s.clientCount(), 1);
-  const t = s.issueTokens({ global: true }, 'c1');
-  assert.deepEqual(s.principalFor(t.access_token), { global: true });
-  assert.equal(s.principalFor(t.refresh_token), null, 'refresh token is not a bearer');
-  assert.equal(s.takeRefresh(t.refresh_token, 'other'), null, 'bound to its client');
-  assert.deepEqual(s.takeRefresh(t.refresh_token, 'c1'), { global: true });
-  assert.equal(s.takeRefresh(t.refresh_token, 'c1'), null, 'single use');
-  s.revokeTokens({ global: true });
-  assert.equal(s.principalFor(t.access_token), null);
+  for (const t of ['profiles', 'logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 0, t);
   db.close();
 });
 
 test('saved logins without their key: refuse to start, never create a new key', () => {
   const f = fresh(), db = openDb(f.db);
-  openStore(db, f.key).createProfile(pid('p'), [], null);
+  openStore(db, f.key).createProfile(pid('p'), []);
   openStore(db, f.key).saveLogin(pid('p'), 'site', login, 'x');
   rmSync(f.key);
   assert.throws(() => openStore(db, f.key), /Restore the existing login key/);
@@ -91,13 +95,13 @@ test('saved logins without their key: refuse to start, never create a new key', 
 
 test('leases: take, slide on use, release, expire', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), leases = createLeases(db);
-  s.createProfile(pid('p'), [], null);
+  s.createProfile(pid('p'), []);
   const { token, exp } = leases.take('p', 1);
-  assert.match(token, /^acl_/);
+  assert.match(token, /^arb_l_/);
   assert.equal(leases.of('p')?.exp, exp);
   assert.ok(!JSON.stringify(db.prepare('SELECT * FROM leases').all()).includes(token), 'only the hash is stored');
   assert.equal(leases.use(token)?.profile, 'p');
-  assert.equal(leases.use('acl_wrong'), null);
+  assert.equal(leases.use('arb_l_wrong'), null);
   assert.equal(leases.release(token), true);
   assert.equal(leases.of('p'), null);
   leases.take('p', 1);
