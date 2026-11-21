@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,305 +7,297 @@
 <link rel="icon" href="data:,">
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #e6e9ec; --panel: #f7f8f9; --sunk: #dde1e5; --ink: #161b21; --muted: #56616c; --line: #c4ccd4;
-    --primary: #1d252e; --primary-ink: #f7f8f9;
-    --ok: #17734a; --off: #7b8590;
-    --signal: #b25000; --signal-soft: #fff1e0; --signal-ink: #6b3000;
-    --danger: #be1e2d; --danger-soft: #fde8ea;
-    --focus: #1f63e0;
-    --bezel: #252c34; --screen: #0d1116;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-    font: 13.5px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #14181d; --panel: #1b2026; --sunk: #10141a; --ink: #e4e8ec; --muted: #8e99a5; --line: #2d353e;
-      --primary: #e4e8ec; --primary-ink: #14181d;
-      --ok: #3fd18b; --off: #69737e;
-      --signal: #f5a524; --signal-soft: #2b2112; --signal-ink: #ffd79a;
-      --danger: #ff6b6b; --danger-soft: #2e1719;
-      --focus: #6ea2ff;
-      --bezel: #262d35; --screen: #07090c;
-    }
+    color-scheme: light;
+    --bg: #F6F7F8; --panel: #FFFFFF; --ink: #1F2226; --muted: #585F66; --line: #CFD4D8; --line2: #E0E0E0; --line3: #E9EBEC;
+    --primary: #00543C; --primary-h: #003526; --green-soft: #E2F2EE; --ok: #007556; --off: #9199A1;
+    --danger: #D43F11; --danger-ink: #A8310C; --danger-soft: #FDE5DC;
+    --warn-ink: #8A5C00; --warn-soft: #FFF6E4; --warn-dot: #E0A500; --warn-line: #FFD02F;
+    --agent: #6F2FD1; --agent-soft: #F0E5FF; --agent-line: #D9C2FF; --agent-ink: #4A1F8C;
+    --sans: Mulish, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: 'Roboto Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font: 14px/20px var(--sans);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); }
-  .mono, code { font-family: var(--mono); font-size: .92em; }
+  a { color: var(--primary); } a:hover { color: var(--primary-h); }
+  .mono, code { font-family: var(--mono); font-size: .93em; }
   .sr { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   [hidden] { display: none !important; }
+  svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* Header */
-  .top { display: flex; align-items: center; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  .top h1 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
-  .top h1 svg { flex: none; }
-  .top .tagline { margin: 0; color: var(--muted); font-size: 12px; flex: 1; min-width: 0; }
-  .fleet { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  @media (max-width: 860px) { .top .tagline { display: none; } }
-
-  main { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 47px); }
-  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
-
-  /* Buttons and fields */
-  button { font: inherit; font-weight: 550; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; white-space: nowrap; }
-  button:hover:not(:disabled) { border-color: var(--muted); }
-  button.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
-  button.primary:hover:not(:disabled) { opacity: .88; }
-  button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-  button.danger:hover:not(:disabled) { border-color: var(--danger); background: var(--danger-soft); }
-  button.danger.solid { background: var(--danger); color: #fff; border-color: var(--danger); }
-  button.small { padding: 2px 9px; font-size: 12px; }
-  button:disabled { opacity: .42; cursor: not-allowed; }
-  button[aria-busy="true"] { cursor: progress; }
-  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 550; color: var(--muted); }
-  input.f { font: inherit; font-weight: 400; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-width: 0; width: 100%; }
-  input.f.mono { font-family: var(--mono); font-size: 12.5px; }
-  input.f:focus { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
-  input.f:user-invalid { border-color: var(--danger); }
-  .hint { color: var(--muted); font-size: 12px; margin: 0; }
-  .msg { font-size: 12px; margin: 0; min-height: 1.5em; color: var(--muted); transition: opacity .4s; }
-  .msg.err { color: var(--danger); }
+  /* Buttons, fields */
+  .btn { font: 600 14px/20px var(--sans); display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; text-decoration: none; white-space: nowrap; background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .btn:hover:not(:disabled) { background: var(--bg); color: var(--ink); }
+  .btn-p { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn-p:hover:not(:disabled) { background: var(--primary-h); color: #fff; }
+  .btn-d { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .btn-d:hover:not(:disabled) { background: var(--danger-ink); color: #fff; }
+  .btn-dl { color: var(--danger-ink); }
+  .btn-dl:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-ink); }
+  .btn-i { width: 40px; padding: 0; color: var(--muted); }
+  .btn-sm { min-height: 32px; padding: 0 12px; font-size: 13px; }
+  .btn-g { border-color: transparent; background: transparent; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn[aria-busy="true"] { cursor: progress; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
+  input.in, select.in { font: 400 14px/20px var(--sans); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; min-height: 40px; padding: 0 12px; min-width: 0; width: 100%; }
+  input.in.mono { font-family: var(--mono); font-size: 13px; }
+  input.in:focus, select.in:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+  input.in:user-invalid { border-color: var(--danger); }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 400; color: var(--ink); cursor: pointer; }
+  .check input { margin: 3px 0 0; accent-color: var(--primary); width: 16px; height: 16px; flex: none; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 16px; margin: 0; }
+  .msg { font-size: 13px; margin: 0; min-height: 20px; color: var(--muted); transition: opacity .4s; }
+  .msg.err { color: var(--danger-ink); font-weight: 600; }
   .msg.fade { opacity: 0; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
+  .term { margin: 0; padding: 12px 14px; border-radius: 4px; background: #1F2226; color: #E9EBEC; font: 400 13px/20px var(--mono); white-space: pre-wrap; word-break: break-word; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .pad { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .card h2, .card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 800; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1 1 auto; min-width: 0; }
 
-  /* Sidebar */
-  aside { border-right: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-  @media (max-width: 860px) { aside { border-right: 0; border-bottom: 1px solid var(--line); } }
-  details > summary { cursor: pointer; list-style: none; }
-  details > summary::-webkit-details-marker { display: none; }
-  .fold > summary { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 7px 10px; border-radius: 6px; }
-  .fold > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 2px; }
-  .fold[open] > summary::before { transform: rotate(45deg); }
-  .newbox { border: 1px dashed var(--line); border-radius: 8px; }
-  .newbox[open] { border-style: solid; background: var(--panel); }
-  .newbox form { display: flex; flex-direction: column; gap: 9px; padding: 2px 10px 10px; }
-  .list-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); padding: 0 2px; }
-  .list { display: flex; flex-direction: column; gap: 6px; }
-  .card { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; font-weight: 400; padding: 9px 11px 9px 12px; border-radius: 8px; background: var(--panel); position: relative; }
-  .card[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
-  .c-top { display: flex; align-items: center; gap: 8px; }
-  .c-id { font-family: var(--mono); font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .c-state { font-size: 11.5px; color: var(--muted); }
-  .card[data-state="up"] .c-state { color: var(--ok); font-weight: 600; }
-  .c-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .c-tags { display: flex; gap: 5px; flex-wrap: wrap; }
-  .c-tags:not(:has(.tag:not([hidden]))) { display: none; }
-  .tag { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; line-height: 17px; }
-  .tag.live { color: var(--signal); }
-  .tag.lease { color: var(--focus); }
-  .tag.plain { color: var(--muted); border-color: var(--line); font-weight: 500; }
-  /* Status LED: shape + text, never color alone */
-  .led { width: 9px; height: 9px; border-radius: 50%; flex: none; border: 1.5px solid var(--off); }
-  [data-state="up"] .led { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
-  [data-state="down"] .led { background: var(--off); }
-  .global { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; }
-  .global > summary { color: var(--muted); font-weight: 550; }
-  .global .gstate { margin-left: auto; font-weight: 400; font-size: 12px; }
-  .global .card { margin-top: 6px; }
+  /* Alerts, pills */
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 4px; font-size: 14px; line-height: 20px; border: 1px solid; }
+  .alert p { margin: 0; }
+  .a-warn { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn-line); }
+  .a-danger { background: var(--danger-soft); color: var(--danger-ink); border-color: #F6B9A3; }
+  .a-info { background: var(--green-soft); color: var(--primary); border-color: #B6DDD2; }
+  .a-agent { background: var(--agent-soft); color: var(--agent-ink); border-color: var(--agent-line); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; background: var(--line3); color: var(--muted); }
+  .pill.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .pill.up { background: var(--green-soft); color: var(--primary); } .pill.up::before { background: var(--ok); }
+  .pill.agent { background: var(--agent-soft); color: var(--agent-ink); } .pill.agent.dot::before { background: var(--agent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn-ink); } .pill.warn.dot::before { background: var(--warn-dot); }
+  .pill.danger { background: var(--danger-soft); color: var(--danger-ink); }
+  .pill.green { background: var(--green-soft); color: var(--primary); }
 
-  /* Sign-in */
-  .login { max-width: 360px; margin: 12vh auto; padding: 0 16px; }
-  .login form { display: flex; flex-direction: column; gap: 10px; }
-  .login select, .grid-form select { font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; }
+  /* Shell: sidebar + main */
+  .shell { min-height: 100vh; display: flex; flex-wrap: wrap; }
+  .side { flex: 1 1 232px; max-width: 100%; background: #fff; border-right: 1px solid var(--line2); padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
+  @media (min-width: 900px) { .side { flex: 0 0 232px; position: sticky; top: 0; height: 100vh; } }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .tile, .brand .tile { width: 36px; height: 36px; border-radius: 8px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+  .brand b { display: block; font-weight: 800; font-size: 15px; }
+  .brand span { font-size: 12px; line-height: 16px; color: var(--muted); }
+  .badge { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 4px; background: var(--green-soft); color: var(--primary); font-size: 12px; line-height: 16px; font-weight: 600; }
+  .badge svg.i { width: 16px; height: 16px; }
+  .navl { display: flex; flex-direction: column; gap: 4px; }
+  .nav { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 4px; color: var(--ink); text-decoration: none; font-weight: 600; }
+  .nav:hover { background: var(--bg); color: var(--ink); }
+  .nav[aria-current="page"] { background: var(--green-soft); color: var(--primary); font-weight: 700; }
+  .nav .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .me { margin-top: auto; display: flex; align-items: center; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line3); }
+  .avatar { width: 32px; height: 32px; border-radius: 999px; background: var(--line3); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; }
+  .me .who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .me .who b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me .who span { font-size: 12px; line-height: 16px; color: var(--primary); font-weight: 600; }
+  #main { flex: 999 1 560px; min-width: 0; padding: 32px 40px 48px; display: flex; flex-direction: column; gap: 24px; }
+  @media (max-width: 700px) { #main { padding: 24px 16px 40px; } }
+  .head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  .head > div:first-child { flex: 1 1 320px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 800; }
+  h1.mono { font-size: 26px; overflow-wrap: anywhere; }
+  .sub { margin: 0; font-size: 16px; line-height: 24px; color: var(--muted); max-width: 720px; }
+  .crumb { font-size: 13px; color: var(--muted); }
+  .crumb a { text-decoration: none; font-weight: 600; }
 
-  /* Detail */
-  #detail { padding: 0 24px 40px; min-width: 0; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 0; }
-  .placeholder { margin: 64px auto; max-width: 340px; text-align: center; color: var(--muted); }
-  .placeholder b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
-  .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 14px 0 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
-  .tb-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 200px; }
-  .tb-title h2 { margin: 0; font-family: var(--mono); font-size: 18px; font-weight: 650; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tb-title h2:focus { outline: none; }
-  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .state[data-state="up"] { color: var(--ok); font-weight: 600; }
-  .actions { display: flex; gap: 6px; flex-wrap: nowrap; }
-  @media (max-width: 600px) {
-    .actions { width: 100%; }
-    .actions button { flex: 1 1 auto; padding-inline: 8px; }
-    #detail { padding: 0 16px 32px; }
-  }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .ph { display: flex; align-items: baseline; gap: 10px; }
-  .ph h3, .panel h3 { margin: 0; font-size: 14px; font-weight: 650; }
-  .readout { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  @media (max-width: 1180px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .stat { padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; }
+  .stat b { font-size: 28px; line-height: 36px; font-weight: 800; }
+  .stat b small { font-size: 14px; font-weight: 600; color: var(--muted); }
 
-  /* Connect */
-  .copyfield { display: flex; gap: 6px; }
-  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
-  .facts dt { color: var(--muted); }
-  .facts dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .mark { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
-  .mark.ok { color: var(--ok); } .mark.ok::before { content: "✓"; }
-  .mark.none { color: var(--muted); } .mark.none::before { content: "–"; }
-  .methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  @media (max-width: 700px) { .methods { grid-template-columns: 1fr; } }
-  .method { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; }
-  .method b { display: block; font-size: 13px; margin-bottom: 2px; }
-  .method p { margin: 0; color: var(--muted); }
-  .method code { color: var(--ink); background: var(--sunk); padding: 1px 4px; border-radius: 3px; word-break: break-all; }
+  /* Tables */
+  .tbl { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line3); vertical-align: middle; }
+  th { font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); background: #FAFBFB; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td .s { display: block; font-size: 12px; line-height: 16px; color: var(--muted); }
+  td.mono, td .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  td.nw { white-space: nowrap; }
+  td.act { width: 1%; white-space: nowrap; text-align: right; }
+  td.ok { color: var(--ok); font-weight: 600; } td.err { color: var(--danger-ink); overflow-wrap: anywhere; }
+  .tblhead { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line3); }
+  .tblhead h2 { flex: 1 1 auto; }
+  .tblfoot { padding: 12px 20px; border-top: 1px solid var(--line3); }
+  .empty { padding: 24px 20px; color: var(--muted); margin: 0; }
+  .filters { display: flex; gap: 6px; }
+  .filters button { font: 700 12px/16px var(--sans); height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; }
+  .filters button[aria-pressed="true"] { background: var(--green-soft); border-color: var(--primary); color: var(--primary); }
+  @media (max-width: 700px) { .tbl table { min-width: 640px; } }
 
-  /* One-time secret */
-  .secret { border: 2px solid var(--signal); background: var(--signal-soft); border-radius: 8px; padding: 11px 13px; display: flex; flex-direction: column; gap: 8px; }
-  .secret:focus { outline: 3px solid color-mix(in srgb, var(--signal) 40%, transparent); outline-offset: 2px; }
-  .secret-head { display: flex; align-items: center; gap: 8px; color: var(--signal-ink); }
-  .secret-head span { margin-left: auto; font-size: 11.5px; font-weight: 700; border: 1.5px solid var(--signal); color: var(--signal); border-radius: 4px; padding: 0 6px; }
-  .secret code { display: block; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; word-break: break-all; user-select: all; font-size: 12.5px; }
-  .secret p { margin: 0; font-size: 12px; color: var(--signal-ink); }
-  .secret .row { display: flex; gap: 6px; }
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tab { padding: 10px 14px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-current="page"] { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+  @media (max-width: 1180px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-  /* Live view: the bezel is the one loud element */
-  .nav { display: flex; gap: 6px; }
-  .vstate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-  .vstate::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--off); }
-  .vstate[data-mode="watch"] { color: var(--ink); }
-  .vstate[data-mode="watch"]::before { background: var(--ok); border-color: var(--ok); }
-  .vstate[data-mode="control"] { color: var(--signal); font-weight: 700; }
-  .vstate[data-mode="control"]::before { background: var(--signal); border-color: var(--signal); }
-  .fps { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
-  .bezel { background: var(--bezel); border-radius: 12px; padding: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.2); }
-  .bezel:has(.screen.control) { padding: 6px; background: repeating-linear-gradient(-45deg, var(--signal) 0 10px, #1a1a1a 10px 20px); }
-  .banner { display: none; align-items: center; gap: 8px; padding: 5px 10px 7px; color: #fff; font-size: 12.5px; font-weight: 600; }
-  .banner b { background: var(--signal); color: #1a1205; padding: 0 6px; border-radius: 3px; }
-  .bezel:has(.screen.control) .banner { display: flex; background: #1a1a1a; border-radius: 6px 6px 0 0; margin: -2px -2px 6px; }
-  .screen { background: var(--screen); border-radius: 6px; overflow: hidden; position: relative; min-height: 120px; }
+  /* Live view */
+  .live { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-radius: 4px; font-size: 14px; font-weight: 600; border: 1px solid; }
+  .banner span { flex: 1 1 220px; }
+  .b-agent { background: var(--agent-soft); color: var(--agent-ink); border-color: var(--agent-line); }
+  .b-ctl { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn-line); }
+  .urlbar { display: flex; gap: 8px; }
+  .vstate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .vstate::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .vstate[data-mode="watch"] { color: var(--primary); } .vstate[data-mode="watch"]::before { background: var(--ok); }
+  .vstate[data-mode="control"] { color: var(--warn-ink); } .vstate[data-mode="control"]::before { background: var(--warn-dot); }
+  .bezel { background: #2A2F35; border-radius: 8px; padding: 8px; }
+  .bezel:has(.screen.control) { padding: 6px; background: repeating-linear-gradient(-45deg, var(--warn-line) 0 10px, #1F2226 10px 20px); }
+  .screen { background: #0D1116; border-radius: 4px; overflow: hidden; position: relative; min-height: 120px; }
   .screen img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
   .screen.control img { cursor: crosshair; }
   .screen img:focus { outline: none; }
-  .screen .empty { display: grid; place-items: center; height: clamp(180px, 32vh, 320px); width: 100%; padding: 20px; text-align: center; color: #8d98a4; font-size: 13px;
+  .screen .nosig { display: grid; place-items: center; height: clamp(200px, 36vh, 360px); padding: 20px; text-align: center; color: #9199A1;
     background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; }
-  .screen .empty b { display: block; color: #d3d9df; font-size: 14px; margin-bottom: 4px; }
-  .pageinfo { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); margin: 0; min-width: 0; }
-  .pageinfo span:first-child { color: var(--ink); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
-  .pageinfo span:last-child { font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .screen .nosig b { display: block; color: #E9EBEC; font-size: 15px; margin-bottom: 4px; }
+  .vfoot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .vfoot .pt { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .big { font: 700 28px/36px var(--mono); }
+  .activity { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+  .activity li { display: flex; gap: 8px; align-items: baseline; }
+  .activity .t { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .activity .ko { color: var(--danger-ink); }
 
-  /* Tables */
-  .tbl { overflow-x: auto; position: relative; }
-  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-  th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  tr:last-child td { border-bottom: 0; }
-  th { color: var(--muted); font-weight: 550; font-size: 11.5px; }
-  td.mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
-  td.nw { white-space: nowrap; }
-  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
-  td.err { color: var(--danger); overflow-wrap: anywhere; }
-  td.ok { color: var(--ok); }
-  td.act { width: 1%; padding-right: 0; }
-  @media (max-width: 600px) { .tbl table { min-width: 540px; } }
-  .icon-del { padding: 3px 5px; border-color: transparent; background: transparent; color: var(--muted); line-height: 0; }
-  .icon-del:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
-  .empty-row { color: var(--muted); font-size: 12.5px; margin: 0; }
-
-  /* Forms in panels */
-  .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; border-top: 1px solid var(--line); padding-top: 12px; }
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font: 500 13px/20px var(--mono); padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--green-soft); color: var(--primary); border: 1px solid #B6DDD2; }
+  .chip button { border: 0; background: transparent; color: inherit; cursor: pointer; width: 22px; height: 22px; border-radius: 50%; font-size: 15px; line-height: 1; }
+  .chip button:hover { background: #fff; }
+  .chip.ro { padding-right: 10px; }
+  .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
   .grid-form .wide { grid-column: 1 / -1; }
-  .grid-form .row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
-  @media (max-width: 500px) { .grid-form { grid-template-columns: 1fr; } }
-  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .chip { font-family: var(--mono); font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--sunk); border: 1px solid var(--line); }
-  .stack { display: flex; flex-direction: column; gap: 9px; }
+  @media (max-width: 600px) { .grid-form { grid-template-columns: 1fr; } }
+  .dz { border-color: #F6B9A3; }
+  .dz h2 { color: var(--danger-ink); }
 
-  /* Diagnostics */
-  .diag { padding: 0; gap: 0; }
-  .diag > summary { display: flex; align-items: baseline; gap: 10px; padding: 13px 16px; border-radius: 10px; }
-  .diag > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; align-self: center; }
-  .diag[open] > summary::before { transform: rotate(45deg); }
-  .diag .body { padding: 0 16px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
-  .diag .body > div { min-width: 0; }
-  .diag .body .full { grid-column: 1 / -1; }
-  .diag h4 { margin: 0 0 4px; font-size: 12.5px; font-weight: 650; }
-  @media (max-width: 1000px) { .diag .body { grid-template-columns: minmax(0, 1fr); } }
+  /* Sign-in */
+  .auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px 16px; }
+  .auth .card { width: 100%; max-width: 420px; padding: 32px; display: flex; flex-direction: column; gap: 20px; }
+  .auth form { display: flex; flex-direction: column; gap: 16px; }
+  .auth h1 { font-size: 24px; line-height: 32px; }
+  .step { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
+  .linkbtn { border: 0; background: none; color: var(--primary); font: 600 14px/20px var(--sans); cursor: pointer; padding: 0; text-align: left; }
+  .linkbtn:hover { text-decoration: underline; }
+  .auth .chipsrow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .codein { font: 600 22px/32px var(--mono) !important; letter-spacing: .3em; text-align: center; }
 
-  /* Danger zone */
-  .dz { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
-  .dz h3 { color: var(--danger); }
-  .drow { display: flex; align-items: center; gap: 16px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .drow:first-of-type { border-top: 0; padding-top: 0; }
-  .drow div { flex: 1; min-width: 0; }
-  .drow b { font-size: 13px; }
-  .drow p { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
-  @media (max-width: 500px) { .drow { flex-direction: column; align-items: stretch; gap: 8px; } }
+  /* Dialogs */
+  dialog { border: 0; border-radius: 8px; padding: 0; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-shadow: 0 16px 48px rgba(31,34,38,.25); color: var(--ink); }
+  dialog::backdrop { background: rgba(31,34,38,.5); }
+  dialog form, .dlg { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  dialog h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 800; }
+  dialog .ic { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--warn-soft); color: var(--warn-ink); font-weight: 800; font-size: 18px; }
+  dialog .ic.d { background: var(--danger-soft); color: var(--danger-ink); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .radios { display: flex; flex-direction: column; gap: 8px; border: 0; margin: 0; padding: 0; }
+  .radios legend { padding: 0; margin-bottom: 4px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .opt:has(input:checked) { border-color: var(--primary); background: var(--green-soft); }
+  .opt input { margin: 3px 0 0; accent-color: var(--primary); }
+  .opt b { display: block; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; border: 0; padding: 0; margin: 0; }
+  .seg label { position: relative; }
+  .seg input { position: absolute; opacity: 0; }
+  .seg span { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); font-weight: 600; cursor: pointer; }
+  .seg input:checked + span { background: var(--green-soft); border-color: var(--primary); color: var(--primary); }
+  .seg input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 
   /* Toast */
   .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
-  .toast { pointer-events: auto; max-width: min(420px, calc(100vw - 32px)); padding: 9px 13px; border-radius: 8px; background: var(--primary); color: var(--primary-ink); font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); animation: tin .18s ease-out; }
-  .toast.error { background: var(--danger); color: #fff; }
-  .toast.error::before { content: "Error: "; font-weight: 700; }
+  .toast { pointer-events: auto; max-width: min(440px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 4px; background: #1F2226; color: #fff; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2); animation: tin .18s ease-out; }
+  .toast.error { background: var(--danger-ink); }
+  .toast.error::before { content: "Erreur : "; font-weight: 700; }
   @keyframes tin { from { transform: translateY(6px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<header class="top">
-  <h1><svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><rect x="1" y="1" width="16" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="6.5" r="1.6" fill="currentColor"/><path d="M6 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Agent Remote Browser</h1>
-  <p class="tagline">Admin sign-in with two-factor code. Cookie values and passwords are never shown. API keys are shown once.</p>
-  <span class="fleet" id="fleet" aria-live="polite"></span>
-  <button type="button" class="small" id="bSignOut" hidden>Sign out</button>
-</header>
-<section class="login panel" id="login" aria-labelledby="hLogin" hidden>
-  <h3 id="hLogin">Admin sign-in</h3>
-  <form id="pwForm">
-    <label>Email<input class="f" name="email" type="email" autocomplete="username" required></label>
-    <label>Password<input class="f" name="password" type="password" autocomplete="current-password" required></label>
-    <button class="primary" type="submit">Continue</button>
-  </form>
-  <form id="totpForm" hidden>
-    <label>Two-factor code<input class="f mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 digits, or a backup code" required></label>
-    <label><input type="checkbox" name="trust"> Trust this browser for 30 days (admin port only, sensitive actions still ask for a code)</label>
-    <button class="primary" type="submit">Verify</button>
-  </form>
-  <p class="msg err" id="loginMsg" aria-live="polite"></p>
+<section class="auth" id="login" aria-labelledby="hLogin" hidden>
+  <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Console d'administration</span></div></div>
+  <div class="card">
+    <form id="pwForm">
+      <div><div class="step">Étape 1 sur 2</div><h1 id="hLogin">Connexion administrateur</h1></div>
+      <label class="f">E-mail<input class="in" name="email" type="email" autocomplete="username" required></label>
+      <label class="f">Mot de passe<input class="in" name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn btn-p" type="submit">Continuer</button>
+    </form>
+    <form id="totpForm" hidden>
+      <div><div class="step">Étape 2 sur 2</div><h1>Code de l'application</h1></div>
+      <p class="hint" style="font-size:14px;line-height:20px">Ouvrez votre application d'authentification et saisissez le code à 6 chiffres.</p>
+      <label class="f" id="lCode">Code à 6 chiffres<input class="in codein" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label>
+      <label class="f" id="lBackup" hidden>Code de secours<input class="in mono" name="backup" maxlength="32" autocomplete="off"><span class="hint">Chaque code ne sert qu'une fois.</span></label>
+      <button type="button" class="linkbtn" id="bBackup">Utiliser un code de secours</button>
+      <label class="check"><input type="checkbox" name="trust"><span>Faire confiance à cet appareil 30 jours<span class="hint" style="display:block">Port admin uniquement. Les actions sensibles redemandent un code.</span></span></label>
+      <div class="actions"><button type="button" class="btn" id="bBack">Retour</button><button class="btn btn-p" type="submit">Vérifier</button></div>
+    </form>
+    <div class="alert a-danger" id="loginMsg" role="alert" hidden></div>
+  </div>
+  <div class="chipsrow"><span class="pill green">Accès local uniquement</span><span class="pill">Mot de passe</span><span class="pill">Code 2FA</span></div>
+  <p class="hint" style="text-align:center;max-width:420px">2FA perdue sans code de secours : sur la machine hôte, <code>node src/cli.ts admin reset-2fa</code>.</p>
 </section>
-<main id="app" hidden>
-  <aside aria-label="Profiles">
-    <details class="fold newbox" id="newbox"><summary>New profile</summary>
-      <form id="newProfile">
-        <label>Profile id
-          <input class="f mono" name="id" placeholder="notion-veille" pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and dashes, 40 max. Starts with a letter or digit." required autocomplete="off"></label>
-        <label>Allowed domains
-          <input class="f mono" name="allow" placeholder="notion.so, example.com" required autocomplete="off"></label>
-        <button class="primary" type="submit">Create profile</button>
-        <p class="msg err" id="newErr" aria-live="polite"></p>
-      </form>
-    </details>
-    <div class="list-head"><span>Profiles</span><span id="listErr" class="msg err" aria-live="polite"></span></div>
-    <div class="list" id="list"></div>
-    <p class="hint" id="listEmpty" hidden>No profiles yet. Create one, then take control to log in.</p>
-    <div class="global"><button type="button" class="card" id="bClients"><span class="c-top"><span class="c-id">Connected clients</span></span>
-      <span class="c-meta">OAuth clients and API keys, with revocation</span></button></div>
+
+<div class="shell" id="app" hidden>
+  <aside class="side">
+    <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Console d'administration</span></div></div>
+    <div class="badge"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Admin local uniquement, jamais exposé via le tunnel</span></div>
+    <nav class="navl" aria-label="Navigation principale">
+      <a class="nav" href="#/profils" data-nav="profils"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profils<span class="n" id="nProfiles"></span></a>
+      <a class="nav" href="#/acces" data-nav="acces"><svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Accès agents<span class="n" id="nClients"></span></a>
+      <a class="nav" href="#/securite" data-nav="securite"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Sécurité</a>
+    </nav>
+    <div class="me">
+      <span class="avatar" id="avatar">AD</span>
+      <span class="who"><b id="meEmail">Administrateur</b><span>2FA active</span></span>
+      <button type="button" class="btn btn-i btn-g" id="bSignOut" aria-label="Se déconnecter" title="Se déconnecter"><svg class="i" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg></button>
+    </div>
   </aside>
-  <section id="detail" aria-label="Profile details"><div class="placeholder"><b>No profile selected</b>Pick a profile on the left to connect an agent, watch its browser or take control.</div></section>
-</main>
+  <main id="main"></main>
+</div>
+
+<dialog id="dlg"></dialog>
+<dialog id="keyDlg"></dialog>
+<dialog id="newDlg"></dialog>
 <div class="toasts" id="toast" role="status" aria-live="polite"></div>
 <script>
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const ago = (ts) => { if (!ts) return '—'; const s = Math.round((Date.now() - Date.parse(ts)) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const ago = (ts) => { if (!ts) return '—'; const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000)); return s < 60 ? `il y a ${s} s` : s < 3600 ? `il y a ${Math.round(s / 60)} min` : s < 172800 ? `il y a ${Math.round(s / 3600)} h` : `il y a ${Math.round(s / 86400)} j`; };
+const day = (ts) => new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+const setText = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+const domains = (s) => s.split(/[\s,]+/).filter(Boolean);
+const codeBody = (c) => /^\d{6}$/.test(c) ? { code: c } : { backupCode: c };
+
 const api = async (path, method = 'GET', body) => {
   const r = await fetch(path, { method, ...(method === 'POST' && { body: JSON.stringify(body || {}), headers: { 'content-type': 'application/json' } }) });
   const j = await r.json().catch(() => ({}));
-  // Step-up: a sensitive action needs a fresh second factor (15 min). Ask once, then retry the call.
+  // Step-up: a sensitive action needs a fresh second factor (15 min). Ask in a dialog, then retry the call.
   if (r.status === 401 && j.stepUp && path !== '/api/step-up') {
-    const c = prompt('Confirm with a two-factor code (or a backup code)')?.trim();
-    if (!c) throw new Error('Cancelled: this action needs a two-factor code');
-    await api('/api/step-up', 'POST', /^\d{6}$/.test(c) ? { code: c } : { backupCode: c });
+    if (!await ask({ title: 'Confirmez avec votre code 2FA', desc: 'Cette action est sensible.', label: 'Confirmer', code: true })) throw new Error('Annulé : cette action demande un code 2FA');
     return api(path, method, body);
   }
   if (r.status === 401 && !j.stepUp && !path.startsWith('/api/auth/')) showLogin();
-  if (!r.ok) throw new Error(j.error || j.message || `HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(j.error || j.message || `HTTP ${r.status}`), { status: r.status });
   return j;
 };
-const setText = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
-const domains = (s) => s.split(/[\s,]+/).filter(Boolean);
-const narrow = matchMedia('(max-width: 860px)');
 
-let computers = [], selected = null, view = null; // view = { id, ws, control }
-let secret = null; // { label, token, copied }: a new API key, shown once in Connected clients
-let authed = false; // polling stops while the sign-in screen is up
-let keys = {};     // last rendered state key per section: polling only touches the DOM when data changed
+let computers = [], clients = null, me = {};
+let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control }
+let authed = false;  // polling stops while the sign-in screen is up
+let keys = {};       // last rendered data per section: polling only touches the DOM when data changed
+let allowDraft = null, filter = 'all', search = '';
 
-// ---- Feedback --------------------------------------------------------------
+// ---- Feedback ---------------------------------------------------------------
 function toast(msg, kind = '') {
   const el = document.createElement('div');
   el.className = `toast ${kind}`; el.textContent = msg;
@@ -322,432 +314,465 @@ async function act(btn, fn, done) {
   if (btn) { btn.dataset.busy = '1'; btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
   try { const r = await fn(); if (done && r !== false) toast(done); }
   catch (e) { toast(e.message || String(e), 'error'); }
-  finally { if (btn) { delete btn.dataset.busy; btn.disabled = false; btn.removeAttribute('aria-busy'); renderToolbar(); } }
+  finally { if (btn) { delete btn.dataset.busy; btn.disabled = false; btn.removeAttribute('aria-busy'); renderLiveBar(); } }
 }
 const submit = (form, fn) => { form.onsubmit = (e) => { e.preventDefault(); act(e.submitter || $('[type=submit]', form), () => fn(form)); }; };
+const copy = (btn, text) => act(btn, async () => { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copié'; setTimeout(() => { btn.textContent = t; }, 1500); });
 
-// ---- Sign-in: password, then the TOTP code (Better Auth session cookie) ----------
+/** In-page confirm (replaces prompt/confirm, which a nonce CSP page should not rely on).
+ *  typed: text to retype. code: ask for a 2FA code and open the step-up window before resolving. Resolves true or null. */
+function ask({ title, desc = '', label = 'Confirmer', danger = false, typed, code = false }) {
+  const d = $('#dlg');
+  d.innerHTML = `<form novalidate>
+    <span class="ic${danger ? ' d' : ''}" aria-hidden="true">${danger ? '!' : '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'}</span>
+    <div><h2 id="dlgT">${esc(title)}</h2>${desc ? `<p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">${esc(desc)}</p>` : ''}</div>
+    ${typed ? `<label class="f">Tapez <span class="mono" style="color:var(--ink)">${esc(typed)}</span> pour confirmer<input class="in mono" name="typed" autocomplete="off" spellcheck="false"></label>` : ''}
+    ${code ? `<label class="f">Code 2FA<input class="in mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 chiffres, ou un code de secours"></label>
+      <p class="hint">Ensuite, plus de code demandé pendant 15 min pour les actions sensibles.</p>` : ''}
+    <p class="msg err" aria-live="polite"></p>
+    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn ${danger ? 'btn-d' : 'btn-p'}">${esc(label)}</button></div></form>`;
+  d.setAttribute('aria-labelledby', 'dlgT');
+  return new Promise((resolve) => {
+    const f = $('form', d), err = $('.msg', f);
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
+    d.onclose = () => finish(null);
+    $('[data-cancel]', f).onclick = () => finish(null);
+    submit(f, async () => {
+      if (typed && f.typed.value.trim() !== typed) return flash(err, 'Le texte ne correspond pas.', true);
+      if (code) {
+        const c = f.code.value.trim();
+        if (!c) return flash(err, 'Saisissez un code.', true);
+        try { await api('/api/step-up', 'POST', codeBody(c)); }
+        catch (e) { f.code.value = ''; f.code.focus(); return flash(err, e.status === 401 ? 'Code invalide. Cinq erreurs ferment la session.' : e.message, true); }
+      }
+      finish(true);
+    });
+    d.showModal();
+    $('input', f)?.focus();
+  });
+}
+/** Confirm a sensitive action: asks for the 2FA code in the same dialog only when the step-up window is closed. */
+async function confirmSensitive(opts) {
+  let s = {}; try { s = await api('/api/session'); } catch {}
+  return ask({ ...opts, code: !(s.stepUpRemainingS > 0) });
+}
+
+// ---- Sign-in: password, then the TOTP or a backup code (Better Auth session cookie) --------
+const loginErr = (msg) => { const m = $('#loginMsg'); m.hidden = !msg; m.textContent = msg || ''; };
 function showLogin() {
   if (!authed && !$('#login').hidden) return;
-  authed = false; closeView(); secret = null;
-  $('#app').hidden = true; $('#bSignOut').hidden = true; $('#login').hidden = false;
+  authed = false; closeView(); page = ''; selected = null;
+  for (const d of $$('dialog')) if (d.open) d.close();
+  $('#app').hidden = true; $('#login').hidden = false;
   $('#pwForm').hidden = false; $('#totpForm').hidden = true; $('#pwForm').email.focus();
 }
-function showApp() {
-  authed = true; $('#login').hidden = true; $('#app').hidden = false; $('#bSignOut').hidden = false;
-  $('#pwForm').reset(); $('#totpForm').reset(); setText($('#loginMsg'), '');
-  refreshList();
+async function showApp() {
+  authed = true; $('#login').hidden = true; $('#app').hidden = false;
+  $('#pwForm').reset(); $('#totpForm').reset(); loginErr('');
+  try { me = await api('/api/session'); } catch { me = {}; }
+  setText($('#meEmail'), me.email || 'Administrateur');
+  setText($('#avatar'), (me.email || 'AD').slice(0, 2).toUpperCase());
+  await refreshList(); refreshClients(); route();
 }
 submit($('#pwForm'), async (f) => {
   try {
     const r = await api('/api/auth/sign-in/email', 'POST', { email: f.email.value.trim(), password: f.password.value });
     // No twoFactorRedirect = TOTP not enrolled: the server refuses that session anyway.
-    if (!r.twoFactorRedirect) throw new Error('Two-factor not enrolled: run `arb admin reset-2fa`.');
-    setText($('#loginMsg'), ''); f.hidden = true; $('#totpForm').hidden = false; $('#totpForm').code.focus();
-  } catch (e) { flash($('#loginMsg'), e.message, true); }
+    if (!r.twoFactorRedirect) throw new Error('2FA non activée : lancez `arb admin reset-2fa`.');
+    loginErr(''); f.hidden = true; $('#totpForm').hidden = false; backupMode(false);
+  } catch (e) { loginErr(e.status === 429 ? 'Trop d\'essais. Attendez une minute avant de réessayer.' : e.status === 401 ? 'E-mail ou mot de passe incorrect.' : e.message); }
 });
+function backupMode(on) {
+  const f = $('#totpForm');
+  $('#lCode').hidden = on; $('#lBackup').hidden = !on;
+  f.code.required = !on; f.backup.required = on;
+  setText($('#bBackup'), on ? 'Utiliser le code de l\'application' : 'Utiliser un code de secours');
+  (on ? f.backup : f.code).focus();
+}
+$('#bBackup').onclick = () => backupMode($('#lBackup').hidden);
+$('#bBack').onclick = () => { $('#totpForm').reset(); $('#totpForm').hidden = true; $('#pwForm').hidden = false; loginErr(''); $('#pwForm').password.focus(); };
 submit($('#totpForm'), async (f) => {
-  const c = f.code.value.trim(), totp = /^\d{6}$/.test(c);
-  try { await api(`/api/auth/two-factor/${totp ? 'verify-totp' : 'verify-backup-code'}`, 'POST', { code: c, trustDevice: f.trust.checked }); showApp(); }
-  catch (e) { flash($('#loginMsg'), e.message, true); f.reset(); }
+  const backup = !$('#lBackup').hidden, c = (backup ? f.backup : f.code).value.trim();
+  try { await api(`/api/auth/two-factor/${backup ? 'verify-backup-code' : 'verify-totp'}`, 'POST', { code: c, trustDevice: f.trust.checked }); await showApp(); }
+  catch (e) {
+    loginErr(e.status === 429 ? 'Trop d\'essais. Le compte est verrouillé 15 min après 5 échecs.' : e.status === 401 ? 'Code invalide ou expiré. Reconnectez-vous si cela se répète.' : e.message);
+    (backup ? f.backup : f.code).value = '';
+  }
 });
 $('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/api/auth/sign-out', 'POST'); showLogin(); });
 
-// ---- One-time secret --------------------------------------------------------
-// An API key is shown once, right after it is created. The server only keeps its hash.
-function showSecret(label, token) { secret = { label, token, copied: false }; renderSecret(true); }
-function renderSecret(focus) {
-  const slot = $('#keySecret');
-  if (!slot) return;
-  slot.innerHTML = '';
-  if (!secret) return;
-  slot.innerHTML = `<div class="secret" role="alert" tabindex="-1">
-    <div class="secret-head"><b>${esc(secret.label)}</b><span>Shown once</span></div>
-    <code>${esc(secret.token)}</code>
-    <p>Copy it now. The server keeps only a hash, so it cannot be shown again.</p>
-    <div class="row"><button type="button" class="primary" data-copy>Copy key</button><button type="button" data-hide>Hide</button></div></div>`;
-  const box = $('.secret', slot), s = secret;
-  $('[data-copy]', box).onclick = (e) => act(e.currentTarget, async () => {
-    await navigator.clipboard.writeText(s.token); s.copied = true; e.target.textContent = 'Copied';
-  }, 'Key copied.');
-  $('[data-hide]', box).onclick = () => {
-    if (!s.copied && !confirm('You have not copied this key. It cannot be shown again. Hide it anyway?')) return;
-    secret = null; renderSecret();
-  };
-  if (focus) box.focus();
+// ---- Routing: #/profils, #/p/<id>/<tab>, #/acces, #/securite -----------------------
+function route() {
+  if (!authed) return;
+  const [, a, b, c] = location.hash.split('/');
+  if (a === 'p' && b) return showProfile(decodeURIComponent(b), c || 'session');
+  if (page === 'profile') closeView();
+  selected = null; allowDraft = null;
+  if (a === 'acces') showClients(); else if (a === 'securite') showSecurity(); else showProfiles();
 }
-
-// ---- Create profile -----------------------------------------------------------
-submit($('#newProfile'), async (f) => {
-  try {
-    const r = await api('/api/profiles', 'POST', { id: f.elements.id.value.trim(), allow: domains(f.allow.value) });
-    f.reset(); setText($('#newErr'), ''); $('#newbox').open = false;
-    await refreshList(); select(r.id);
-  } catch (err) { flash($('#newErr'), err.message, true); }
-});
-
-// ---- Connected clients: OAuth clients (scope picked at consent) and API keys ----------
-const scopeLabel = (s) => s === 'global' ? 'Global' : s ? s.replace(/^profile:/, 'Profile ') : '—';
-function showClients() {
-  if (view) closeView();
-  selected = null; keys = {};
-  for (const b of $('#list').children) b.setAttribute('aria-pressed', 'false');
-  $('#detail').innerHTML = `
-    <div class="toolbar"><div class="tb-title"><h2 id="dTitle" tabindex="-1">Connected clients</h2></div></div>
-    <section class="panel" aria-labelledby="hKeys">
-      <div class="ph"><h3 id="hKeys">API keys</h3><span class="readout" id="rKeys"></span></div>
-      <div id="keySecret"></div>
-      <div id="keyList"></div>
-      <form class="grid-form" id="keyForm">
-        <label>Name<input class="f" name="name" placeholder="ci-agent" maxlength="60" required autocomplete="off"></label>
-        <label>Scope<select name="scope">${computers.map((c) => `<option value="profile:${esc(c.id)}">Profile ${esc(c.id)}</option>`).join('')}
-          <option value="global">Global: manage and lease every profile</option></select></label>
-        <label>Expires<select name="expiresIn"><option value="30d">in 30 days</option><option value="90d" selected>in 90 days</option><option value="1y">in 1 year</option></select></label>
-        <div class="row"><button type="submit">Create key</button></div>
-        <p class="hint wide">Send it as <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>. Shown once.</p>
-      </form>
-    </section>
-    <section class="panel" aria-labelledby="hOauth">
-      <div class="ph"><h3 id="hOauth">OAuth clients</h3><span class="readout" id="rOauth"></span></div>
-      <div id="oauthList"></div>
-      <p class="hint">MCP clients register themselves, then you sign in and pick a scope on the consent page. Unused registrations are purged after 24 h.</p>
-    </section>`;
-  submit($('#keyForm'), async (f) => {
-    const r = await api('/api/keys', 'POST', { name: f.name.value.trim(), scope: f.scope.value, expiresIn: f.expiresIn.value });
-    f.reset(); showSecret(`API key ${r.key.slice(0, 10)}…`, r.key); refreshClients();
-  });
-  renderSecret(); refreshClients(); $('#dTitle').focus({ preventScroll: true });
+addEventListener('hashchange', route);
+function setPage(p, html) {
+  page = p; keys = {};
+  const cur = p.startsWith('profile') ? 'profils' : p;
+  for (const n of $$('[data-nav]')) n.dataset.nav === cur ? n.setAttribute('aria-current', 'page') : n.removeAttribute('aria-current');
+  $('#main').innerHTML = html;
+  scrollTo(0, 0);
 }
-$('#bClients').onclick = showClients;
-const revokeBtn = (kind, id, label) => `<button type="button" class="danger small" data-revoke="${kind}" data-id="${esc(id)}" aria-label="Revoke ${esc(label)}">Revoke</button>`;
-async function refreshClients() {
-  if (!$('#keyList')) return;
-  let d; try { d = await api('/api/clients'); } catch (e) { toast(e.message, 'error'); return; }
-  if (!$('#keyList')) return;
-  setText($('#rKeys'), `${d.keys.length} active`); setText($('#rOauth'), `${d.oauth.length} registered`);
-  $('#keyList').innerHTML = d.keys.length
-    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th>Last IP</th><th>Expires</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
-      <tr><td>${esc(k.name)}</td><td class="mono nw">${esc(k.start)}…</td><td class="mono">${esc(scopeLabel(k.scope))}</td><td class="num">${k.lastRequest ? ago(k.lastRequest) : 'never'}</td><td class="mono">${esc(k.lastIp ?? '')}</td>
-      <td class="num">${k.noExpiry ? 'never: rotate it' : esc(k.expiresAt.slice(0, 10))}</td>
-      <td class="act">${revokeBtn('keys', k.id, k.name)}</td></tr>`).join('')}</table></div>`
-    : '<p class="empty-row">No API keys.</p>';
-  $('#oauthList').innerHTML = d.oauth.length
-    ? `<div class="tbl"><table><tr><th>Client</th><th>Scope granted</th><th>Registered</th><th>Last token</th><th><span class="sr">Revoke</span></th></tr>${d.oauth.map((c) => `
-      <tr><td>${esc(c.name || c.id)}</td><td class="mono">${esc((c.scopes || '').split(',').filter(Boolean).map(scopeLabel).join(', ') || 'none yet')}</td>
-      <td class="num">${ago(c.createdAt)}</td><td class="num">${c.lastToken ? ago(c.lastToken) : 'never'}</td>
-      <td class="act">${revokeBtn('clients', c.id, c.name || c.id)}</td></tr>`).join('')}</table></div>`
-    : '<p class="empty-row">No OAuth clients.</p>';
-  for (const b of document.querySelectorAll('[data-revoke]')) b.onclick = () => act(b, async () => {
-    if (!confirm('Revoke it? Agents using it lose access immediately.')) return false;
-    await api(`/api/${b.dataset.revoke}/${encodeURIComponent(b.dataset.id)}/revoke`, 'POST'); refreshClients();
-  }, 'Revoked.');
-}
-
-// ---- Profile list: cards are created once and updated in place ---------------
-function cardEl(id) {
-  const b = document.createElement('button');
-  b.type = 'button'; b.className = 'card'; b.dataset.id = id;
-  b.innerHTML = `<span class="c-top"><span class="led" aria-hidden="true"></span><span class="c-id"></span><span class="c-state"></span></span>
-    <span class="c-tags"><span class="tag lease" hidden>Leased</span><span class="tag live" hidden></span><span class="tag plain c-vol" hidden>No saved data</span></span>
-    <span class="c-meta c-status"></span><span class="c-meta c-call"></span>`;
-  $('.c-id', b).textContent = id;
-  b.onclick = () => select(id, true);
-  return b;
-}
-const stateOf = (c) => (c.state === 'running' ? 'up' : c.state === 'none' ? 'never' : 'down');
-const stateLabel = (c) => ({ up: 'Running', never: 'Never started', down: 'Stopped' })[stateOf(c)];
-function updateCard(b, c) {
-  const st = stateOf(c);
-  if (b.dataset.state !== st) b.dataset.state = st;
-  const pressed = String(c.id === selected);
-  if (b.getAttribute('aria-pressed') !== pressed) b.setAttribute('aria-pressed', pressed);
-  setText($('.c-state', b), stateLabel(c));
-  $('.lease', b).hidden = !c.leasedUntil;
-  $('.live', b).hidden = !c.viewers; setText($('.live', b), `${c.viewers} watching`);
-  $('.c-vol', b).hidden = c.profile;
-  setText($('.c-status', b), c.status + (c.idleStopInS != null && c.state === 'running' && !c.viewers ? `, idle stop in ${Math.ceil(c.idleStopInS / 60)} min` : ''));
-  setText($('.c-call', b), c.lastCall ? `Last call: ${c.lastCall.tool}${c.lastCall.ok ? '' : ' (failed)'}, ${ago(c.lastCall.ts)}` : 'No calls yet');
-}
-async function refreshList() {
-  try { computers = await api('/api/computers'); } catch (e) { setText($('#listErr'), e.message); return; }
-  setText($('#listErr'), '');
-  const list = $('#list'), ids = new Set(computers.map((c) => c.id));
-  for (const b of [...list.children]) if (!ids.has(b.dataset.id)) b.remove();
-  computers.forEach((c, i) => {
-    const b = [...list.children].find((x) => x.dataset.id === c.id) || cardEl(c.id);
-    if (list.children[i] !== b) list.insertBefore(b, list.children[i] || null);
-    updateCard(b, c);
-  });
-  $('#listEmpty').hidden = computers.length > 0;
-  const up = computers.filter((c) => c.state === 'running').length;
-  setText($('#fleet'), `${computers.length} profile${computers.length === 1 ? '' : 's'}, ${up} running`);
-  if (selected) { renderToolbar(); renderFacts(); }
-}
-
-// ---- Detail panel -----------------------------------------------------------
 const MCP_KEY = 'agentComputer.mcpUrl';
-const mcpUrl = () => { try { return localStorage.getItem(MCP_KEY); } catch { return null; } };
-const TRASH = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-function select(id, byUser) {
-  if (view && view.id !== id) closeView();
-  const diagOpen = $('#diag')?.open;
-  selected = id; keys = {};
-  $('#detail').innerHTML = `
-    <div class="toolbar" id="toolbar">
-      <div class="tb-title"><h2 id="dTitle" tabindex="-1"></h2><span class="state" id="dState"><span class="led" aria-hidden="true"></span><span></span></span></div>
-      <div class="actions">
-        <button type="button" id="bWatch">Watch</button>
-        <button type="button" id="bCtl" class="primary"></button>
-        <button type="button" id="bLeave" hidden>Leave</button>
-        <button type="button" id="bStop">Stop</button>
-      </div>
-    </div>
-
-    <section class="panel" aria-labelledby="hConnect">
-      <div class="ph"><h3 id="hConnect">Connect agent</h3><span class="readout">MCP over HTTPS</span></div>
-      <div class="stack">
-        <label for="mcpUrl">MCP server URL</label>
-        <div class="copyfield"><input class="f mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" id="bCopyUrl">Copy</button></div>
-        <p class="hint">Notion needs the public tunnel URL: run <code>docker compose logs tunnel</code>, then add <code>/mcp</code>. Your edit is kept in this browser.</p>
-      </div>
-      <dl class="facts">
-        <dt>Lease</dt><dd id="fLease"></dd>
-      </dl>
-      <div class="methods">
-        <div class="method"><b>OAuth</b><p>Add the URL in your MCP client. Sign in with your code, then pick this profile on the consent page.</p></div>
-        <div class="method"><b>API key</b><p>Create a key scoped to this profile in Connected clients. Send <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>.</p></div>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="hLive">
-      <div class="ph"><h3 id="hLive">Live view</h3><span class="vstate" id="vstate" aria-live="polite">No live view</span><span class="readout fps" id="vfps"></span></div>
-      <form class="nav" id="nav"><label for="vurl" class="sr">Address</label>
-        <input class="f mono" id="vurl" placeholder="https://… (allowed domains only)" autocomplete="off"><button type="submit">Go</button></form>
-      <div class="bezel">
-        <div class="banner"><b>Control</b>Your keyboard and mouse go to this browser. Click the view to type.</div>
-        <div class="screen" id="screen"><div class="empty"><div><b>No signal</b>Watch shows a running computer. Take control starts it if needed.</div></div></div>
-      </div>
-      <p class="pageinfo" id="pageinfo"><span></span><span></span></p>
-    </section>
-
-    <div class="pair">
-      <section class="panel" aria-labelledby="hLogins">
-        <div class="ph"><h3 id="hLogins">Saved logins</h3><span class="readout" id="rLogins"></span></div>
-        <div id="logins"></div>
-        <form class="grid-form" id="loginForm">
-          <label>Site name<input class="f mono" name="site" placeholder="notion" pattern="[a-z0-9-]{1,40}" title="Lowercase letters, digits and dashes, 40 max" required autocomplete="off"></label>
-          <label>Login page URL<input class="f mono" name="url" placeholder="https://www.notion.so/login" required autocomplete="off"></label>
-          <label>Username or email<input class="f" name="username" autocomplete="off" required></label>
-          <label>Password<input class="f" name="password" type="password" placeholder="Empty keeps the saved one" autocomplete="new-password"></label>
-          <div class="row"><button type="submit">Save login</button><p class="msg" id="loginErr" aria-live="polite"></p></div>
-          <p class="hint wide">The agent calls <code>login</code> with the site name. It never sees the password.</p>
-        </form>
-      </section>
-      <section class="panel" aria-labelledby="hAllow">
-        <div class="ph"><h3 id="hAllow">Allowed domains</h3><span class="readout" id="rAllow"></span></div>
-        <div class="chips" id="chips"></div>
-        <form class="stack" id="allowForm">
-          <label>Domains, comma separated<input class="f mono" name="allow" required autocomplete="off"></label>
-          <div><button type="submit">Save domains</button></div>
-          <p class="hint">Saving restarts the browser: the DNS allowlist is set at launch.</p>
-        </form>
-      </section>
-    </div>
-
-    <details class="panel diag" id="diag"${diagOpen ? ' open' : ''}>
-      <summary><h3>Diagnostics</h3><span class="readout" id="rDiag"></span></summary>
-      <div class="body">
-        <div class="full"><h4>Recent calls</h4><div class="tbl" id="audit"></div></div>
-        <div><h4>Cookies</h4><div class="tbl" id="cookies"></div></div>
-        <div><h4>Local storage</h4><div class="tbl" id="storage"></div><p class="hint" style="margin-top:12px">Container <span class="mono" id="fContainer"></span></p></div>
-      </div>
-    </details>
-
-    <section class="panel dz" aria-labelledby="hDanger">
-      <h3 id="hDanger">Danger zone</h3>
-      <div class="drow"><div><b>Delete profile</b><p>Container, cookies, saved logins, OAuth grants and API keys of this profile are destroyed. This cannot be undone.</p></div><button type="button" class="danger solid" id="bDelete">Delete profile</button></div>
-    </section>`;
-
-  const p = `/api/computers/${encodeURIComponent(id)}`;
-  const u = $('#mcpUrl');
-  u.value = mcpUrl() || `${location.protocol}//${location.hostname}:${+location.port - 1}/mcp` /* MCP port = admin port - 1 */;
+const mcpUrl = () => { let v = null; try { v = localStorage.getItem(MCP_KEY); } catch {} return v || `${location.protocol}//${location.hostname}:${+location.port - 1}/mcp` /* MCP port = admin port - 1 */; };
+const mcpField = () => `<div class="stack" style="gap:4px"><label class="lbl" for="mcpUrl">URL du serveur MCP</label>
+  <div class="urlbar"><input class="in mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" class="btn" id="bCopyUrl">Copier</button></div>
+  <p class="hint">Client distant (Notion…) : URL publique du tunnel (<code>docker compose logs tunnel</code>) + <code>/mcp</code>. Votre modification reste dans ce navigateur.</p></div>`;
+function wireMcp() {
+  const u = $('#mcpUrl'); if (!u) return;
+  u.value = mcpUrl();
   u.onchange = () => { try { localStorage.setItem(MCP_KEY, u.value.trim()); } catch {} };
-  $('#bCopyUrl').onclick = (e) => act(e.currentTarget, () => navigator.clipboard.writeText(u.value.trim()), 'MCP URL copied.');
+  $('#bCopyUrl').onclick = (e) => copy(e.currentTarget, u.value.trim());
+}
 
+// ---- Profiles page --------------------------------------------------------------
+const stateOf = (c) => (c.state === 'running' ? 'up' : c.state === 'none' ? 'never' : 'down');
+const statePill = (c) => `<span class="pill dot ${stateOf(c) === 'up' ? 'up' : ''}">${({ up: 'Actif', never: 'Jamais démarré', down: 'Arrêté' })[stateOf(c)]}</span>`;
+const leftMin = (c) => Math.max(0, Math.ceil((Date.parse(c.leasedUntil) - Date.now()) / 60000));
+const leasePill = (c) => c.leasedUntil ? `<span class="pill dot agent">Bail · ${leftMin(c)} min restantes</span>` : '<span class="hint">Aucun bail</span>';
+const stateNote = (c) => c.viewers ? plural(c.viewers, 'spectateur') : c.state === 'running' && c.idleStopInS != null ? `Arrêt auto dans ${Math.ceil(c.idleStopInS / 60)} min` : !c.profile ? 'Aucune donnée enregistrée' : '';
+const nClients = () => clients ? clients.keys.length + clients.oauth.length : null;
+
+function showProfiles() {
+  setPage('profiles', `
+    <div class="head"><div><h1>Profils</h1><p class="sub">Chaque profil est un navigateur isolé, avec ses cookies, ses identifiants et ses domaines autorisés.</p></div>
+      <div class="row"><a class="btn" href="#/acces">Connecter un agent</a><button type="button" class="btn btn-p" id="bNew">+ Nouveau profil</button></div></div>
+    <div class="stats">
+      <div class="card stat"><span class="lbl">Navigateurs actifs</span><b id="sUp"></b></div>
+      <div class="card stat"><span class="lbl">Baux agents en cours</span><b id="sLease"></b></div>
+      <div class="card stat"><span class="lbl">Accès agents</span><b id="sClients"></b></div>
+    </div>
+    <section class="card" aria-labelledby="hAll">
+      <div class="tblhead"><h2 id="hAll">Tous les profils</h2>
+        <div class="filters" role="group" aria-label="Filtrer"><button type="button" data-f="all"></button><button type="button" data-f="up"></button></div>
+        <input class="in" id="q" type="search" placeholder="Rechercher un profil" aria-label="Rechercher un profil" style="width:220px">
+      </div>
+      <div id="ptable"></div>
+      <div class="tblfoot"><p class="hint">Un navigateur inactif s'arrête automatiquement. Ses cookies et identifiants restent enregistrés.</p></div>
+    </section>`);
+  $('#bNew').onclick = openNewProfile;
+  for (const b of $$('[data-f]')) b.onclick = () => { filter = b.dataset.f; renderProfiles(); };
+  $('#q').value = search; $('#q').oninput = (e) => { search = e.target.value.trim().toLowerCase(); renderProfiles(); };
+  renderProfiles();
+}
+function renderProfiles() {
+  if (page !== 'profiles') return;
+  const up = computers.filter((c) => c.state === 'running');
+  $('#sUp').innerHTML = `${up.length} <small>sur ${computers.length}</small>`;
+  setText($('#sLease'), String(computers.filter((c) => c.leasedUntil).length));
+  setText($('#sClients'), String(nClients() ?? '…'));
+  for (const b of $$('[data-f]')) { b.setAttribute('aria-pressed', String(b.dataset.f === filter)); setText(b, b.dataset.f === 'all' ? `Tous · ${computers.length}` : `Actifs · ${up.length}`); }
+  const rows = computers.filter((c) => (filter === 'all' || c.state === 'running') && (!search || c.id.includes(search) || c.allow.some((d) => d.includes(search))));
+  // Minutes, not seconds, in the key: the table only redraws when something visible changed.
+  patch('ptable', [rows, filter, search, Math.floor(Date.now() / 60000)], () => !computers.length
+    ? '<p class="empty">Aucun profil. Créez-en un, puis prenez la main pour vous connecter aux sites.</p>'
+    : !rows.length ? '<p class="empty">Aucun profil ne correspond.</p>'
+    : `<div class="tbl"><table><tr><th>Profil</th><th>État</th><th>Agent</th><th>Dernière activité</th><th><span class="sr">Action</span></th></tr>${rows.map((c) => `
+      <tr><td><a class="mono" href="#/p/${encodeURIComponent(c.id)}" style="font-weight:600">${esc(c.id)}</a><span class="s">${esc(c.allow.join(', '))}</span></td>
+      <td>${statePill(c)}<span class="s">${esc(stateNote(c))}</span></td>
+      <td>${leasePill(c)}</td>
+      <td>${c.lastCall ? `${esc(ago(c.lastCall.ts))}<span class="s mono">${esc(c.lastCall.tool)}${c.lastCall.ok ? '' : ' · échec'}</span>` : '<span class="hint">Aucun appel</span>'}</td>
+      <td class="act"><button type="button" class="btn btn-sm" data-go="${esc(c.id)}" data-ctl="${c.state === 'running' ? '' : '1'}">${c.state === 'running' ? 'Regarder' : 'Démarrer'}</button></td></tr>`).join('')}</table></div>`);
+  for (const b of $$('[data-go]')) b.onclick = () => {
+    location.hash = `#/p/${encodeURIComponent(b.dataset.go)}`; route(); // render now: hashchange fires later
+    b.dataset.ctl ? act($('#bCtl'), () => takeControl(b.dataset.go)) : openView(b.dataset.go, false);
+  };
+}
+
+// ---- New profile ----------------------------------------------------------------
+function openNewProfile() {
+  const d = $('#newDlg');
+  d.innerHTML = `<form>
+    <div><h2 id="newT">Nouveau profil</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">Un navigateur isolé. L'agent ne pourra ouvrir que les domaines autorisés.</p></div>
+    <label class="f">Nom du profil<input class="in mono" name="id" placeholder="notion-veille" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Minuscules, chiffres et tirets, 40 max. Commence par une lettre ou un chiffre." required autocomplete="off" spellcheck="false"></label>
+    <label class="f">Domaines autorisés<input class="in mono" name="allow" placeholder="notion.so, example.com" required autocomplete="off" spellcheck="false"><span class="hint">Séparés par des virgules. Les sous-domaines sont inclus.</span></label>
+    <p class="hint">Ensuite : prenez la main pour vous connecter aux sites, ajoutez des identifiants si besoin, puis connectez un agent.</p>
+    <p class="msg err" aria-live="polite"></p>
+    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn btn-p">Créer le profil</button></div></form>`;
+  d.setAttribute('aria-labelledby', 'newT');
+  const f = $('form', d);
+  $('[data-cancel]', f).onclick = () => d.close();
+  submit(f, async () => {
+    try {
+      const r = await api('/api/profiles', 'POST', { id: f.elements.id.value.trim(), allow: domains(f.allow.value) });
+      d.close(); await refreshList(); location.hash = `#/p/${encodeURIComponent(r.id)}`; toast(`Profil ${r.id} créé. Prenez la main pour vous connecter aux sites.`);
+    } catch (e) { flash($('.msg', f), e.message, true); }
+  });
+  d.showModal(); f.elements.id.focus();
+}
+
+// ---- Profile page ---------------------------------------------------------------
+const TABS = [['session', 'Session'], ['identifiants', 'Identifiants'], ['domaines', 'Domaines autorisés'], ['diagnostic', 'Diagnostic'], ['parametres', 'Paramètres']];
+function showProfile(id, t) {
+  const c = computers.find((x) => x.id === id);
+  if (!c) { if (page === 'profile') closeView(); selected = null; setPage('profile', `<div class="head"><div><span class="crumb"><a href="#/profils">Profils</a> › ${esc(id)}</span><h1>Profil introuvable</h1><p class="sub">${esc(id)} n'existe pas ou a été supprimé.</p></div></div>`); return; }
+  tab = TABS.some(([k]) => k === t) ? t : 'session';
+  if (page === 'profile' && selected === id) return showTab();
+  if (view && view.id !== id) closeView();
+  selected = id; allowDraft = null;
+  const p = `/api/computers/${encodeURIComponent(id)}`;
+  setPage('profile', `
+    <div class="head"><div><span class="crumb"><a href="#/profils">Profils</a> › <span class="mono">${esc(id)}</span></span>
+      <div class="row" style="gap:12px"><h1 class="mono" id="dTitle" tabindex="-1">${esc(id)}</h1><span id="dState"></span></div></div>
+      <div class="row"><button type="button" class="btn" id="bStop">Arrêter le navigateur</button></div></div>
+    <nav class="tabs" aria-label="Sections du profil">${TABS.map(([k, l]) => `<a class="tab" href="#/p/${encodeURIComponent(id)}/${k}" data-tab="${k}">${l}<span data-count="${k}"></span></a>`).join('')}</nav>
+
+    <div data-panel="session" class="cols">
+      <section class="card live" aria-label="Vue en direct">
+        <div id="banner"></div>
+        <div class="row">
+          <button type="button" class="btn btn-sm" id="bWatch">Regarder</button>
+          <button type="button" class="btn btn-sm btn-p" id="bCtl"></button>
+          <button type="button" class="btn btn-sm" id="bLeave" hidden>Quitter la vue</button>
+          <span class="grow"></span><span class="vstate" id="vstate" aria-live="polite">Pas de vue</span><span class="hint" id="vfps"></span>
+        </div>
+        <form class="urlbar" id="nav"><label for="vurl" class="sr">Adresse</label>
+          <input class="in mono" id="vurl" placeholder="https://… (domaines autorisés uniquement)" autocomplete="off"><button type="submit" class="btn">Ouvrir</button></form>
+        <div class="bezel"><div class="screen" id="screen"><div class="nosig"><div><b>Pas de signal</b>Regarder montre un navigateur actif. Prendre la main le démarre si besoin.</div></div></div></div>
+        <div class="vfoot"><span id="vViewers"></span><span class="pt" id="pageinfo"></span></div>
+      </section>
+      <div class="stack">
+        <section class="card pad" aria-labelledby="hLease"><h3 id="hLease">Bail agent</h3><div id="lease"></div></section>
+        <section class="card pad" aria-labelledby="hAct"><h3 id="hAct">Activité de l'agent</h3><div id="activity"></div></section>
+        <section class="card pad" aria-labelledby="hConn"><h3 id="hConn">Connecter un agent</h3>${mcpField()}
+          <p class="hint" style="font-size:13px">OAuth recommandé : ajoutez l'URL dans votre client MCP, connectez-vous, puis choisissez ce profil. Sinon, une clé API limitée à ce profil.</p>
+          <a href="#/acces" style="font-weight:600">Accès agents →</a></section>
+      </div>
+    </div>
+
+    <div data-panel="identifiants" class="stack">
+      <div class="alert a-info"><p>Coffre en écriture seule. Les mots de passe sont chiffrés (AES-256-GCM) et ne sont jamais réaffichés, ni ici, ni à l'agent. L'agent appelle <code>login</code> avec le nom du site : le formulaire est rempli pour lui.</p></div>
+      <section class="card" aria-labelledby="hLogins"><div class="tblhead"><h2 id="hLogins">Identifiants enregistrés</h2><span class="hint">Enregistrer ou supprimer demande votre code 2FA</span></div><div id="logins"></div></section>
+      <section class="card pad" aria-labelledby="hAdd"><h3 id="hAdd">Ajouter ou remplacer</h3>
+        <form class="grid-form" id="loginForm">
+          <label class="f">Site<input class="in mono" name="site" placeholder="notion" pattern="[a-z0-9\\-]{1,40}" title="Minuscules, chiffres et tirets, 40 max" required autocomplete="off"></label>
+          <label class="f">URL de connexion<input class="in mono" name="url" placeholder="https://www.notion.so/login" required autocomplete="off"></label>
+          <label class="f">Identifiant<input class="in" name="username" autocomplete="off" required></label>
+          <label class="f">Mot de passe<input class="in" name="password" type="password" placeholder="Vide : garde l'actuel" autocomplete="new-password"></label>
+          <div class="wide row"><button type="submit" class="btn btn-p">Enregistrer</button><p class="msg" id="loginErr" aria-live="polite"></p></div>
+        </form></section>
+    </div>
+
+    <div data-panel="domaines" class="stack">
+      <section class="card pad" aria-labelledby="hAllow"><h3 id="hAllow">Domaines autorisés</h3>
+        <p class="hint" style="font-size:14px;line-height:20px">L'agent ne peut ouvrir que ces domaines et leurs sous-domaines. Le reste est bloqué au niveau DNS.</p>
+        <div class="chips" id="chips"></div>
+        <form class="urlbar" id="addDomain"><label for="newDomain" class="sr">Ajouter un domaine</label><input class="in mono" id="newDomain" placeholder="exemple.com" autocomplete="off" spellcheck="false"><button type="submit" class="btn">Ajouter</button></form>
+        <div class="alert a-warn"><p>Enregistrer redémarre le navigateur de ce profil : la liste DNS est fixée au lancement. Un agent en cours perd sa page.</p></div>
+        <div class="row"><button type="button" class="btn btn-p" id="bSaveAllow">Enregistrer les domaines</button><span class="hint" id="allowDirty"></span></div>
+      </section>
+    </div>
+
+    <div data-panel="diagnostic" class="stack">
+      <section class="card" aria-labelledby="hAudit"><div class="tblhead"><h2 id="hAudit">Appels récents</h2></div><div class="tbl" id="audit"></div></section>
+      <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+        <section class="card" aria-labelledby="hCookies"><div class="tblhead"><h2 id="hCookies">Cookies</h2><span class="hint">Noms seulement</span></div><div class="tbl" id="cookies"></div></section>
+        <section class="card" aria-labelledby="hStore"><div class="tblhead"><h2 id="hStore">Stockage local</h2></div><div class="tbl" id="storage"></div></section>
+      </div>
+      <p class="hint">Conteneur <span class="mono" id="fContainer"></span></p>
+    </div>
+
+    <div data-panel="parametres" class="stack">
+      <section class="card pad dz" aria-labelledby="hDanger"><h2 id="hDanger">Zone de danger</h2>
+        <div class="row" style="gap:16px"><div class="grow" style="flex-basis:280px"><b>Supprimer le profil</b><p class="hint" style="font-size:14px;line-height:20px">Conteneur, cookies, identifiants, accès OAuth et clés API de ce profil sont détruits. Irréversible.</p></div>
+        <button type="button" class="btn btn-d" id="bDelete">Supprimer le profil</button></div></section>
+    </div>`);
+
+  wireMcp();
   $('#bWatch').onclick = () => openView(id, false);
   $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeControl(id));
-  $('#bLeave').onclick = () => { closeView(); renderToolbar(); $('#bCtl').focus(); };
-  $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Browser stopped.');
-
+  $('#bLeave').onclick = () => { closeView(); renderLiveBar(); $('#bCtl').focus(); };
+  $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Navigateur arrêté. Le profil est conservé.');
   $('#nav').onsubmit = (e) => {
     e.preventDefault();
     act(e.submitter, async () => {
       let url = $('#vurl').value.trim(); if (!url) return false;
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-      setVstate('Opening…');
+      setVstate('Ouverture…');
       try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
       catch (err) { setVstate(err.message); return false; }
       refreshDetail();
     });
   };
-  $('#allowForm').allow.value = (computers.find((x) => x.id === id)?.allow || []).join(', ');
-  submit($('#allowForm'), async (f) => {
-    closeView();
-    try { await api(`${p}/config`, 'POST', { allow: domains(f.allow.value) }); toast('Domains saved. The browser restarts on next use.'); }
-    finally { refreshList(); refreshDetail(); }
-  });
   submit($('#loginForm'), async (f) => {
     try {
       await api(`${p}/login-save`, 'POST', { site: f.site.value.trim(), url: f.url.value.trim(), username: f.username.value, password: f.password.value });
-      f.reset(); flash($('#loginErr'), 'Saved.'); refreshDetail();
+      f.reset(); flash($('#loginErr'), 'Enregistré.'); refreshDetail(); refreshList();
     } catch (err) { flash($('#loginErr'), err.message, true); }
   });
+  $('#addDomain').onsubmit = (e) => {
+    e.preventDefault();
+    const cur = allowDraft ?? computers.find((x) => x.id === id)?.allow ?? [], add = domains($('#newDomain').value.toLowerCase());
+    if (!add.length) return;
+    allowDraft = [...new Set([...cur, ...add])]; $('#newDomain').value = ''; renderAllow();
+  };
+  $('#bSaveAllow').onclick = (e) => act(e.currentTarget, async () => {
+    const allow = allowDraft ?? computers.find((x) => x.id === id)?.allow ?? [];
+    if (!allow.length) throw new Error('Gardez au moins un domaine.');
+    closeView();
+    try { await api(`${p}/config`, 'POST', { allow }); allowDraft = null; }
+    finally { await refreshList(); refreshDetail(); }
+  }, 'Domaines enregistrés. Le navigateur redémarre au prochain usage.');
   $('#bDelete').onclick = (e) => act(e.currentTarget, async () => {
-    if (!confirm(`Delete ${id}? Container, cookies, saved logins, OAuth grants and API keys of this profile are destroyed. This cannot be undone.`)) return false;
+    if (!await confirmSensitive({ title: `Supprimer le profil « ${id} » ?`, desc: 'Conteneur, cookies, identifiants, accès OAuth et clés API de ce profil sont détruits. Irréversible.', typed: id, label: 'Supprimer définitivement', danger: true })) return false;
     closeView(); await api(`${p}/delete`, 'POST');
-    selected = null; $('#detail').innerHTML = `<div class="placeholder"><b>Profile deleted</b>${esc(id)} and its data are gone.</div>`; refreshList();
-  }, `Deleted ${id}.`);
+    location.hash = '#/profils'; refreshList();
+  }, `Profil ${id} supprimé.`);
 
-  renderToolbar(); renderFacts();
-  refreshList();
-  refreshDetail();
-  if (byUser && narrow.matches) {
-    $('#detail').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-    $('#dTitle').focus({ preventScroll: true });
-  }
+  showTab(); renderProfile(); refreshDetail();
+}
+function showTab() {
+  for (const a of $$('[data-tab]')) a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+  for (const s of $$('[data-panel]')) s.hidden = s.dataset.panel !== tab;
 }
 
-function deleteLogin(btn, site) {
-  act(btn, async () => {
-    if (!confirm(`Delete the saved login "${site}"?`)) return false;
-    await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail();
-  }, `Deleted login ${site}.`);
+// Parts fed by the list poll (3 s): header, lease, live bar, domains.
+function renderProfile() {
+  const c = computers.find((x) => x.id === selected);
+  if (page !== 'profile' || !c) return;
+  patch('dState', [c.state, c.leasedUntil && 1], () => statePill(c) + (c.leasedUntil ? ' <span class="pill dot agent">Bail agent</span>' : ''));
+  const bs = $('#bStop'); if (!bs.dataset.busy) bs.disabled = c.state !== 'running';
+  setText($('[data-count="identifiants"]'), ` · ${c.logins.length}`);
+  setText($('[data-count="domaines"]'), ` · ${c.allow.length}`);
+  patch('lease', [c.leasedUntil], () => c.leasedUntil
+    ? `<div><span class="big" id="leaseLeft"></span><p class="hint" style="margin-top:4px">Se prolonge à chaque appel de l'agent. Fin prévue à ${esc(new Date(c.leasedUntil).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}.</p></div>
+       <div class="row"><button type="button" class="btn btn-sm" id="bExtend">Prolonger 30 min</button><button type="button" class="btn btn-sm btn-dl" id="bRelease">Forcer la libération</button></div>`
+    : '<p class="hint" style="font-size:14px;line-height:20px">Libre. Aucun agent ne pilote ce profil. Un agent prend un bail de 10 min, prolongé à chaque action.</p>')
+    && wireLease();
+  tickLease();
+  setText($('#vViewers'), plural(c.viewers, 'spectateur'));
+  setText($('#fContainer'), `${c.container} : ${c.status}`);
+  renderLiveBar(); renderAllow();
 }
-
-function testLogin(btn, site) {
-  act(btn, async () => {
-    const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-test`, 'POST', { site }); refreshDetail();
-    toast(`${site}: ${r.ok ? 'form filled' : 'fill failed'}, now on ${r.url || 'unknown page'}`, r.ok ? undefined : 'error');
-  });
+function wireLease() {
+  const p = `/api/computers/${encodeURIComponent(selected)}`;
+  if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/release`, 'POST'); refreshList(); }, 'Bail libéré. L\'agent doit en reprendre un.');
+  if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); refreshList(); }, 'Bail prolongé de 30 min à partir de maintenant.');
 }
-
+function tickLease() {
+  const c = computers.find((x) => x.id === selected), el = $('#leaseLeft');
+  if (!c?.leasedUntil || !el) return;
+  const s = Math.max(0, Math.round((Date.parse(c.leasedUntil) - Date.now()) / 1000));
+  setText(el, `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`);
+}
+function renderAllow() {
+  const c = computers.find((x) => x.id === selected);
+  if (!c || !$('#chips')) return;
+  const list = allowDraft ?? c.allow;
+  patch('chips', list, () => list.map((d) => `<span class="chip">${esc(d)}<button type="button" data-rm="${esc(d)}" aria-label="Retirer ${esc(d)}">×</button></span>`).join('') || '<span class="hint">Aucun domaine.</span>')
+    && $$('[data-rm]').forEach((b) => { b.onclick = () => { allowDraft = list.filter((d) => d !== b.dataset.rm); renderAllow(); }; });
+  setText($('#allowDirty'), allowDraft && JSON.stringify(allowDraft) !== JSON.stringify(c.allow) ? 'Modifications non enregistrées' : '');
+}
 const setBtn = (b, dis, title) => { b.disabled = !!b.dataset.busy || dis; if (title) { if (b.title !== title) b.title = title; } else b.removeAttribute('title'); };
-function renderToolbar() {
+function renderLiveBar() {
   const c = computers.find((x) => x.id === selected);
-  if (!c || !$('#toolbar')) return;
+  if (!c || !$('#bCtl')) return;
   const up = c.state === 'running', live = view?.id === c.id, ctl = live && view.control;
-  setText($('#dTitle'), c.id);
-  const st = $('#dState'); if (st.dataset.state !== stateOf(c)) st.dataset.state = stateOf(c);
-  setText(st.lastElementChild, stateLabel(c) + (c.leasedUntil ? ', leased' : ''));
-  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'The computer is stopped. Use Start + take control.' : live && !ctl ? 'Already watching' : 'Watch without sending input');
-  setText($('#bCtl'), up ? 'Take control' : 'Start + take control');
-  setBtn($('#bCtl'), ctl, ctl ? 'You already have control' : '');
+  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'Navigateur arrêté : utilisez Démarrer et prendre la main.' : live && !ctl ? 'Vous regardez déjà' : 'Regarder sans envoyer de saisie');
+  setText($('#bCtl'), up ? 'Prendre la main' : 'Démarrer et prendre la main');
+  setBtn($('#bCtl'), ctl, ctl ? 'Vous avez déjà la main' : '');
   $('#bLeave').hidden = !live;
-  setBtn($('#bStop'), !up, !up ? 'Already stopped' : 'Close the browser. The profile is kept.');
-}
-
-// Connect facts and allowlist come from the list poll: rebuilt only when their data changes.
-function renderFacts() {
-  const c = computers.find((x) => x.id === selected);
-  if (!c || !$('#fLease')) return;
-  const k = JSON.stringify([c.leasedUntil]);
-  if (keys.facts !== k) {
-    keys.facts = k;
-    $('#fLease').innerHTML = c.leasedUntil
-      ? `<span class="mark ok">Leased</span><span>by an agent until ${esc(new Date(c.leasedUntil).toLocaleTimeString())}</span><button type="button" class="small" id="bExtend">+30 min</button><button type="button" class="small" id="bRelease">Release</button>`
-      : '<span class="mark none">Free</span>';
-    if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => {
-      await api(`/api/computers/${encodeURIComponent(selected)}/release`, 'POST'); refreshList(); refreshDetail();
-    }, 'Lease released.');
-    if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => {
-      await api(`/api/computers/${encodeURIComponent(selected)}/extend`, 'POST', { minutes: 30 }); refreshList(); refreshDetail();
-    }, 'Lease extended by 30 minutes from now.');
-  }
-  const ka = JSON.stringify(c.allow);
-  if (keys.allow !== ka) {
-    keys.allow = ka;
-    $('#chips').innerHTML = (c.allow || []).map((d) => `<span class="chip">${esc(d)}</span>`).join('');
-    setText($('#rAllow'), `${(c.allow || []).length} enforced`);
-  }
-  setText($('#fContainer'), `${c.container}: ${c.status}`);
+  // ponytail: the lease holder's name is not exposed by the list API, so the banner says "un agent".
+  patch('banner', [ctl, !!c.leasedUntil], () => ctl
+    ? '<div class="banner b-ctl"><span>Vous avez la main. Clavier et souris vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button></div>'
+    : c.leasedUntil ? '<div class="banner b-agent"><span>Un agent est aux commandes. Vous pouvez regarder ou prendre la main.</span><button type="button" class="btn btn-sm" id="bTake">Prendre la main</button></div>' : '');
+  const give = $('#bGiveBack'), take = $('#bTake');
+  if (give) give.onclick = () => openView(selected, false);
+  if (take) take.onclick = (e) => act(e.currentTarget, () => takeControl(selected));
 }
 
 function patch(name, data, html) {
-  const k = JSON.stringify(data);
-  if (keys[name] === k) return false;
-  keys[name] = k; $('#' + name).innerHTML = html();
+  const k = JSON.stringify(data), el = $('#' + name);
+  if (!el || keys[name] === k) return false;
+  keys[name] = k; el.innerHTML = html();
   return true;
 }
-const tickTimes = () => { for (const t of document.querySelectorAll('time[data-ts]')) setText(t, ago(t.dataset.ts)); };
+const tickTimes = () => { for (const t of $$('time[data-ts]')) setText(t, ago(t.dataset.ts)); };
 
+// Parts fed by the detail poll (5 s): page, logins, activity, diagnostics.
 async function refreshDetail() {
-  if (!selected) return;
+  if (!selected || page !== 'profile') return;
   const id = selected;
   let d; try { d = await api(`/api/computers/${encodeURIComponent(id)}`); } catch (e) { if ($('#logins')) toast(e.message, 'error'); return; }
   if (id !== selected || !$('#logins')) return;
-  const [pt, pu] = $('#pageinfo').children;
-  setText(pt, d.page ? d.page.title || 'Untitled page' : 'Browser is not running');
-  setText(pu, d.page ? d.page.url : '');
+  setText($('#pageinfo'), d.page ? `${d.page.title || 'Page sans titre'} · ${d.page.url}` : 'Navigateur arrêté');
 
-  setText($('#rLogins'), `${d.logins.length} saved`);
   if (patch('logins', d.logins, () => d.logins.length
-    ? `<div class="tbl"><table><tr><th>Site</th><th>Login page</th><th>Username</th><th>Last test</th><th><span class="sr">Actions</span></th></tr>${d.logins.map((l) => `
-      <tr><td class="mono nw">${esc(l.site)}</td><td class="mono">${esc(l.url)}</td><td>${esc(l.username)}</td>
-      <td class="nw">${l.lastTestedAt ? `${esc(l.lastResult)}, <time data-ts="${esc(l.lastTestedAt)}">${ago(l.lastTestedAt)}</time>` : 'never'}</td>
-      <td class="act"><button type="button" class="login-test" data-site="${esc(l.site)}">Test</button><button type="button" class="icon-del" data-site="${esc(l.site)}" aria-label="Delete saved login ${esc(l.site)}" title="Delete saved login">${TRASH}</button></td></tr>`).join('')}</table></div>`
-    : '<p class="empty-row">None yet. Add one below, or log in by hand with Take control: cookies stay in the profile.</p>'))
-    for (const b of document.querySelectorAll('#logins .icon-del')) b.onclick = () => deleteLogin(b, b.dataset.site);
-    for (const b of document.querySelectorAll('#logins .login-test')) b.onclick = () => testLogin(b, b.dataset.site);
-
-  setText($('#rDiag'), `${d.audit.length} calls, ${d.cookies.length} cookies, ${d.storage.length} origins`);
+    ? `<div class="tbl"><table><tr><th>Site</th><th>Identifiant</th><th>Mot de passe</th><th>Dernier test</th><th><span class="sr">Actions</span></th></tr>${d.logins.map((l) => `
+      <tr><td><span class="mono" style="font-weight:600">${esc(l.site)}</span><span class="s mono">${esc(l.url)}</span></td><td>${esc(l.username)}</td>
+      <td><span class="pill green">Enregistré</span></td>
+      <td class="nw">${l.lastTestedAt ? `${l.lastResult === 'ok' ? '<span class="pill up dot">Formulaire envoyé</span>' : '<span class="pill danger">Échec</span>'}<span class="s"><time data-ts="${esc(l.lastTestedAt)}">${ago(l.lastTestedAt)}</time></span>` : '<span class="hint">Jamais testé</span>'}</td>
+      <td class="act"><button type="button" class="btn btn-sm" data-test="${esc(l.site)}">Tester</button> <button type="button" class="btn btn-sm btn-dl" data-del="${esc(l.site)}">Supprimer</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">Aucun identifiant. Ajoutez-en un ci-dessous, ou connectez-vous à la main avec Prendre la main : les cookies restent dans le profil.</p>')) {
+    for (const b of $$('[data-del]')) b.onclick = () => deleteLogin(b, b.dataset.del);
+    for (const b of $$('[data-test]')) b.onclick = () => testLogin(b, b.dataset.test);
+  }
+  patch('activity', d.audit.slice(0, 6), () => d.audit.length
+    ? `<ul class="activity">${d.audit.slice(0, 6).map((l) => `<li><span class="${l.ok ? '' : 'ko'}">${l.ok ? '✓' : '✗'}</span><span class="mono">${esc(l.tool)}</span><time class="t" data-ts="${esc(l.ts)}">${ago(l.ts)}</time></li>`).join('')}</ul>`
+    : '<p class="hint">Aucun appel pour l\'instant.</p>');
   patch('audit', d.audit, () => d.audit.length
-    ? `<table><tr><th>When</th><th>Tool</th><th>Result</th><th>Time</th></tr>${d.audit.map((l) => `<tr><td class="num"><time data-ts="${esc(l.ts)}" title="${esc(l.ts)}">${ago(l.ts)}</time></td><td class="mono nw">${esc(l.tool)}</td>
-      <td class="${l.ok ? 'ok' : 'err'}">${l.ok ? '✓ ok' : '✗ ' + esc(l.err || 'error')}</td><td class="num">${l.ms != null ? l.ms + ' ms' : ''}</td></tr>`).join('')}</table>`
-    : '<p class="empty-row">No calls yet.</p>');
+    ? `<table><tr><th>Quand</th><th>Outil</th><th>Résultat</th><th>Durée</th></tr>${d.audit.map((l) => `<tr><td class="nw"><time data-ts="${esc(l.ts)}" title="${esc(l.ts)}">${ago(l.ts)}</time></td><td class="mono nw">${esc(l.tool)}</td>
+      <td class="${l.ok ? 'ok' : 'err'}">${l.ok ? '✓ ok' : '✗ ' + esc(l.err || 'erreur')}</td><td class="nw">${l.ms != null ? l.ms + ' ms' : ''}</td></tr>`).join('')}</table>`
+    : '<p class="empty">Aucun appel.</p>');
   patch('cookies', d.cookies, () => d.cookies.length
-    ? `<table><tr><th>Name</th><th>Domain</th><th>Expires</th><th>Flags</th></tr>${d.cookies.map((k) => `
-      <tr><td class="mono nw">${esc(k.name)}</td><td class="mono">${esc(k.domain)}</td><td class="num">${k.session || k.expires < 0 ? 'session' : new Date(k.expires * 1000).toLocaleDateString()}</td>
-      <td>${[k.httpOnly && 'httpOnly', k.secure && 'secure'].filter(Boolean).join(' ')}</td></tr>`).join('')}</table>
-      <p class="hint" style="margin-top:6px">Names only, from the saved session (refreshed every 30 s while up).</p>`
-    : '<p class="empty-row">No cookies saved.</p>');
+    ? `<table><tr><th>Nom</th><th>Domaine</th><th>Expire</th><th>Options</th></tr>${d.cookies.map((k) => `
+      <tr><td class="mono nw">${esc(k.name)}</td><td class="mono">${esc(k.domain)}</td><td class="nw">${k.session || k.expires < 0 ? 'session' : new Date(k.expires * 1000).toLocaleDateString('fr-FR')}</td>
+      <td>${[k.httpOnly && 'httpOnly', k.secure && 'secure'].filter(Boolean).join(' ')}</td></tr>`).join('')}</table>`
+    : '<p class="empty">Aucun cookie enregistré.</p>');
   patch('storage', d.storage, () => d.storage.length
-    ? `<table><tr><th>Origin</th><th>Keys</th></tr>${d.storage.map((o) => `<tr><td class="mono">${esc(o.origin)}</td><td class="num">${o.localStorageKeys}</td></tr>`).join('')}</table>`
-    : '<p class="empty-row">None.</p>');
+    ? `<table><tr><th>Origine</th><th>Clés</th></tr>${d.storage.map((o) => `<tr><td class="mono">${esc(o.origin)}</td><td>${o.localStorageKeys}</td></tr>`).join('')}</table>`
+    : '<p class="empty">Rien.</p>');
   tickTimes();
 }
+function deleteLogin(btn, site) {
+  act(btn, async () => {
+    if (!await confirmSensitive({ title: `Supprimer l'identifiant « ${site} » ?`, desc: 'L\'agent ne pourra plus s\'y connecter. Les cookies déjà présents restent.', label: 'Supprimer', danger: true })) return false;
+    await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail(); refreshList();
+  }, `Identifiant ${site} supprimé.`);
+}
+function testLogin(btn, site) {
+  act(btn, async () => {
+    const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-test`, 'POST', { site }); refreshDetail();
+    // ok = the form was filled and submitted, not that the site accepted it: the page URL tells.
+    toast(r.ok ? `${site} : formulaire envoyé. Page : ${r.url || 'inconnue'}. Regardez la vue pour vérifier.` : `${site} : remplissage échoué. Page : ${r.url || 'inconnue'}`, r.ok ? undefined : 'error');
+  });
+}
 
-// ---- Live view (same stream protocol as admin.html) -------------------------
+// ---- Live view (agent-browser stream protocol) ------------------------------------
 function setVstate(text, mode) { const v = $('#vstate'); if (!v) return; setText(v, text); if ((v.dataset.mode || '') !== (mode || '')) v.dataset.mode = mode || ''; }
-
 async function takeControl(id) {
-  setVstate('Starting…');
+  setVstate('Démarrage…');
   try { await api(`/api/computers/${encodeURIComponent(id)}/start`, 'POST'); } catch (e) { setVstate(e.message); throw e; }
   await refreshList();
   openView(id, true);
 }
-
 function openView(id, control) {
-  if (view?.id === id) { view.control = control; wireControl(); renderToolbar(); return; }
+  if (view?.id === id) { view.control = control; wireControl(); renderLiveBar(); return; }
   closeView();
+  if (!$('#screen')) return;
   const ws = new WebSocket(`ws://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
   view = { id, ws, control, meta: null, frames: 0 };
-  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live browser view">';
+  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Vue en direct du navigateur">';
   const img = $('#frame'), v = view;
-  ws.onopen = () => { setVstate(v.control ? 'Control' : 'Watching', v.control ? 'control' : 'watch'); };
-  ws.onclose = () => { if (view === v) { view = null; setVstate('View closed'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderToolbar(); } };
+  ws.onopen = () => { setVstate(v.control ? 'Vous avez la main' : 'En direct', v.control ? 'control' : 'watch'); };
+  ws.onclose = () => { if (view === v) { view = null; setVstate('Vue fermée'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderLiveBar(); } };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'frame') {
       v.meta = msg.metadata; v.frames++;
       img.onload = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'ack', seq: msg.seq }));
       img.src = 'data:image/jpeg;base64,' + msg.data;
-    } else if (msg.type === 'url' && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
+    } else if (msg.type === 'url' && $('#vurl') && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
   };
   wireControl();
-  renderToolbar();
+  renderLiveBar();
 }
-
 function closeView() { if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
 
 // Human input -> agent-browser stream protocol (same fields as its own dashboard).
@@ -758,7 +783,7 @@ function wireControl() {
   if (!img || !view) return;
   const on = view.control;
   screen.classList.toggle('control', on);
-  setVstate(on ? 'Control' : 'Watching', on ? 'control' : 'watch');
+  setVstate(on ? 'Vous avez la main' : 'En direct', on ? 'control' : 'watch');
   const send = (m) => on && view?.ws.readyState === 1 && view.ws.send(JSON.stringify(m));
   const pos = (e) => { const r = img.getBoundingClientRect(), m = view.meta || { deviceWidth: r.width, deviceHeight: r.height };
     return { x: Math.round((e.clientX - r.left) * m.deviceWidth / r.width), y: Math.round((e.clientY - r.top) * m.deviceHeight / r.height) }; };
@@ -778,9 +803,163 @@ function wireControl() {
   if (on) img.focus();
 }
 
-setInterval(() => { if (view) setText($('#vfps'), `${view.frames} fps`); if (view) view.frames = 0; }, 1000);
+// ---- Accès agents: OAuth clients (scope picked at consent) and API keys -----------------
+const scopePill = (s) => s === 'global' ? '<span class="pill danger">Global</span>' : `<span class="pill green mono">${esc(String(s).replace(/^profile:/, ''))}</span>`;
+function showClients() {
+  setPage('acces', `
+    <div class="head"><div><h1>Accès agents</h1><p class="sub">Tout ce qui peut piloter un profil : clients OAuth et clés API, au même endroit.</p></div>
+      <div class="row"><button type="button" class="btn btn-p" id="bNewKey">+ Créer une clé API</button></div></div>
+    <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <section class="card pad" aria-labelledby="hOauth"><div class="row"><h3 id="hOauth">OAuth</h3><span class="pill green">recommandé</span></div>
+        <p class="hint" style="font-size:14px;line-height:20px">Ajoutez l'URL MCP dans le client. Il s'enregistre seul, vous vous connectez avec votre code 2FA puis choisissez les profils sur la page d'autorisation.</p>${mcpField()}</section>
+      <section class="card pad" aria-labelledby="hKeyInfo"><h3 id="hKeyInfo">Clé API</h3>
+        <p class="hint" style="font-size:14px;line-height:20px">Pour les scripts et clients sans OAuth. Limitée à un profil de préférence, expiration obligatoire, affichée une seule fois. Envoyée en <code>Authorization: Bearer arb_k_…</code> ou <code>x-api-key</code>.</p></section>
+    </div>
+    <section class="card" aria-labelledby="hActive"><div class="tblhead"><h2 id="hActive">Accès actifs</h2></div>
+      <div id="ctable"><p class="empty">Chargement…</p></div>
+      <div class="tblfoot"><p class="hint">Révoquer coupe immédiatement les jetons et libère les baux de l'agent.</p></div></section>`);
+  wireMcp();
+  $('#bNewKey').onclick = () => openKeyDialog();
+  refreshClients();
+}
+async function refreshClients() {
+  let d; try { d = await api('/api/clients'); } catch (e) { if (page === 'acces') toast(e.message, 'error'); return; }
+  clients = d;
+  const n = nClients();
+  setText($('#nClients'), String(n)); setText($('#sClients'), String(n));
+  if (page !== 'acces') return;
+  setText($('#hActive'), `Accès actifs · ${n}`);
+  const rows = [
+    ...d.oauth.map((c) => ({ kind: 'clients', id: c.id, name: c.name || c.id, sub: c.id, type: '<span class="pill agent">OAuth</span>',
+      scope: (c.scopes || '').split(',').filter(Boolean), created: ago(c.createdAt), extra: '',
+      used: c.lastToken ? ago(c.lastToken) : 'jamais', usedSub: '', ts: c.createdAt })),
+    ...d.keys.map((k) => ({ kind: 'keys', id: k.id, name: k.name, sub: `${k.start}…`, type: '<span class="pill">Clé API</span>',
+      scope: k.scope ? [k.scope] : [], created: ago(k.createdAt),
+      extra: k.noExpiry ? '<span class="pill warn dot">sans expiration : à remplacer</span>' : `expire le ${esc(day(k.expiresAt))}`,
+      used: k.lastRequest ? ago(k.lastRequest) : 'jamais', usedSub: k.lastIp || '', ts: k.createdAt })),
+  ].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+  patch('ctable', [rows, Math.floor(Date.now() / 60000)], () => rows.length
+    ? `<div class="tbl"><table><tr><th>Agent</th><th>Type</th><th>Portée</th><th>Créé</th><th>Dernier usage</th><th><span class="sr">Révoquer</span></th></tr>${rows.map((r) => `
+      <tr><td><b>${esc(r.name)}</b><span class="s mono">${esc(r.sub)}</span></td><td>${r.type}</td>
+      <td>${r.scope.length ? r.scope.map(scopePill).join(' ') : '<span class="hint">jamais utilisé · supprimé après 24 h</span>'}</td>
+      <td class="nw">${esc(r.created)}<span class="s">${r.extra}</span></td>
+      <td class="nw">${esc(r.used)}<span class="s mono">${esc(r.usedSub)}</span></td>
+      <td class="act"><button type="button" class="btn btn-sm btn-dl" data-revoke="${r.kind}" data-id="${esc(r.id)}" data-name="${esc(r.name)}">Révoquer</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">Aucun accès. Ajoutez l\'URL MCP dans un client (OAuth) ou créez une clé API.</p>')
+    && $$('[data-revoke]').forEach((b) => { b.onclick = () => act(b, async () => {
+      if (!await confirmSensitive({ title: `Révoquer « ${b.dataset.name} » ?`, desc: 'Ses jetons sont coupés tout de suite et ses baux libérés. L\'agent devra être reconnecté.', label: 'Révoquer', danger: true })) return false;
+      await api(`/api/${b.dataset.revoke}/${encodeURIComponent(b.dataset.id)}/revoke`, 'POST'); refreshClients();
+    }, 'Accès révoqué.'); });
+}
+
+// API key: created in a dialog, shown once, closable only after the "saved it" box is ticked.
+const isoDay = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+async function openKeyDialog(profileId) {
+  const d = $('#keyDlg');
+  let s = {}; try { s = await api('/api/session'); } catch {}
+  const opts = computers.map((c) => `<option value="profile:${esc(c.id)}"${c.id === profileId ? ' selected' : ''}>${esc(c.id)}</option>`).join('');
+  d.innerHTML = `<form>
+    <div><h2 id="keyT">Créer une clé API</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">Pour un script ou un client MCP sans OAuth.</p></div>
+    <label class="f">Nom<input class="in" name="name" placeholder="ci-agent" pattern="[\\w .\\-]{1,60}" maxlength="60" required autocomplete="off"></label>
+    <fieldset class="radios"><legend class="lbl">Portée</legend>
+      <label class="opt"><input type="radio" name="kind" value="profile" ${computers.length ? 'checked' : 'disabled'}><span class="grow"><b>Un profil</b><span class="hint">La clé ne voit que ce navigateur.</span>
+        <select class="in" name="profile" style="margin-top:8px" aria-label="Profil" ${computers.length ? '' : 'disabled'}>${opts}</select></span></label>
+      <label class="opt"><input type="radio" name="kind" value="global" ${computers.length ? '' : 'checked'}><span><b>Tous les profils</b><span class="hint">Gère et loue tous les profils, présents et futurs.</span></span></label>
+    </fieldset>
+    <div class="alert a-danger" id="gWarn" hidden><p>Une clé globale fuitée donne accès à toutes vos sessions connectées. Préférez une clé par profil.</p></div>
+    <fieldset class="radios"><legend class="lbl">Expiration</legend>
+      <div class="seg">${[['30d', '30 jours'], ['90d', '90 jours', 1], ['1y', '1 an'], ['date', 'Date précise']].map(([v, l, c]) => `<label><input type="radio" name="exp" value="${v}"${c ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <input class="in" type="date" name="date" min="${isoDay(1)}" max="${isoDay(364)}" aria-label="Date d'expiration" hidden>
+      <p class="hint" id="expText"></p>
+    </fieldset>
+    <p class="hint">${s.stepUpRemainingS > 0 ? `Code 2FA vérifié : plus de code demandé pendant ${Math.ceil(s.stepUpRemainingS / 60)} min.` : 'Votre code 2FA sera demandé à la création.'}</p>
+    <p class="msg err" aria-live="polite"></p>
+    <div class="actions"><button type="button" class="btn" data-cancel>Annuler</button><button type="submit" class="btn btn-p">Créer la clé</button></div></form>`;
+  d.setAttribute('aria-labelledby', 'keyT');
+  const f = $('form', d);
+  const sync = () => {
+    $('#gWarn').hidden = f.kind.value !== 'global'; f.profile.disabled = f.kind.value !== 'profile';
+    const exp = f.exp.value; f.date.hidden = exp !== 'date'; f.date.required = exp === 'date';
+    const at = exp === 'date' ? (f.date.value ? new Date(f.date.value + 'T23:59:59') : null) : new Date(Date.now() + { '30d': 30, '90d': 90, '1y': 365 }[exp] * 86400000);
+    setText($('#expText'), `${at ? `Expire le ${day(at)}.` : 'Choisissez une date (1 à 364 jours).'} Pas d'option « jamais ».`);
+  };
+  f.onchange = sync; sync();
+  $('[data-cancel]', f).onclick = () => d.close();
+  d.onclose = () => { d.innerHTML = ''; }; // drop the key from the DOM once closed
+  d.oncancel = null;
+  submit(f, async () => {
+    const exp = f.exp.value;
+    const body = { name: f.elements.name.value.trim(), scope: f.kind.value === 'global' ? 'global' : f.profile.value,
+      ...(exp === 'date' ? { expiresAt: new Date(f.date.value + 'T23:59:59').toISOString() } : { expiresIn: exp }) };
+    try { const r = await api('/api/keys', 'POST', body); showKey(r, body); refreshClients(); }
+    catch (e) { flash($('.msg', f), e.message, true); }
+  });
+  d.showModal(); f.elements.name.focus();
+}
+function showKey(r, body) {
+  const d = $('#keyDlg');
+  d.innerHTML = `<div class="dlg">
+    <div><h2 id="keyT">Clé créée : copiez-la maintenant</h2><p class="hint" style="font-size:14px;line-height:20px;margin-top:4px">${esc(body.name)} · ${body.scope === 'global' ? 'tous les profils' : esc(body.scope.replace(/^profile:/, 'profil '))} · expire le ${esc(day(r.expiresAt))}</p></div>
+    <div class="alert a-warn"><p>Elle ne sera plus jamais affichée : le serveur ne garde qu'une empreinte. Perdue = révoquez-la et créez-en une autre.</p></div>
+    <div class="urlbar"><input class="in mono" id="keyVal" readonly aria-label="Clé API"><button type="button" class="btn btn-p" id="bCopyKey">Copier</button></div>
+    <div class="stack" style="gap:4px"><span class="lbl">Configuration MCP (la clé dans la variable ARB_KEY)</span><pre class="term" id="keyCfg"></pre></div>
+    <label class="check"><input type="checkbox" id="keySaved"><span>J'ai enregistré la clé dans un endroit sûr</span></label>
+    <div class="actions"><button type="button" class="btn btn-p" id="bKeyDone" disabled>Fermer</button></div></div>`;
+  $('#keyVal').value = r.key;
+  setText($('#keyCfg'), JSON.stringify({ url: mcpUrl(), headers: { Authorization: 'Bearer $ARB_KEY' } }, null, 2));
+  $('#bCopyKey').onclick = (e) => copy(e.currentTarget, r.key);
+  $('#keySaved').onchange = (e) => { $('#bKeyDone').disabled = !e.target.checked; };
+  $('#bKeyDone').onclick = () => d.close();
+  d.oncancel = (e) => { if (!$('#keySaved')?.checked) e.preventDefault(); };
+  $('#keyVal').focus(); $('#keyVal').select();
+}
+
+// ---- Sécurité: 2FA is managed on the host (CLI), this page only explains how -----------
+function showSecurity() {
+  const email = me.email || 'admin@exemple.com', reset = `docker compose exec gateway node src/cli.ts admin reset-2fa ${email}`;
+  setPage('securite', `
+    <div class="head"><div><h1>Sécurité du compte</h1><p class="sub">La double authentification se gère depuis la machine hôte, en ligne de commande. Avoir accès au terminal du serveur prouve que c'est bien vous.</p></div></div>
+    <section class="card pad" aria-labelledby="hStatus" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:20px">
+      <span class="tile" style="width:48px;height:48px;background:var(--green-soft);color:var(--primary)"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <div class="grow" style="flex-basis:260px"><h2 id="hStatus">Double authentification active</h2><span class="hint" style="font-size:14px">Application d'authentification (TOTP) · ${esc(email)}</span></div>
+      <dl class="row" style="margin:0;gap:8px 32px">
+        <div><dt class="lbl">Activée</dt><dd style="margin:0;font-weight:600">par la CLI, à la création du compte</dd></div>
+        <div><dt class="lbl">Codes de secours</dt><dd style="margin:0;font-weight:600">10 générés, usage unique</dd></div>
+        <div><dt class="lbl">Verrouillage</dt><dd style="margin:0;font-weight:600">5 essais, puis 15 min</dd></div>
+      </dl></section>
+    <div class="cols" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <section class="card pad" aria-labelledby="hReset"><div><h2 id="hReset">Changer de téléphone ou régénérer les codes</h2><p class="hint" style="font-size:14px;line-height:20px">Aussi en cas de perte : téléphone et codes de secours introuvables.</p></div>
+        <div class="stack" style="gap:4px"><span class="lbl">Sur la machine hôte</span><div class="urlbar"><pre class="term grow" id="resetCmd"></pre><button type="button" class="btn" id="bCopyReset">Copier</button></div></div>
+        <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px">
+          <li>Demande un nouveau mot de passe (12 caractères minimum)</li>
+          <li>Affiche une fois le lien otpauth:// à ajouter dans l'application</li>
+          <li>Vérifie un premier code, puis affiche 10 nouveaux codes de secours</li>
+          <li>Ferme toutes les sessions admin : <strong>vous serez déconnecté ici</strong></li>
+        </ol></section>
+      <aside class="card pad" aria-labelledby="hTips"><h2 id="hTips">Bonnes pratiques</h2>
+        <p style="margin:0">Gardez les codes de secours hors ligne, ailleurs que sur le téléphone.</p>
+        <p style="margin:0">Le lien otpauth:// contient le secret : ne le collez dans aucun chat ni ticket.</p>
+        <p style="margin:0">Pas d'accès au serveur ? Personne ne peut réinitialiser la 2FA depuis le navigateur, c'est voulu.</p>
+        <p style="margin:0">Les actions sensibles (domaines, identifiants, clés, suppression) redemandent un code toutes les 15 min. Cinq codes faux ferment la session.</p>
+        <details style="border-top:1px solid var(--line3);padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:var(--primary)">Installation neuve : créer l'admin</summary>
+          <pre class="term" style="margin-top:10px">docker compose exec gateway node src/cli.ts admin create vous@exemple.com</pre>
+          <p class="hint" style="margin-top:6px">Un seul admin par passerelle. Même déroulé : mot de passe, lien otpauth://, premier code, codes de secours.</p></details>
+      </aside>
+    </div>`);
+  setText($('#resetCmd'), reset);
+  $('#bCopyReset').onclick = (e) => copy(e.currentTarget, reset);
+}
+
+// ---- Polling ----------------------------------------------------------------------
+async function refreshList() {
+  try { computers = await api('/api/computers'); } catch (e) { if (authed) toast(e.message, 'error'); return; }
+  setText($('#nProfiles'), String(computers.length));
+  if (page === 'profiles') renderProfiles();
+  if (page === 'profile') { if (selected && !computers.some((c) => c.id === selected)) return route(); renderProfile(); }
+}
+setInterval(() => { if (view) { setText($('#vfps'), `${view.frames} img/s`); view.frames = 0; } tickLease(); }, 1000);
 setInterval(() => authed && refreshList(), 3000);
-setInterval(() => authed && refreshDetail(), 5000);
+setInterval(() => { if (!authed) return; refreshDetail(); if (page === 'acces') refreshClients(); }, 5000);
 fetch('/api/auth/get-session').then((r) => r.json()).then((s) => s?.user?.twoFactorEnabled ? showApp() : showLogin(), showLogin);
 </script>
 </body>
