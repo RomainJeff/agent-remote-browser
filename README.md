@@ -1,5 +1,7 @@
 # agent-remote-browser
 
+![Admin UI: an agent drives the n8n-ops profile, live view of n8n.io, lease and activity on the right](docs/admin.png)
+
 **Give an AI agent a real browser, without giving it your machine or your passwords.**
 
 agent-remote-browser is a remote MCP server. An agent (a Notion Custom Agent, Claude, any MCP client) connects to it and drives a Chromium that runs on your server: open a page, read it, click, fill a form, sign in to a site. Each agent works in its own **browser profile**, a sandboxed container that keeps its cookies between sessions and can reach only the domains you allowed.
