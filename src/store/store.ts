@@ -53,8 +53,8 @@ export function openStore(db: DatabaseSync, keyFile: string) {
   return {
     profile, globalTokenHash, principalForStatic,
     profiles: () => all('SELECT * FROM profiles ORDER BY created_at, id').map(toProfile),
-    createProfile: (id: ProfileId, allow: string[], tokenHash: string | null) =>
-      run('INSERT INTO profiles (id, allow_json, token_hash, created_at) VALUES (?, ?, ?, ?)', id, JSON.stringify(allow), tokenHash, Date.now()),
+    createProfile: (id: ProfileId, allow: string[], tokenHash: string | null, createdAt = Date.now()) =>
+      run('INSERT INTO profiles (id, allow_json, token_hash, created_at) VALUES (?, ?, ?, ?)', id, JSON.stringify(allow), tokenHash, createdAt),
     setAllow: (id: ProfileId, allow: string[]) => run('UPDATE profiles SET allow_json = ? WHERE id = ?', JSON.stringify(allow), id),
     setProfileToken: (id: ProfileId, tokenHash: string) => run('UPDATE profiles SET token_hash = ? WHERE id = ?', tokenHash, id),
     /** Logins, leases and OAuth tokens of the profile go with it (ON DELETE CASCADE). */
