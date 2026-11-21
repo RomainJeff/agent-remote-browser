@@ -97,7 +97,7 @@ docker compose ps                                             # runner healthy, 
 docker compose exec gateway node src/cli.ts admin create you@example.com
 ```
 
-`admin create` asks for a password (12 to 128 characters), prints an `otpauth://` URI (add it to an authenticator app, then clear the terminal), and asks for a code to confirm. One admin per gateway; signups are disabled.
+`admin create` asks for a password (12 to 128 characters), prints an `otpauth://` URI (add it to an authenticator app), asks for a code to confirm, then prints 10 backup codes (one use each). Store the codes offline (password manager or paper), then clear the terminal: they are never shown again. One admin per gateway; signups are disabled. 2FA enrolment happens only here, on the host: the admin UI cannot enrol or reset a second factor.
 
 Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or with the tunnel `docker compose exec gateway node -e "fetch('http://127.0.0.1:18787/readyz').then(r => process.exit(r.ok ? 0 : 1))"`.
 
@@ -116,7 +116,9 @@ Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or with t
 
 - **Public admin**: `ADMIN_PUBLIC=1` serves the admin UI on `PUBLIC_URL` too. The gateway refuses to start unless `ACCESS_AUD` and `ACCESS_TEAM` are set, and then checks the Cloudflare Access token on every admin request (section 5).
 
-In the admin UI: create a profile (id + allowed domains), save logins for it, create API keys, revoke connected clients, watch a browser live.
+In the admin UI: create a profile (id + allowed domains), save logins for it (and "Test" them), create API keys (expiry required: 30 days, 90 days, 1 year or a date), revoke connected clients, extend or release an agent's lease, watch a browser live.
+
+Sign-in: password, then a TOTP code or a backup code. "Trust this device for 30 days" (admin listener only) skips the code at the next sign-ins from this browser. Sensitive actions (keys, clients, logins, domains, profile deletion) ask for a fresh code when the last one is older than 15 minutes; five wrong codes in a row sign the session out.
 
 ## 5. Cloudflare named tunnel
 
@@ -190,7 +192,11 @@ docker compose start gateway
 
 The previous key is kept as `secrets/login_key.old`: delete it once no `arb.db` backup needs it.
 
-**Lost authenticator**: `docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com` (new password and TOTP, sessions dropped).
+**Lost authenticator**: sign in with a backup code, then on the host `docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com` (new password, TOTP and backup codes; old ones void, sessions dropped). No backup code left: the same command, from the host.
+
+**API keys without expiry** (created before Lot 7b): they still work, and the admin list flags them `noExpiry`. Rotate each one: create a new key for the same scope, switch the agent to it, revoke the old one. A key's last IP shows in the same list: an address you do not recognise = revoke.
+
+**Saved login looks broken**: "Test" on the login row fills the form like the agent would and shows the page it ended on (still on the login page = wrong password or a changed form). Refused while an agent holds the profile: release the lease first, or wait.
 
 **Backups**: section 10.
 
