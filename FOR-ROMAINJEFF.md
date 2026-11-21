@@ -178,6 +178,16 @@ Les lots précédents ont blindé les murs. Le Lot 7b s'occupe du **comptoir** :
 
 Trois migrations : `003` (dernière IP par clé), `004` (table `step_up`), `005` (résultat du dernier test de login).
 
+## Lot 7c : la nouvelle façade
+
+Le Lot 7b avait posé le comptoir ; le 7c repeint la boutique. L'admin et les pages `/login` / `/consent` passent en **français**, aux couleurs NOMAD (vert `#00543C`, rouge pour le danger, violet pour « ce que l'agent peut faire »), sans framework ni CDN : un seul fichier HTML, un seul `<script>` autorisé par nonce, des icônes en SVG inline.
+
+**L'admin, écran par écran.** *Profils* : la liste des postes avec leur état (éteint, allumé, loué par un agent). Un clic ouvre le profil, avec cinq onglets : *Session* (vue en direct, bail, « Prolonger 30 min »), *Identifiants* (logins enregistrés, bouton Tester), *Domaines* (allowlist), *Diagnostic*, *Paramètres* (suppression). *Accès agents* : clients OAuth et clés d'API, avec une boîte de dialogue de création qui impose une durée et montre la clé une seule fois. *Sécurité* : la fenêtre de double signature restante, les codes de secours, et la commande `reset-2fa` à copier (l'enrôlement reste en CLI). Quand une action sensible tombe sur un `401 {stepUp: true}`, l'UI demande le code puis rejoue l'action, sans perdre ce qu'on avait tapé.
+
+**Ce qui n'y est pas : la passation agent → humain** (« l'agent vous demande la main », boutons « Terminé, rendre la main »). La maquette l'avait, le backend non (Lot 9). Peindre un bouton qui n'appelle rien, c'est mentir à l'utilisateur.
+
+**Les pages publiques restent sans JavaScript.** Étape 1 sur 2 (e-mail, mot de passe), étape 2 sur 2 (code TOTP, ou « application perdue ? » puis code de secours), puis la page de consentement : identité du client, pastille « non vérifié » ou « vérifié (CIMD) », âge de l'inscription, choix du profil en boutons radio, et l'avertissement Global en page intermédiaire.
+
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
 2. **Le profil Chrome ne garde pas les cookies de session.** Fix : `--restore` d'agent-browser, qui sauvegarde cookies et localStorage sur le même volume.
@@ -205,6 +215,9 @@ Trois migrations : `003` (dernière IP par clé), `004` (table `step_up`), `005`
 22. **Le cookie « appareil de confiance » change à chaque visite.** Better Auth fait tourner ce cookie à chaque login réussi et efface l'ancien. Le premier test réutilisait l'ancien cookie, échouait pour une mauvaise raison… et passait donc aussi sur le port public, où il **devait** échouer. Un test qui ne distingue pas le bon refus du mauvais ne prouve rien. Fix : le test suit le cookie renouvelé.
 23. **Une transaction dans une transaction.** `saveLogin` faisait deux écritures dans une transaction. Mais la migration du POC l'appelle déjà depuis sa propre transaction, et SQLite refuse l'emboîtement (`cannot start a transaction within a transaction`). Fix : une seule requête (l'`UPSERT` remet le résultat de test à zéro dans sa clause `ON CONFLICT`).
 24. **L'échappement qui n'échappe pas comme prévu.** Le test cherchait `&lt;img` ; `esc()` produit `&#60;img`. Les deux sont corrects pour le navigateur, mais la chaîne attendue doit suivre le vrai code, pas l'habitude.
+
+25. **Le formulaire qui arrive de nulle part.** Premier test dans un vrai Chrome : `/login` en POST répond 403. Les pages publiques envoyaient `Referrer-Policy: no-referrer`, et sous cette politique le navigateur envoie `Origin: null` sur un POST de formulaire. Le contrôle d'origine refusait donc **tous** les vrais navigateurs ; les tests passaient parce que `fetch` de Node envoie la vraie origine. Fix : `same-origin` (le referrer ne quitte toujours pas le site).
+26. **Better Auth lit les en-têtes du navigateur.** Deuxième essai : le mot de passe passe, le code TOTP échoue. Le gateway relaie le POST du formulaire vers l'API Better Auth en JSON, mais recopie les en-têtes du navigateur (`sec-fetch-mode: navigate`, `accept: text/html`). Better Auth croit alors parler à une page et répond par une redirection 302 au lieu du JSON attendu. `callAuth` retire maintenant ces indices quand c'est nous qui parlons en JSON. Les tests envoient désormais les formulaires en HTTP brut avec les en-têtes d'un vrai navigateur (Node force `sec-fetch-mode: cors`, qui masquait le bug). Leçon commune aux pièges 25 et 26 : un test qui ne ressemble pas au client réel teste un autre programme.
 
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
