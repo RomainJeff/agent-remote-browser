@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     strategy:
       matrix:
@@ -29,7 +29,7 @@ jobs:
       - run: npm run check:compose
 
   scan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +42,7 @@ jobs:
   # The stack as deployed: browsers under gVisor (runsc), no ALLOW_NO_SANDBOX. Then the POC migration, a backup and
   # the restore procedures of deploy/runbook.md (section 10), run as written.
   e2e:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
       SANDBOX_RUNTIME: runsc
