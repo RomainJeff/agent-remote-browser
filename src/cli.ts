@@ -1,8 +1,9 @@
-// Operator commands. Run them with the gateway stopped: they write arb.db and the login key.
+// Operator commands. Run them with the gateway stopped (backup-db excepted): they write arb.db and the login key.
 //   node src/cli.ts rotate-login-key
 //   node src/cli.ts migrate-from-poc <state.json> <poc-login.key> [--apply]
 //   node src/cli.ts admin create <email>      (password, then TOTP code, on stdin)
 //   node src/cli.ts admin reset-2fa <email>   (new password and new TOTP secret)
+//   node src/cli.ts backup-db <file>          (consistent snapshot of arb.db; safe while the gateway runs)
 // Output: counts, key ids, profile ids and Docker resource names. Never a password, token or key, with one
 // exception: `admin create` / `admin reset-2fa` print the TOTP otpauth:// URI once, to load in an authenticator app.
 import { readFileSync, writeFileSync, renameSync, rmSync, existsSync } from 'node:fs';
@@ -11,6 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
 import { loadConfig, type Config } from './config.ts';
+import { DatabaseSync } from 'node:sqlite';
 import { openDb, tx } from './store/db.ts';
 import { openStore } from './store/store.ts';
 import { decryptLogin, type Envelope } from './store/logins-crypto.ts';
@@ -25,7 +27,7 @@ type Copier = Pick<RunnerDriver, 'copyVolume'>;
 /** Reads one line, without echo on a TTY. */
 type Ask = (prompt: string) => Promise<string>;
 
-const USAGE = 'Usage: node src/cli.ts rotate-login-key | migrate-from-poc <state.json> <poc-login.key> [--apply] | admin create|reset-2fa <email>';
+const USAGE = 'Usage: node src/cli.ts rotate-login-key | migrate-from-poc <state.json> <poc-login.key> [--apply] | admin create|reset-2fa <email> | backup-db <file>';
 
 function withStore<T>(cfg: Config, fn: (store: ReturnType<typeof openStore>, db: ReturnType<typeof openDb>) => T): T {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
@@ -46,6 +48,24 @@ function rotateLoginKey(cfg: Config, out: Out) {
     renameSync(next, file);
     out(`Re-encrypted ${n} login(s): key ${from} -> ${store.keyId()}.`);
     out(`Previous key kept at ${old}: delete it once no backup of arb.db needs it.`);
+  });
+}
+
+/** VACUUM INTO: one read transaction, so the copy is consistent even with the gateway writing (copying arb.db
+ *  and its -wal by hand is not). The copy is a plain DB (no -wal), 0600, checked before reporting success. */
+function backupDb(cfg: Config, file: string, out: Out) {
+  withStore(cfg, (_store, db) => {
+    writeFileSync(file, '', { flag: 'wx', mode: 0o600 }); // never overwrite; SQLite keeps the mode of an existing file
+    try {
+      db.prepare('VACUUM INTO ?').run(file);
+      const copy = new DatabaseSync(file, { readOnly: true });
+      try {
+        const ok = (copy.prepare('PRAGMA integrity_check').get() as { integrity_check: string }).integrity_check;
+        if (ok !== 'ok') throw Error('integrity check of the copy failed');
+        const n = (t: string) => (copy.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n;
+        out(`arb.db backed up to ${file}: ${n('profiles')} profile(s), ${n('logins')} login(s), integrity ok.`);
+      } finally { copy.close(); }
+    } catch (e) { rmSync(file, { force: true }); throw e; }
   });
 }
 
@@ -169,6 +189,7 @@ export async function main(args: string[], env: NodeJS.ProcessEnv, out: Out, doc
   const cfg = loadConfig(env);
   const [cmd, ...rest] = args;
   if (cmd === 'rotate-login-key' && rest.length === 0) { rotateLoginKey(cfg, out); return 0; }
+  if (cmd === 'backup-db' && rest.length === 1) { backupDb(cfg, rest[0], out); return 0; }
   if (cmd === 'admin' && ['create', 'reset-2fa'].includes(rest[0]) && rest.length === 2) {
     await adminCmd(cfg, rest[0], rest[1], ask ?? stdinAsk(), out);
     return 0;

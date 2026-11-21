@@ -166,7 +166,7 @@ To stop everything instead: `docker compose stop`, then stop the browsers (they 
 
 ```sh
 git fetch && git checkout <release commit or tag>
-docker compose exec -T gateway node src/cli.ts backup-db /tmp/pre-upgrade.db && docker compose cp gateway:/tmp/pre-upgrade.db ./pre-upgrade.db
+deploy/backup.sh                                  # restic snapshot of arb.db first (section 10)
 docker compose up -d --build                      # migrations run at gateway start, forward only
 ```
 
@@ -188,7 +188,7 @@ The previous key is kept as `secrets/login_key.old`: delete it once no `arb.db` 
 
 **Lost authenticator**: `docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com` (new password and TOTP, sessions dropped).
 
-**Backups**: `arb.db` (volume `arb-data`), `secrets/login_key` and `secrets/better_auth_secret`, stored apart from each other. Automated backups and restore drills come with Lot 7; until then, stop the gateway and copy the volume and the key by hand.
+**Backups**: section 10.
 
 ## 8. Migrating from the POC
 
@@ -226,3 +226,47 @@ sudo rm -rf secrets
 ```
 
 `docker compose down -v` alone leaves the browser containers and the volumes they use. Every name and label starts with `ARB_PREFIX`: adjust it if you changed the prefix, and never widen these filters (other stacks may share the daemon). Removing `arb-data` and `secrets/` is irreversible: keep a backup if the saved logins may be needed again.
+
+## 10. Backups and restore
+
+Two things to keep, never in the same place: the data (`arb.db`, optionally the profile volumes) and the keys (`secrets/login_key`, `secrets/better_auth_secret`). `arb.db` holds the saved passwords encrypted with the login key: one leak of both = every password.
+
+**Data, with restic** (`deploy/backup.sh`, daily from cron). It takes a consistent snapshot with `cli.ts backup-db` while the gateway runs (`VACUUM INTO`: never copy `arb.db` and its `-wal` by hand), streams it out of the gateway, and with `BACKUP_PROFILES=1` also tars every `arb-profile-*` volume (logged-in sessions: without them, agents log in again from the saved logins). Then `restic forget --keep-daily 30 --prune`.
+
+```sh
+sudo apt install restic
+restic -r s3:https://<endpoint>/<bucket>/arb init            # once; password into /root/.arb-restic (0600)
+RESTIC_REPOSITORY=s3:https://<endpoint>/<bucket>/arb RESTIC_PASSWORD_FILE=/root/.arb-restic BACKUP_PROFILES=1 deploy/backup.sh
+```
+
+**Keys, by hand, elsewhere**: `secrets/login_key`, `secrets/better_auth_secret` and the restic password go into the team password manager (`base64 < secrets/login_key` for the binary key), not into restic and not on the backup host. Again after `rotate-login-key`: snapshots older than the rotation need `login_key.old`, so keep it there until they expire (30 days). Without the login key a restored `arb.db` has profiles but no usable saved passwords; without the Better Auth secret, sessions and TOTP are lost (`admin reset-2fa` recovers).
+
+**Restore drill** (quarterly, and after any change to this procedure). It touches nothing live: the snapshot is opened in a throw-away gateway container with the current key, which checks the key id, runs the migrations and an integrity check, and prints the counts to compare with the admin UI.
+
+```sh
+umask 077
+restic snapshots --tag arb
+restic dump --tag arb latest /var/tmp/arb-backup/arb.db > /var/tmp/arb.db
+docker compose run --rm --no-deps -T -e DATA_DIR=/tmp/drill gateway \
+  sh -c 'mkdir /tmp/drill && cat > /tmp/drill/arb.db && node src/cli.ts backup-db /tmp/check.db' < /var/tmp/arb.db
+rm /var/tmp/arb.db
+```
+
+**Restore for real** (lost or corrupt volume, rollback across a migration): same `restic dump`, then, gateway stopped, the file replaces `arb.db` and the stale `-wal`/`-shm` go away:
+
+```sh
+docker compose stop gateway
+docker compose run --rm --no-deps -T gateway \
+  sh -c 'cat > /data/arb.db.new && rm -f /data/arb.db-wal /data/arb.db-shm && mv /data/arb.db.new /data/arb.db && chmod 600 /data/arb.db' < /var/tmp/arb.db
+docker compose start gateway                      # refuses to start if secrets/login_key is not the key of this arb.db
+```
+
+A profile volume (stop that browser first, the volume keeps its label so uninstall and backups still find it):
+
+```sh
+docker volume create --label arb-computer=<id> arb-profile-<id>
+restic dump --tag arb latest /var/tmp/arb-backup/profiles/arb-profile-<id>.tar \
+  | docker run --rm -i --network none -v arb-profile-<id>:/v alpine:3.22 tar -C /v -xpf -
+```
+
+CI (`.github/workflows/ci.yml`, e2e job) runs this backup and the real restore on every push, against a throw-away stack.

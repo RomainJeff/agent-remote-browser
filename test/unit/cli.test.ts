@@ -1,7 +1,7 @@
 // Operator CLI: rotate-login-key, migrate-from-poc and admin, on a synthetic POC state and keys generated here.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, renameSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -57,6 +57,36 @@ test('rotate-login-key refuses to clobber an earlier .old key', async () => {
   t.withStore(() => {});
   writeFileSync(t.env.LOGIN_KEY_FILE + '.old', randomBytes(32));
   await assert.rejects(t.run(['rotate-login-key']), /exists \(earlier rotation\?\)/);
+});
+
+test('backup-db: consistent copy while the database is open and written, 0600, never overwrites', async () => {
+  const t = fresh(), pw = randomBytes(12).toString('hex'), shop = parseProfileId('shop')!;
+  t.withStore((s) => { s.createProfile(shop, ['example.com']); s.saveLogin(shop, 'main', login, pw); });
+  // The gateway's connection: open, WAL mode, a commit still in the -wal file (no checkpoint yet).
+  const live = openDb(join(t.env.DATA_DIR, 'arb.db'));
+  live.exec('PRAGMA wal_autocheckpoint = 0');
+  openStore(live, t.env.LOGIN_KEY_FILE).createProfile(parseProfileId('news')!, ['example.org']);
+  const file = join(t.dir, 'backup.db');
+  try {
+    assert.equal(await t.run(['backup-db', file]), 0);
+  } finally { live.close(); }
+  assert.equal(t.lines.at(-1), `arb.db backed up to ${file}: 2 profile(s), 1 login(s), integrity ok.`);
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+  assert.equal(existsSync(file + '-wal'), false);
+  // The copy opens as a data dir of its own, with the same key, and decrypts the login.
+  const restored = join(t.dir, 'restored');
+  mkdirSync(restored);
+  renameSync(file, join(restored, 'arb.db'));
+  const db = openDb(join(restored, 'arb.db'));
+  try {
+    const s = openStore(db, t.env.LOGIN_KEY_FILE);
+    assert.ok(s.profile('news'));
+    assert.equal(s.decryptLogin('shop', 'main', s.profile('shop')!.logins.main), pw);
+  } finally { db.close(); }
+  assertNoSecret(t.lines, [pw, readFileSync(t.env.LOGIN_KEY_FILE)]);
+  writeFileSync(file, 'x');
+  await assert.rejects(t.run(['backup-db', file]), /EEXIST/);
+  assert.equal(readFileSync(file, 'utf8'), 'x');
 });
 
 /** A POC state.json as the POC writes it: one encrypted login, one legacy plaintext login, tokens, OAuth data. */
