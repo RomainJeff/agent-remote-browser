@@ -15,10 +15,13 @@ export function createAudit(file: string) {
   return Object.assign(write, { read });
 }
 
-export interface LogFields { profile?: string; tool?: string; ms?: number; ok?: boolean; port?: number }
+export interface LogFields { profile?: string; tool?: string; ms?: number; ok?: boolean; port?: number; code?: string }
+
+/** An error's code, never its message: errno (ENOENT), Chrome net error (ERR_PROXY_CONNECTION_FAILED) or timeout. */
+export const errCode = (e: unknown) => String((e as Error)?.message ?? '').match(/\b(?:ERR_[A-Z_]+|E[A-Z]{3,}|timeout|Timeout)\b/)?.[0];
 
 /** One JSON line on stdout. Fields are a closed list: nothing free-form (URLs, errors, args) can leak in. */
 export function log(level: 'info' | 'warn' | 'error', msg: string, f: LogFields = {}) {
-  const { profile, tool, ms, ok, port } = f;
-  process.stdout.write(JSON.stringify({ level, msg, profile, tool, ms, ok, port }) + '\n');
+  const { profile, tool, ms, ok, port, code } = f;
+  process.stdout.write(JSON.stringify({ level, msg, profile, tool, ms, ok, port, code }) + '\n');
 }

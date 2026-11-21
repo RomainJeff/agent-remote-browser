@@ -12,6 +12,7 @@ import { readJson, send } from '../http.ts';
 import { requireAdmin } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
+import { log, errCode } from '../audit.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
 import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
@@ -288,7 +289,10 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return l ? send(res, 200, { leasedUntil: new Date(l.exp).toISOString() }) : send(res, 404, { error: 'no live lease' });
       }
       if (act === 'delete') { await pc.serial(id, () => deleteProfile(id)); return send(res, 200, { deleted: id }); }
-    } catch {
+    } catch (e) {
+      // Closed fields only (see log): the profile and action from the path, an error code, never the message.
+      const m = req.url!.match(/^\/api\/computers\/([^/?]+)(?:\/([a-z-]+))?/), raw = m && decodeURIComponent(m[1]);
+      log('error', 'admin operation failed', { profile: validId(raw) ? raw : undefined, tool: m ? `admin:${m[2] || req.method}` : req.url!.split('?')[0].slice(0, 40), code: errCode(e), ok: false });
       if (!res.headersSent) send(res, 500, { error: 'Admin operation failed' });
     }
   }
