@@ -52,6 +52,20 @@ Le **token global** (`acg_`), c'est le passe du bibliothécaire en chef : il cr�
 - **`/healthz`** (le process répond) et **`/readyz`** (Docker répond en moins de 2 s) : sans authentification, sans détail.
 - **Logs** : une ligne JSON par appel (`{level,msg,profile,tool,ms}`). Jamais les arguments, jamais de secret.
 
+## Lot 3 : le carnet, le coffre et le déménagement
+
+**Le carnet (SQLite).** Avant, l'état tenait dans un fichier JSON réécrit en entier à chaque changement, comme un cahier qu'on recopie à chaque ligne ajoutée. Maintenant, c'est un vrai carnet relié : `arb.db`, une base SQLite. Le pilote est `node:sqlite`, fourni par Node lui-même : rien à compiler, rien à installer. Better Auth (Lot 4) sait écrire dans ce même carnet via Kysely, qui reconnaît une base `node:sqlite` toute seule. On a vérifié avant de choisir : `better-auth@1.7.27`, Node 24 et 26, sans avertissement « expérimental ».
+
+Le carnet a ses règles :
+- **WAL** : les lecteurs ne bloquent pas l'écrivain.
+- **Clés étrangères** : supprimer un profil efface ses identifiants, ses leases et ses tokens, en cascade. Plus de miettes orphelines.
+- **Migrations numérotées** (`001_app.sql`, puis `002_...`) : chaque page ajoutée au règlement s'applique une fois, dans une transaction. `PRAGMA user_version` est le marque-page.
+- **Les leases survivent** : avant, un redémarrage effaçait les prêts en cours, et un deuxième agent pouvait prendre un navigateur déjà prêté. Maintenant le prêt est écrit dans le carnet, haché comme tous les tokens.
+
+**Le coffre et sa clé.** Les mots de passe enregistrés sont dans le carnet, mais scellés (AES-256-GCM). La clé du coffre n'est **pas** rangée avec le carnet : c'est un secret Docker à part (`/run/secrets/login_key`). Voler le carnet seul ne donne rien. Chaque enveloppe porte l'empreinte de la clé qui l'a scellée (`key_id`). Au démarrage, le gateway compare : clé absente ou différente alors que des enveloppes existent ? Il refuse de démarrer, plutôt que de créer une clé neuve qui rendrait tout illisible. `rotate-login-key` change la serrure : nouvelle clé, tout est re-scellé dans une seule transaction, l'ancienne clé reste à côté (`.old`) jusqu'à ce qu'on la jette.
+
+**Le déménagement (`migrate-from-poc`).** Le POC (`agent-computer`) tourne encore. On emporte les meubles, pas les clés de l'ancien appartement : profils, listes de sites autorisés et identifiants (déchiffrés avec l'ancienne clé, rescellés avec la nouvelle, et vérifiés un par un). Les tokens et l'OAuth restent sur place : on en génère des neufs, les agents se reconnectent. Par défaut c'est une visite à blanc : la commande fait tout l'import dans une transaction, puis l'annule, et affiche les commandes Docker qui copieraient les volumes `ac-profile-*` vers `arb-profile-*`. Avec `--apply`, elle valide et copie pour de vrai, sans jamais écraser un volume existant. La sortie ne montre que des compteurs et des noms de profils.
+
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
 2. **Le profil Chrome ne garde pas les cookies de session.** Fix : `--restore` d'agent-browser, qui sauvegarde cookies et localStorage sur le même volume.
@@ -59,9 +73,13 @@ Le **token global** (`acg_`), c'est le passe du bibliothécaire en chef : il cr�
 4. **`__proto__` comme nom de profil** : les ids passent par une regex de slug, les lectures par `Object.hasOwn`.
 5. **Node 26 lit le corps à notre place.** Le faux Engine des tests sautait le corps JSON de la requête `Upgrade` pour atteindre stdin. Sous Node 24, ce corps restait dans le socket ; sous Node 26, le serveur HTTP l'avalait déjà. Résultat : le test mangeait le mot de passe et recevait `got:` au lieu de `got:secret`. On a découvert ça au build de l'image (Node 26), pas en local (Node 24). Morale : faire tourner les tests sur la version cible, pas seulement sur celle du laptop.
 6. **Non-root, mais le socket est à root.** Dans le conteneur, `/var/run/docker.sock` appartient à `root:root` en 0660. L'utilisateur `node` n'y a pas accès. Fix : `group_add: [DOCKER_GID]` dans compose (0 sur Docker Desktop, le groupe `docker` sur Linux).
-7. **Les volumes nommés héritent du propriétaire de l'image.** Un volume vide monté sur `/run/arb-keys` prend le propriétaire du dossier dans l'image. Si le dossier n'existe pas, il appartient à root, et `node` ne peut pas y écrire la clé. Fix : `mkdir` + `chown node` dans le Dockerfile.
+7. **Les volumes nommés héritent du propriétaire de l'image.** Un volume vide monté sur `/data` prend le propriétaire du dossier dans l'image. Si le dossier n'existe pas, il appartient à root, et `node` ne peut pas y écrire la base. Fix : `mkdir` + `chown node` + `chmod 700` dans le Dockerfile.
+8. **Le gateway redémarré, le test plante en `ECONNRESET`.** Le client HTTP de Node garde la connexion ouverte (keep-alive). On redémarrait le serveur sur le même port : la première requête partait sur l'ancien socket, mort. Fix : chaque redémarrage de test prend de nouveaux ports libres.
+9. **SQLite crée ses fichiers compagnons.** En mode WAL, `arb.db` vient avec `arb.db-wal` et `arb.db-shm`. Ils contiennent les dernières écritures, donc des hashes et des enveloppes. SQLite leur donne les droits du fichier principal : on crée `arb.db` en 0600 **avant** de l'ouvrir, et les compagnons suivent.
+10. **`JSON.parse` bavarde.** Son message d'erreur cite un bout du fichier fautif. Sur un `state.json` du POC, ce bout peut être un mot de passe en clair. La CLI remplace l'erreur par un message générique, et un test vérifie qu'aucun secret ne sort, en hex, base64 et texte.
 
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
 - Le vrai risque restant n'a pas bougé : qui parle au socket Docker contrôle l'hôte. Le HostDriver ne le règle pas, il prépare le Lot 5 qui le sort du gateway.
-- **Prochaines étapes** : SQLite pour l'état et les leases (Lot 3), Better Auth devant l'admin (Lot 4), le runner séparé (Lot 5).
+- Un secret ne doit jamais dormir à côté de ce qu'il protège : la clé dans un secret Docker, le carnet dans un volume. Deux sauvegardes séparées.
+- **Prochaines étapes** : Better Auth devant l'admin, dans le même carnet SQLite (Lot 4), le runner séparé (Lot 5).

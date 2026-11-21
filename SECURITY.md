@@ -7,7 +7,7 @@ The public listener accepts untrusted OAuth clients. MCP tokens delegate use of 
 | Gateway socket grants host control | Critical × high | Residual. Container creation with arbitrary mounts is sufficient for host control. An endpoint-only socket proxy still permits this. A dedicated VM or a validating broker is needed. |
 | Browser access to LAN, metadata or other profiles | High × high | Fixed for private and special-use destinations. Docker network mode is none. A per-profile Unix socket accepts allowed domains on ports 80/443 and connects to a checked IPv4 address. Deployments routing globally numbered addresses to private services need additional routing policy. |
 | Cross-origin admin writes and WebSocket access | High × low | Fixed. Require same-origin browser requests, loopback Host and JSON writes. |
-| Clear saved passwords | High × medium | Fixed. Encrypt and authenticate credentials with a separately mounted key. |
+| Clear saved passwords | High × medium | Fixed. Encrypt and authenticate credentials with a key mounted as a Docker secret, outside the data volume. Each envelope records the id of its key; the gateway refuses to start with a missing or different key. |
 | Sensitive request arguments and errors in logs | High × low | Fixed for new entries. Record operation metadata only. Historical logs require separate operator review. |
 | Public registration and consent abuse | Medium × low | Fixed with gateway-wide budgets. Bound registration, consent attempts and pending grants. |
 | Malicious content on a trusted login site | High × high | Residual. A saved login trusts the configured site, its scripts and the browser automation package. |
@@ -15,3 +15,7 @@ The public listener accepts untrusted OAuth clients. MCP tokens delegate use of 
 
 
 Authentication remains local-machine trust for admin and bearer-token trust for MCP. Local native processes and Docker peers with gateway network access remain trusted. Shared OAuth budgets can be exhausted deliberately, delaying new connections. Public sites and scripts on an allowed origin can still receive data available to that browser. A CONNECT proxy controls the upstream IP and port, while the browser validates TLS. It does not inspect encrypted application traffic.
+
+## State at rest
+
+`arb.db` (SQLite, data volume, 0600) holds hashes of every token (profile, global, OAuth access and refresh, lease), allowlists, OAuth client registrations and saved logins as AES-256-GCM envelopes bound to profile, site, URL and username. No plaintext secret is written to it. The login key lives in a separate Docker secret: a copy of the database or of the data volume alone discloses no password; a copy of both does. `rotate-login-key` re-encrypts every login in one transaction and keeps the previous key as `<key>.old` until the operator deletes it. Browser profile volumes (`arb-profile-*`: cookies, sessions) remain plaintext on the host disk (residual, row above).
