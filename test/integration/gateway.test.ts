@@ -451,9 +451,21 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
     const html = await page.text();
     assert.match(html, /test client/);
     assert.match(html, /value="profile:other"/);
+    assert.ok(html.includes(client_id));
+    assert.match(html, /client non vérifié/);
+    assert.match(html, /Registered \d+ min ago/);
+    assert.match(html, /Loopback redirect/);
+    assert.match(html, /Global: manage and lease every profile \(not recommended for an unverified client\)/);
     assert.equal((await postForm('/consent', { scope: 'profile:nope', accept: 'true', oauth_query: cq }, cookie)).status, 400);
     assert.equal((await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie, 'http://evil.test')).status, 403);
-    const r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie);
+    let r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie);
+    if (scope === 'global') {
+      assert.equal(r.status, 200);
+      const warn = await r.text();
+      assert.match(warn, /Unverified client with Global access/);
+      assert.match(warn, /name="confirm" value="global"/);
+      r = await postForm('/consent', { scope, confirm: 'global', accept: 'true', oauth_query: cq }, cookie);
+    }
     assert.equal(r.status, 302);
     const loc = new URL(r.headers.get('location')!);
     assert.equal(loc.origin + loc.pathname, redirect_uri);
@@ -462,6 +474,23 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   };
   const token = (form: Record<string, string>) => postForm('/api/auth/oauth2/token', { client_id, resource, ...form }, '', '');
   const exchange = (code: string, verifier = code_verifier) => token({ grant_type: 'authorization_code', redirect_uri, code, code_verifier: verifier });
+
+  // Global for an unverified (DCR) client: a second page with a strong warning, then the grant.
+  const globalCode = await grant('global');
+  assert.ok(globalCode);
+  // Everything the client controls is escaped.
+  const evil = (await (await register({ redirect_uris: ['https://x.test/cb'], token_endpoint_auth_method: 'none', client_name: '<img src=x onerror=alert(1)>' })).json()).client_id;
+  const evilPage = await (await get('/consent?' + new URLSearchParams({ client_id: evil, redirect_uri: 'https://x"><script>.test/cb' }), cookie)).text();
+  assert.equal(evilPage.match(/<h1>.*<\/h1>/)?.[0], "<h1>Connect &#60;img src=x onerror=alert(1)&#62;</h1>");
+  assert.ok(!evilPage.includes('<script>') && !/Loopback/.test(evilPage));
+  // A CIMD client (metadata fetched from its https client_id) shows as verified, no warning page.
+  const cimdId = 'https://client.example.test/meta.json';
+  sql((db) => db.prepare(`INSERT INTO oauthClient (id, clientId, clientDiscoveryId, name, createdAt, redirectUris) VALUES ('c1', ?, 'cimd', 'Docs app', ?, '[]')`)
+    .run(cimdId, new Date(Date.now() - 3 * 86400_000).toISOString()));
+  const cimdPage = await (await get('/consent?' + new URLSearchParams({ client_id: cimdId, redirect_uri: 'https://client.example.test/cb' }), cookie)).text();
+  assert.match(cimdPage, /Verified by its metadata URL \(CIMD\)[\s\S]*Registered 3 days ago/);
+  assert.ok(!/non vérifié|not recommended/.test(cimdPage));
+  sql((db) => db.prepare('DELETE FROM oauthClient WHERE id = ?').run('c1'));
 
   // PKCE failure: refused.
   const burnt = await grant('profile:shop');
@@ -501,13 +530,13 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   assert.equal((await call(next.access_token, 'snapshot')).error, false);
 
   const clients = (await admin('GET', '/api/clients')).json.oauth;
-  assert.deepEqual(clients.find((c: any) => c.id === client_id).scopes.split(',').sort(), ['profile:other', 'profile:shop']);
+  assert.deepEqual(clients.find((c: any) => c.id === client_id).scopes.split(',').sort(), ['global', 'profile:other', 'profile:shop']);
 
   // Purge: only clients older than 24 h with no grant at all.
   const db = new DatabaseSync(dbFile());
   try {
     db.prepare('UPDATE oauthClient SET createdAt = ?').run(new Date(Date.now() - 2 * 86400_000).toISOString());
-    assert.equal(purgeClients(db), 1);
+    assert.equal(purgeClients(db), 2, 'abandoned + evil');
     assert.deepEqual((db.prepare('SELECT clientId FROM oauthClient').all() as { clientId: string }[]).map((r) => r.clientId), [client_id]);
   } finally { db.close(); }
   assert.notEqual(abandoned, client_id);

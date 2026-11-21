@@ -60,7 +60,7 @@ h1{font-size:18px;margin:0 0 8px}p{color:var(--muted);margin:0 0 16px}b{color:va
 input,select{font:inherit;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);margin-bottom:12px}
 button{font:inherit;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;width:100%}
 button.alt{background:transparent;color:var(--ink);border-color:var(--line);margin-top:8px}
-.err{color:var(--warn)}</style></head><body><main>${body}</main></body></html>`);
+.err{color:var(--warn)}.mono{font-family:ui-monospace,monospace;word-break:break-all}</style></head><body><main>${body}</main></body></html>`);
 }
 
 /** Public routes on the MCP listener. Returns false when the request is not one of them. */
@@ -91,17 +91,36 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
   const toLocal = (res: Res, url: unknown) => typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
     ? res.writeHead(302, { location: url, 'cache-control': 'no-store' }).end() : res.writeHead(400).end();
 
-  function consentPage(res: Res, q: string) {
-    const p = new URLSearchParams(q);
-    const client = db.prepare('SELECT name FROM oauthClient WHERE clientId = ?').get(p.get('client_id') ?? '') as { name: string | null } | undefined;
-    let host = '';
-    try { host = new URL(p.get('redirect_uri') ?? '').host; } catch {}
+  // CIMD rows (metadata fetched from the client_id URL) carry clientDiscoveryId 'cimd'; anything else is open DCR.
+  const clientOf = (id: string) => {
+    const c = db.prepare('SELECT name, createdAt, clientDiscoveryId d FROM oauthClient WHERE clientId = ?').get(id) as
+      { name: string | null; createdAt: string | null; d: string | null } | undefined;
+    return { id, name: c?.name || 'an MCP client', dcr: c?.d !== 'cimd', createdAt: c?.createdAt ?? null };
+  };
+  const age = (iso: string | null) => {
+    const m = iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)) : NaN;
+    return Number.isNaN(m) ? 'unknown' : m < 120 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+  };
+  const GLOBAL_WARNING = 'Unverified client with Global access: it could manage, lease and delete every profile and its saved logins. Only allow this if you registered this client yourself, just now.';
+
+  /** `confirmGlobal`: the second page an unverified (DCR) client gets after picking Global. */
+  function consentPage(res: Res, q: string, confirmGlobal = false) {
+    const p = new URLSearchParams(q), c = clientOf(p.get('client_id') ?? '');
+    let host = '', loopback = false;
+    try { const u = new URL(p.get('redirect_uri') ?? ''); host = u.host; loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname); } catch {}
     const profiles = (db.prepare('SELECT id FROM profiles ORDER BY id').all() as { id: string }[]).map((r) => r.id);
-    page(res, 200, `<h1>Connect ${esc(client?.name || 'an MCP client')}</h1>
+    const choice = confirmGlobal ? `<input type="hidden" name="scope" value="global"><input type="hidden" name="confirm" value="global">
+<p class="err"><b>${esc(GLOBAL_WARNING)}</b></p>`
+      : `<select name="scope">${profiles.map((id) => `<option value="profile:${esc(id)}">Profile ${esc(id)}</option>`).join('')}
+<option value="global">Global: manage and lease every profile${c.dcr ? ' (not recommended for an unverified client)' : ''}</option></select>`;
+    page(res, 200, `<h1>Connect ${esc(c.name)}</h1>
 <p>It will drive a remote browser with the access you pick. Afterwards you return to <b>${esc(host)}</b>.</p>
+<p>Client ID <b class="mono">${esc(c.id)}</b><br>${c.dcr
+      ? '<span class="err">Unverified client (client non vérifié): registered itself, its name is self-declared.</span>'
+      : 'Verified by its metadata URL (CIMD): the name comes from that domain.'}<br>Registered ${esc(age(c.createdAt))}.</p>
+${loopback ? '<p>Loopback redirect: the grant goes to an app on this computer. Allow only if you just started that app.</p>' : ''}
 <form method="post" action="/consent">${hidden(q)}
-<select name="scope">${profiles.map((id) => `<option value="profile:${esc(id)}">Profile ${esc(id)}</option>`).join('')}
-<option value="global">Global: manage and lease every profile</option></select>
+${choice}
 <button name="accept" value="true">Allow</button><button class="alt" name="accept" value="false">Deny</button></form>`);
   }
 
@@ -159,6 +178,8 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
       const scope = b.scope === 'global' ? 'global' : b.scope?.startsWith('profile:') && parseProfileId(b.scope.slice(8))
         && db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(b.scope.slice(8)) ? b.scope : null;
       if (!scope) return res.writeHead(400).end(), true;
+      const oq = b.oauth_query ?? '';
+      if (scope === 'global' && b.accept === 'true' && b.confirm !== 'global' && clientOf(new URLSearchParams(oq).get('client_id') ?? '').dcr) return consentPage(res, oq, true), true;
       pending.set(s.session.id, scope);
       try {
         req.headers.accept = 'application/json';
