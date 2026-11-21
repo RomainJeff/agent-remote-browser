@@ -4,7 +4,7 @@
 Chaque agent (Notion ou autre) reçoit un petit ordinateur jetable avec un navigateur, qu'il pilote à distance comme avec une télécommande. Les boutons de la télécommande sont les tools MCP. L'ordinateur, c'est un conteneur Docker.
 
 ## L'image mentale : la salle d'ordinateurs de la bibliothèque
-- **Le guichet (`src/server.ts`)** : l'agent montre sa carte (clé Bearer). Le bibliothécaire sait quel poste lui revient et quels sites il a le droit de visiter. Il note chaque demande dans le registre (`audit.jsonl`).
+- **Le guichet (`src/server.ts`)** : l'agent montre sa carte (token OAuth ou clé API). Le bibliothécaire sait quel poste lui revient et quels sites il a le droit de visiter. Il note chaque demande dans le registre (`audit.jsonl`).
 - **Le poste (conteneur `arb-<profil>`)** : Chromium + agent-browser, rien d'autre. Pas de root, pas de capacités Linux, pas de réseau, 1 Go de RAM.
 - **Le casier (volume `arb-profile-<profil>`)** : cookies et sessions. Le poste s'éteint après 5 min d'inactivité, mais le casier reste. Au retour de l'agent, il est toujours connecté.
 - **Le trousseau (`login`)** : l'agent demande « connecte-moi à X ». C'est le bibliothécaire qui tape le mot de passe. L'agent voit seulement « c'est fait ».
@@ -39,12 +39,10 @@ Imagine un poste dont on a débranché le câble Ethernet. Il lui reste un inter
 
 Concrètement, l'interphone est un socket Unix posé dans le volume `arb-egress`, un sous-dossier par profil. Chaque poste ne voit que le sien, en lecture seule.
 
-## Profils, tokens et le guichet OAuth
-Un **profil**, c'est une carte de bibliothèque : un poste, un casier, un trousseau, une liste de sites autorisés et un numéro (token `acp_`). Le token n'est affiché qu'**une fois** ; on ne garde que son empreinte (sha256).
+## Profils, cartes et passes
+Un **profil**, c'est une place à la bibliothèque : un poste, un casier, un trousseau, une liste de sites autorisés. Jusqu'au Lot 3, chaque profil avait son numéro fixe (`acp_`), et le bibliothécaire en chef un passe global (`acg_`). Le Lot 4 a jeté ces deux trousseaux : voir plus bas.
 
-**OAuth DCR**, c'est le guichet automatique. Notion arrive sans clé, se fait refouler (401), lit dans la réponse où trouver le guichet, s'y inscrit tout seul et repart avec un ticket d'1 h et un ticket de renouvellement de 30 jours.
-
-Le **token global** (`acg_`), c'est le passe du bibliothécaire en chef : il crée des cartes et **emprunte** (lease) un poste pour un temps limité, de façon exclusive. Il ne révèle jamais le numéro d'une carte.
+Le **scope global**, c'est le passe du bibliothécaire en chef : il crée des profils et **emprunte** (lease) un poste pour un temps limité, de façon exclusive. Il ne révèle jamais le numéro d'une carte.
 
 ## Démarrer, s'arrêter, se relever
 - **Config (`src/config.ts`)** : toutes les variables d'environnement passent par zod au démarrage. Une erreur, et le process s'arrête avec la liste des problèmes. Pas de gVisor (`runsc`) ? Refus, sauf `ALLOW_NO_SANDBOX=1` (dev sur Mac). En production, `PUBLIC_URL` est obligatoire et les tunnels jetables `trycloudflare` sont refusés.
@@ -66,6 +64,35 @@ Le carnet a ses règles :
 
 **Le déménagement (`migrate-from-poc`).** Le POC (`agent-computer`) tourne encore. On emporte les meubles, pas les clés de l'ancien appartement : profils, listes de sites autorisés et identifiants (déchiffrés avec l'ancienne clé, rescellés avec la nouvelle, et vérifiés un par un). Les tokens et l'OAuth restent sur place : on en génère des neufs, les agents se reconnectent. Par défaut c'est une visite à blanc : la commande fait tout l'import dans une transaction, puis l'annule, et affiche les commandes Docker qui copieraient les volumes `ac-profile-*` vers `arb-profile-*`. Avec `--apply`, elle valide et copie pour de vrai, sans jamais écraser un volume existant. La sortie ne montre que des compteurs et des noms de profils.
 
+## Lot 4 : le videur, le badge et la carte à puce
+
+Jusqu'ici, la porte de l'admin était « fermée » parce qu'elle donnait sur une cour privée (localhost). Et les cartes des agents étaient des numéros fixes qu'on recopiait à la main. Le Lot 4 installe un vrai service de sécurité : **Better Auth** (`1.7.27`, version figée), qui écrit dans le même carnet SQLite que le reste.
+
+**Le gérant et son double contrôle.** Il n'y a qu'**un** humain : l'admin. Il entre avec un mot de passe **et** un code à 6 chiffres de son appli d'authentification (TOTP). C'est la porte blindée à deux serrures : voler le mot de passe ne suffit pas, il faut aussi le téléphone. Pas de formulaire d'inscription : le seul moyen de créer l'admin, c'est d'être sur la machine (`arb admin create`). La commande affiche une seule chose secrète, une fois : l'URI `otpauth://` à scanner. Tout le reste (mot de passe, secret Better Auth) ne sort jamais.
+
+**Le guichet OAuth, version contrôlée.** Notion arrive sans carte, se fait refouler (401), lit dans la réponse où se trouve le guichet, s'inscrit tout seul (DCR) et demande une carte. Avant, il repartait directement avec. Maintenant, le guichet appelle le gérant : page `/login` (mot de passe + code), puis page `/consent` où le gérant **choisit** quel poste ce client aura le droit d'utiliser (`profile:shop`) ou s'il reçoit le passe global. Le client repart avec un ticket d'1 h (`arb_at_`) et un ticket de renouvellement de 30 jours (`arb_rt_`), mais le périmètre, c'est le gérant qui l'a écrit, pas le client.
+
+C'est comme un hôtel : n'importe qui peut se présenter à l'accueil, mais c'est le réceptionniste qui programme la carte pour **la chambre 12**, pas le client.
+
+**Les badges permanents (clés API).** Pour un script ou un orchestrateur, pas de navigateur pour faire le tour login/consent : l'admin crée une clé `arb_k_…` dans l'admin, avec son périmètre, affichée une fois. Révoquée dans l'onglet « Connected clients » : refusée à l'appel suivant (testé : 401).
+
+**Les garde-fous du guichet.** Une porte ouverte au public attire les petits malins :
+- inscriptions : 5 par minute par IP, 20 par heure et 1000 clients au total ; les clients qui n'ont jamais rien obtenu partent à la poubelle après 24 h ;
+- login 5/min, code 5/min (et 15 min de blocage après 5 mauvais codes), consentement 10/min, token 30/min, compteurs stockés dans la base ;
+- PKCE S256 obligatoire : le client qui demande la carte doit prouver que c'est bien lui qui l'a commandée.
+
+**Le videur à l'entrée (Cloudflare Access, optionnel).** Si un jour l'admin doit être accessible hors de la machine (`ADMIN_PUBLIC=1`), on peut mettre Cloudflare Access devant. Cloudflare remet alors un bracelet signé (un JWT) à chaque visiteur. Le gateway ne fait pas confiance aveuglément : il vérifie lui-même la signature (RS256, via WebCrypto, sans bibliothèque), le public visé, l'expiration, et exige que l'email du bracelet soit celui de l'admin. Les clés publiques de Cloudflare sont gardées en cache 1 h.
+
+**Le déménagement du carnet.** La migration `002_better_auth.sql` ajoute les 14 tables de Better Auth et supprime les anciennes (`oauth_clients`, `oauth_tokens`, `settings`, la colonne `token_hash`). C'est notre propre runner qui l'applique, jamais l'auto-migration de Better Auth : une seule source de vérité pour le schéma. Conséquence assumée : les anciens tokens meurent, les agents se reconnectent.
+
+### Les surprises de Better Auth
+1. **Pas de plugin MCP en 1.7.** Le plan en parlait ; il a été remplacé par `@better-auth/oauth-provider`, qui fait la même chose (et mieux : refresh rotatif, CIMD).
+2. **Il ne redirige que les vrais navigateurs.** `/authorize` répond par une redirection 302 seulement si la requête ressemble à une navigation (`sec-fetch-mode: navigate`). Sinon, du JSON. Et le `fetch` de Node impose `sec-fetch-mode: cors`, impossible à changer : les tests passent par `http.get`.
+3. **Un cookie sans Origin = 403.** Better Auth considère une requête avec cookie mais sans en-tête Origin comme suspecte. Bonne idée, mais il faut ne jamais envoyer un en-tête `cookie:` vide.
+4. **Le choix du profil passe par un petit papier.** Better Auth range le consentement par « référence » ; pour lui faire porter `profile:shop`, la page de consentement glisse le choix dans une `Map` en mémoire le temps d'un appel. D'où une conséquence : chaque connexion repasse par la page de consentement (c'est voulu : le gérant choisit à chaque fois).
+5. **Rejouer un code d'autorisation tue les tokens déjà émis.** Conforme à la RFC, et testé.
+6. **Passkey reporté.** Le plugin existe, mais ajoutait une dépendance WebAuthn pour un seul humain qui a déjà le TOTP.
+
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
 2. **Le profil Chrome ne garde pas les cookies de session.** Fix : `--restore` d'agent-browser, qui sauvegarde cookies et localStorage sur le même volume.
@@ -78,8 +105,12 @@ Le carnet a ses règles :
 9. **SQLite crée ses fichiers compagnons.** En mode WAL, `arb.db` vient avec `arb.db-wal` et `arb.db-shm`. Ils contiennent les dernières écritures, donc des hashes et des enveloppes. SQLite leur donne les droits du fichier principal : on crée `arb.db` en 0600 **avant** de l'ouvrir, et les compagnons suivent.
 10. **`JSON.parse` bavarde.** Son message d'erreur cite un bout du fichier fautif. Sur un `state.json` du POC, ce bout peut être un mot de passe en clair. La CLI remplace l'erreur par un message générique, et un test vérifie qu'aucun secret ne sort, en hex, base64 et texte.
 
+11. **La query string avalée.** Les routes `/api/auth/*` du listener public transmettaient le chemin sans `?client_id=…` : l'autorisation échouait sans message clair. Fix : `path + url.search`.
+12. **Un profil recréé héritait d'un code en attente.** Supprimer un profil effaçait ses tokens, mais pas les codes d'autorisation pas encore échangés (rangés dans `verification`). Un profil recréé sous le même nom pouvait les récupérer. Fix : `deleteProfile` les purge aussi.
+
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
 - Le vrai risque restant n'a pas bougé : qui parle au socket Docker contrôle l'hôte. Le HostDriver ne le règle pas, il prépare le Lot 5 qui le sort du gateway.
 - Un secret ne doit jamais dormir à côté de ce qu'il protège : la clé dans un secret Docker, le carnet dans un volume. Deux sauvegardes séparées.
-- **Prochaines étapes** : Better Auth devant l'admin, dans le même carnet SQLite (Lot 4), le runner séparé (Lot 5).
+- Un périmètre se donne, il ne se demande pas : le client OAuth demande « mcp », c'est le gérant qui écrit « profile:shop » sur la carte.
+- **Prochaines étapes** : le runner séparé qui sort le socket Docker du gateway (Lot 5), le tunnel nommé et Cloudflare Access en vrai (Lot 6).

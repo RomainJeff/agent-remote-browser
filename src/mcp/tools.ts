@@ -1,5 +1,5 @@
 // MCP tools, built per request for one principal. Browser tools drive the caller's profile (or the leased one);
-// the global token also gets profile management and leases.
+// the global scope also gets profile management and leases.
 import { existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';

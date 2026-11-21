@@ -2,7 +2,7 @@
 
 One sandboxed Chromium per AI agent, driven through a remote MCP server.
 
-An agent (e.g. a Notion Custom Agent) connects over MCP with OAuth or a static token. Each browser profile runs in its own Docker container: no network, all caps dropped, egress only through a per-profile proxy that enforces a domain allowlist and refuses private IPs. Saved logins are encrypted and typed by the gateway, the agent never sees them. A localhost-only admin UI manages profiles, logins, tokens and offers a live view.
+An agent (e.g. a Notion Custom Agent) connects over MCP with OAuth 2.1 or an API key. Each browser profile runs in its own Docker container: no network, all caps dropped, egress only through a per-profile proxy that enforces a domain allowlist and refuses private IPs. Saved logins are encrypted and typed by the gateway, the agent never sees them. A localhost-only admin UI (password + TOTP) manages profiles, logins, API keys and connected clients, and offers a live view.
 
 Status: imported from the `agent-computer` POC, on its way to production. See the production plan (`projects/agent-computer/production-plan.md` in the parent workspace) and [SECURITY.md](SECURITY.md).
 
@@ -16,10 +16,12 @@ npm test            # unit + integration on an in-memory FakeDriver, no Docker n
 npm run typecheck
 
 cp .env.example .env               # on macOS: ALLOW_NO_SANDBOX=1 (no gVisor)
-mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key && chmod 600 secrets/login_key   # once
+mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key                     # once
+openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
 docker compose up -d --build       # MCP on http://127.0.0.1:18787/mcp, admin on http://127.0.0.1:18788
 curl 127.0.0.1:18787/readyz        # /healthz = process up, /readyz = Docker reachable
-TOKEN=acp_... npm run smoke        # end-to-end MCP calls against the running stack
+docker compose exec gateway node src/cli.ts admin create you@example.com   # once, see Admin below
+TOKEN=arb_k_... npm run smoke      # end-to-end MCP calls; profile-scoped API key or OAuth access token
 ```
 
 All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>`, volumes `arb-profile-<profile>`, `arb-data`, `arb-egress`).
@@ -29,9 +31,10 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/server.ts`: entry point (`npm start`). Two listeners, graceful SIGTERM (drains, leaves browsers running), reconnects running browsers at startup.
 - `src/config.ts`: every env var, validated with zod. Invalid config = exit 1. Refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production, requires `PUBLIC_URL` and refuses quick tunnels.
 - `src/host/`: the `HostDriver` contract. `DockerDriver` talks to the Engine API (`/v1.47`) over the Unix socket; the gateway image has no docker CLI. `FakeDriver` backs the tests.
-- `src/mcp/`, `src/admin/`, `src/oauth/`: MCP tools and leases, admin UI, OAuth server.
+- `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
+- `src/auth/`: Better Auth setup (`better-auth.ts`), public login/consent/OAuth routes (`routes.ts`), token and admin checks (`guards.ts`), Cloudflare Access JWT (`access-jwt.ts`).
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
-- `src/cli.ts`: operator commands (`rotate-login-key`, `migrate-from-poc`).
+- `src/cli.ts`: operator commands (`admin create`, `admin reset-2fa`, `rotate-login-key`, `migrate-from-poc`).
 - `src/egress/`, `src/policy.ts`, `src/audit.ts`: egress proxy, allowlist rules, audit file and JSON logs.
 
 Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
@@ -40,11 +43,30 @@ The gateway runs as `node` (uid 1000). It reaches the Docker socket through `DOC
 
 ## State
 
-One SQLite file, `${DATA_DIR}/arb.db` (compose: volume `arb-data`, mounted at `/data`), mode 0600, WAL, foreign keys on. Tables: `profiles` (allowlist, profile token hash), `logins` (one AES-256-GCM envelope per saved login, with the `key_id` of the key that sealed it), `leases` (token hash, expiry: they survive a restart), `settings` (global token hash), `oauth_clients`, `oauth_tokens` (hashes only). Every token is stored as its sha256. Deleting a profile deletes its logins, leases and OAuth tokens (foreign key cascade).
+One SQLite file, `${DATA_DIR}/arb.db` (compose: volume `arb-data`, mounted at `/data`), mode 0600, WAL, foreign keys on. Tables: `profiles` (allowlist), `logins` (one AES-256-GCM envelope per saved login, with the `key_id` of the key that sealed it), `leases` (token hash, expiry: they survive a restart), and Better Auth's tables (`user`, `account`, `session`, `twoFactor`, `verification`, `apikey`, `oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `rateLimit`, ...). Every token is stored as its sha256 (OAuth access/refresh tokens, API keys, leases); TOTP secrets are encrypted with `BETTER_AUTH_SECRET`. Deleting a profile deletes its logins and leases (foreign key cascade), and its OAuth tokens, consents, pending codes and API keys.
 
-Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one.
+Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one. Better Auth's tables come from `002_better_auth.sql`, never from its own auto-migration; `002` also drops the Lot 3 `oauth_clients`, `oauth_tokens`, `settings` and `profiles.token_hash` (old tokens stop working, agents reconnect). Bumping `better-auth` = diff its schema (`npx @better-auth/cli generate`) and add a migration.
 
 Database driver: `node:sqlite` (built into Node, no native dependency, no build stage). Evidence for Lot 4 (2026-11-21): `better-auth@1.7.27` (latest) depends on `@better-auth/kysely-adapter@1.7.27`, which ships a `NodeSqliteDialect` and picks it automatically when handed a `DatabaseSync`; `node:sqlite` runs without an experimental warning on Node 24.22.1 (SQLite 3.53.4) and Node 26.13.1 (SQLite 3.54.1). `better-sqlite3` would add a native build for nothing.
+
+## Auth
+
+Better Auth `1.7.27` (pinned, with `@better-auth/oauth-provider`, `@better-auth/api-key`, `@better-auth/cimd`; `twoFactor` built in), on the same `arb.db`. Model and threats: [SECURITY.md](SECURITY.md).
+
+- **Agents, OAuth 2.1**: `/.well-known/oauth-protected-resource` points to the issuer `${PUBLIC_URL}/api/auth`. Dynamic client registration (or a CIMD client id URL), PKCE S256 only, access tokens `arb_at_` (1 h), refresh tokens `arb_rt_` (30 days, rotated). The admin signs in on `/login` (password + TOTP) and picks on `/consent` which scope the client gets: `profile:<id>` or `global`. Signups are disabled.
+- **Agents, API keys**: `arb_k_...`, created in the admin UI with a scope (`profile:<id>` or `global`), shown once. Send as `Authorization: Bearer` or `x-api-key`.
+- **Admin**: one admin per gateway, email + password (12 to 128 characters) + mandatory TOTP. Session cookie, 12 h. Host and Origin checked on every call. Admin UI on `:18788` (localhost) only, unless `ADMIN_PUBLIC=1` (then also on `PUBLIC_URL`, ideally behind Cloudflare Access: set `ACCESS_AUD` and `ACCESS_TEAM`; the Access email must be the admin's).
+- **Limits** (stored in `rateLimit`, per client IP from `cf-connecting-ip`): sign-in 5/min, TOTP 5/min (then 15 min lockout after 5 failures), consent 10/min, token 30/min. Client registration: 5/min per IP, 20/h and 1000 clients overall; clients never granted anything are purged after 24 h.
+- `BETTER_AUTH_SECRET` (Docker secret `better_auth_secret`, at least 32 characters) signs cookies and encrypts TOTP secrets. Changing it signs everyone out and invalidates every TOTP enrolment (`admin reset-2fa`). `PUBLIC_URL` is Better Auth's base URL (`BETTER_AUTH_URL`).
+
+### Admin
+
+```sh
+docker compose exec gateway node src/cli.ts admin create you@example.com   # password, then a TOTP code
+docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com # new password + new TOTP, sessions dropped
+```
+
+Both prompt for the password (hidden on a TTY, one line on stdin otherwise), print an `otpauth://` URI to add to an authenticator app, then ask for a code from the app to confirm. **The `otpauth://` URI is the only secret the CLI ever prints**: add it to the app, then clear the terminal. Nothing else (password, `BETTER_AUTH_SECRET`, keys) is ever output. No backup codes: a lost authenticator = `admin reset-2fa` from the host.
 
 ### Login key
 
@@ -68,7 +90,7 @@ docker compose start gateway
 
 `rotate-login-key` writes a new key to `<key>.new`, re-encrypts every login in one transaction, then renames `<key>` to `<key>.old` and `<key>.new` to `<key>`. On failure nothing changes. Delete `<key>.old` once no backup of `arb.db` needs it. A crash between the commit and the renames leaves the live key in `<key>.new`: the startup error names the key id it expects.
 
-`migrate-from-poc <state.json> <poc-login.key> [--apply]` imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: generate new profile and global tokens in the admin UI; agents reconnect. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22 cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and copies through the Engine API (never overwrites an existing target). Mount the POC files read-only into a one-off container:
+`migrate-from-poc <state.json> <poc-login.key> [--apply]` imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22 cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and copies through the Engine API (never overwrites an existing target). Mount the POC files read-only into a one-off container:
 
 ```sh
 docker compose run --rm --no-deps -v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro \
