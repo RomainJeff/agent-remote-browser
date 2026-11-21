@@ -219,7 +219,10 @@ ${choice}
         const r = await callAuth(auth, base, req, '/api/auth/oauth2/consent', { accept: b.accept === 'true', oauth_query: b.oauth_query });
         const j = await r.json().catch(() => ({}));
         if (!r.ok || typeof j.url !== 'string') return res.writeHead(r.status === 429 ? 429 : 400).end(), true;
-        return res.writeHead(302, { location: j.url, 'cache-control': 'no-store' }).end(), true;
+        // Not a 302: Chrome applies the consent page's form-action 'self' to the redirect that follows the POST and
+        // blocks the hop to the client's redirect_uri. A Refresh is a fresh navigation, with no script; the link is the fallback.
+        return page(res, 200, `<h1>${b.accept === 'true' ? 'Accès accordé' : 'Accès refusé'}</h1><p>Retour à l'application…</p>
+<p><a href="${esc(j.url)}">Continuer si rien ne se passe</a></p>`, { refresh: `0;url=${j.url}` }), true;
       } finally { pending.delete(s.session.id); }
     }
     return false;

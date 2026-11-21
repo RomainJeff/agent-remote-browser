@@ -538,8 +538,10 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
       assert.match(warn, /name="confirm" value="global"/);
       r = await postForm('/consent', { scope, confirm: 'global', accept: 'true', oauth_query: cq }, cookie);
     }
-    assert.equal(r.status, 302);
-    const loc = new URL(r.headers.get('location')!);
+    assert.equal(r.status, 200, 'consent answers a page, not a 302 (form-action would block the redirect)');
+    const ref = r.headers.get('refresh')!, loc = new URL(ref.slice(ref.indexOf('url=') + 4));
+    assert.match(r.headers.get('content-security-policy')!, /form-action 'self'/);
+    assert.match(await r.text(), /<a href="http/);
     assert.equal(loc.origin + loc.pathname, redirect_uri);
     assert.equal(loc.searchParams.get('state'), 'xyz');
     return loc.searchParams.get('code')!;
