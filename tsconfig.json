@@ -9,11 +9,8 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    // ponytail: JS modules from the POC are read for types but not checked until lot 2 converts them.
-    "allowJs": true,
-    "checkJs": false,
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["*.mjs", "src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

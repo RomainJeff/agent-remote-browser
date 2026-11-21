@@ -1,6 +1,6 @@
 {
   "name": "agent-remote-browser",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "One sandboxed browser per AI agent, behind a remote MCP gateway",
   "type": "module",
@@ -8,10 +8,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "node gateway.mjs",
+    "start": "node src/server.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "smoke": "node smoke.mjs"
+    "smoke": "node test/e2e/smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
