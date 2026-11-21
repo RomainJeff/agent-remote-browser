@@ -42,12 +42,13 @@ const server = http.createServer((req, res) => {
 // exec start: hijack, echo stdin back on stdout (split across frames and chunks), one stderr frame, then close.
 server.on('upgrade', (req, sock, head) => {
   log.push({ method: req.method!, url: req.url! });
-  const skip = Number(req.headers['content-length'] ?? 0);
+  // The start body precedes stdin on the wire. Node <= 24 leaves it in the socket, newer Node may parse it into req.
+  const body = JSON.stringify({ Detach: false, Tty: false });
   let buf = Buffer.from(head);
   sock.write('HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n');
   sock.on('data', (d) => { buf = Buffer.concat([buf, d]); });
   sock.on('end', () => {
-    const stdin = buf.subarray(skip).toString();
+    const raw = buf.toString(), stdin = raw.startsWith(body) ? raw.slice(body.length) : raw;
     const out = Buffer.concat([frame(1, 'got:'), frame(2, 'warn'), frame(1, stdin)]);
     sock.write(out.subarray(0, 5));
     sock.end(out.subarray(5));
