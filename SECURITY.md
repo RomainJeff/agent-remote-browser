@@ -1,10 +1,10 @@
 # agent-remote-browser security boundaries
 
-The public listener accepts untrusted OAuth clients. MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, gateway, Docker daemon and local machine are trusted.
+The public listener accepts untrusted OAuth clients. MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, runner, Docker daemon and local machine are trusted. The gateway is trusted with the browsers and their data, not with the host.
 
 | Finding | Severity × effort | Disposition |
 | --- | --- | --- |
-| Gateway socket grants host control | Critical × high | Residual. Container creation with arbitrary mounts is sufficient for host control. An endpoint-only socket proxy still permits this. A dedicated VM or a validating broker is needed. |
+| Gateway socket grants host control | Critical × high | Fixed (Lot 5). The gateway has no Docker socket. A separate runner owns it and accepts only validated requests (below). The runner itself remains host-equivalent. |
 | Browser access to LAN, metadata or other profiles | High × high | Fixed for private and special-use destinations. Docker network mode is none. A per-profile Unix socket accepts allowed domains on ports 80/443 and connects to a checked IPv4 address. Deployments routing globally numbered addresses to private services need additional routing policy. |
 | Cross-origin admin writes and WebSocket access | High × low | Fixed. Require same-origin browser requests, loopback Host and JSON writes. |
 | Clear saved passwords | High × medium | Fixed. Encrypt and authenticate credentials with a key mounted as a Docker secret, outside the data volume. Each envelope records the id of its key; the gateway refuses to start with a missing or different key. |
@@ -16,6 +16,23 @@ The public listener accepts untrusted OAuth clients. MCP tokens delegate use of 
 
 
 Local native processes and Docker peers with gateway network access remain trusted. Shared OAuth budgets can be exhausted deliberately, delaying new connections. Public sites and scripts on an allowed origin can still receive data available to that browser. A CONNECT proxy controls the upstream IP and port, while the browser validates TLS. It does not inspect encrypted application traffic.
+
+## Gateway compromise
+
+The gateway parses untrusted input (MCP, OAuth, pages through the browsers), so it is the likely first foothold. Since Lot 5 it has no Docker socket and runs read-only, no capabilities, as uid 1000. It reaches Docker only through the runner's Unix socket (`/run/arb-runner/runner.sock`, 0600 in a 0700 directory on a volume mounted by the gateway and the runner only). The runner validates every request with strict zod schemas (unknown fields refused) before the Engine API is reached.
+
+A gateway compromise yields:
+
+- **The browsers and their data, as today.** Drive any profile, read its pages, session file and screenshots, use its saved logins. Control egress (the proxies and allowlists live in the gateway). Read `arb.db` and the login key, so decrypt saved passwords.
+- **Availability of this stack.** Stop or remove any computer of the stack, and delete any profile volume carrying the stack's label (cookies lost). Create computers for any valid profile id. Per-computer limits apply (1 GiB, 1 CPU, 512 pids), the count does not: a flood of computers can exhaust the host (deliberate ceiling: add a cap in the runner if it matters).
+- **Nothing beyond that, as long as the runner holds.** No image choice (the pinned `${ARB_PREFIX}-computer:dev` image only), no mount (only the profile's volume and its read-only egress subpath), no host option (runtime, no network, no caps, read-only rootfs and resource limits are fixed). No command line: `exec` accepts the exact `agent-browser` calls the gateway makes and three helpers, with no NUL, no leading-dash value, and a `timeout -k 5` that kills the process in the container. No container or volume without the stack's label: compose's own `arb-gateway-1` / `arb-runner-1` match the profile id format but are refused, and so are the POC's `ac-*` resources.
+- **POC profiles only during the migration.** `copyVolume` (source fixed to `ac-profile-<id>`) is refused unless the runner runs with `ALLOW_POC_MIGRATION=1`. Leave it unset outside the migration run.
+
+Runner compromise = host compromise: it holds the Docker socket. Its attack surface is one JSON line per connection (64 KiB max, 10 s to send it), parsed by zod, and no network (`network_mode: none`).
+
+Auth between the two is the socket's file mode, not a shared secret: only uid 1000 in containers mounting `arb-runner` can connect, and a secret would sit in the gateway anyway. Anything that runs as uid 1000 on that volume (or as root on the host) is the gateway, for the runner.
+
+Not yet verified: the computers' read-only rootfs and tmpfs mounts under gVisor (`runsc`); macOS dev runs the default runtime. To check in Lot 7 (CI e2e on Linux).
 
 ## Authentication model
 

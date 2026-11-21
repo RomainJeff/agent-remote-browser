@@ -43,6 +43,7 @@ export function serveRunner(driver: Runner, path: string, { migration = false } 
         return done(true);
       }
       const result = await (
+        // ponytail: no cap on the number of computers; each is bounded (docker.ts). Count them here if floods matter.
         req.op === 'ensure' ? driver.ensure(req.id, { egressDir: '' })
         : req.op === 'exec' ? driver.exec(req.id, req.argv, { stdin: req.stdin, timeoutMs: req.timeoutMs })
         : req.op === 'stop' ? driver.stop(req.id)

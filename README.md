@@ -19,18 +19,19 @@ cp .env.example .env               # on macOS: ALLOW_NO_SANDBOX=1 (no gVisor)
 mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key                     # once
 openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
 docker compose up -d --build       # MCP on http://127.0.0.1:18787/mcp, admin on http://127.0.0.1:18788
-curl 127.0.0.1:18787/readyz        # /healthz = process up, /readyz = Docker reachable
+curl 127.0.0.1:18787/readyz        # /healthz = process up, /readyz = runner and Docker reachable
 docker compose exec gateway node src/cli.ts admin create you@example.com   # once, see Admin below
 TOKEN=arb_k_... npm run smoke      # end-to-end MCP calls; profile-scoped API key or OAuth access token
 ```
 
-All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>`, volumes `arb-profile-<profile>`, `arb-data`, `arb-egress`).
+All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>`, volumes `arb-profile-<profile>`, `arb-data`, `arb-egress`, `arb-runner`).
 
 ## Layout
 
 - `src/server.ts`: entry point (`npm start`). Two listeners, graceful SIGTERM (drains, leaves browsers running), reconnects running browsers at startup.
-- `src/config.ts`: every env var, validated with zod. Invalid config = exit 1. Refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production, requires `PUBLIC_URL` and refuses quick tunnels.
-- `src/host/`: the `HostDriver` contract. `DockerDriver` talks to the Engine API (`/v1.47`) over the Unix socket; the gateway image has no docker CLI. `FakeDriver` backs the tests.
+- `src/config.ts`: every env var, validated with zod (`loadConfig` for the gateway, `loadRunnerConfig` for the runner). Invalid config = exit 1. The runner refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production, the gateway requires `PUBLIC_URL` and refuses quick tunnels.
+- `src/host/`: the `HostDriver` contract. `RunnerDriver` (gateway side) speaks the runner RPC; `DockerDriver` (runner side) talks to the Engine API (`/v1.47`) over the Docker socket, no docker CLI. `FakeDriver` backs the tests.
+- `src/runner/`: the runner (`server.ts`) and its RPC (`protocol.ts`: one JSON line per connection, zod-validated, argv allowlist).
 - `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
 - `src/auth/`: Better Auth setup (`better-auth.ts`), public login/consent/OAuth routes (`routes.ts`), token and admin checks (`guards.ts`), Cloudflare Access JWT (`access-jwt.ts`).
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
@@ -39,7 +40,13 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 
 Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
 
-The gateway runs as `node` (uid 1000). It reaches the Docker socket through `DOCKER_GID` (`group_add` in compose); on Linux, `secrets/login_key` must be readable by uid 1000.
+## Gateway and runner
+
+Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-only root filesystem, all capabilities dropped:
+
+- **gateway**: MCP, admin UI, OAuth, egress proxies, `arb.db`. No Docker socket. On Linux, `secrets/login_key` must be readable by uid 1000.
+- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`, `copyVolume`), never an image, mount, container name or free command line. Containers are created from the pinned `${ARB_PREFIX}-computer:dev` image with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
+- Healthcheck: `node src/runner/server.ts check` (one `list` round trip). The gateway starts once the runner is healthy.
 
 ## State
 
@@ -90,9 +97,13 @@ docker compose start gateway
 
 `rotate-login-key` writes a new key to `<key>.new`, re-encrypts every login in one transaction, then renames `<key>` to `<key>.old` and `<key>.new` to `<key>`. On failure nothing changes. Delete `<key>.old` once no backup of `arb.db` needs it. A crash between the commit and the renames leaves the live key in `<key>.new`: the startup error names the key id it expects.
 
-`migrate-from-poc <state.json> <poc-login.key> [--apply]` imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22 cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and copies through the Engine API (never overwrites an existing target). Mount the POC files read-only into a one-off container:
+`migrate-from-poc <state.json> <poc-login.key> [--apply]` imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22 cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and asks the runner to copy each volume (never overwrites an existing target). The runner picks the source itself (`ac-profile-<id>`) and refuses `copyVolume` unless started with `ALLOW_POC_MIGRATION=1`: without the flag, a compromised gateway could pull any POC profile's cookies into this stack. Mount the POC files read-only into a one-off container:
 
 ```sh
-docker compose run --rm --no-deps -v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro \
-  gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key            # then again with --apply
+P="-v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro"
+docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key   # dry run
+ALLOW_POC_MIGRATION=1 docker compose up -d runner      # recreates the runner with copyVolume enabled
+docker compose stop gateway
+docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key --apply
+docker compose up -d                                   # flag unset: runner recreated without it, gateway back
 ```

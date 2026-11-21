@@ -93,6 +93,27 @@ C'est comme un hôtel : n'importe qui peut se présenter à l'accueil, mais c'es
 5. **Rejouer un code d'autorisation tue les tokens déjà émis.** Conforme à la RFC, et testé.
 6. **Passkey reporté.** Le plugin existe, mais ajoutait une dépendance WebAuthn pour un seul humain qui a déjà le TOTP.
 
+## Lot 5 : le passe-plat et le gardien du local technique
+
+Jusqu'au Lot 4, le bibliothécaire (le gateway) avait la **clé du local technique** dans sa poche : le socket Docker. Or le bibliothécaire, c'est celui qui parle à tout le monde : agents, clients OAuth, pages web via les navigateurs. Si quelqu'un le manipule, il ressort avec la clé, et la clé du local technique ouvre tout le bâtiment (créer un conteneur qui monte `/` de l'hôte = contrôle de la machine).
+
+Le Lot 5 lui reprend la clé et la confie à un **gardien** : le service `runner` (`src/runner/server.ts`).
+
+- **Le gardien ne sort jamais.** Pas de réseau (`network_mode: none`), système de fichiers en lecture seule, aucune capacité Linux. Il a la clé (le socket Docker) et un **passe-plat** : un socket Unix (`/run/arb-runner/runner.sock`) sur un volume que seuls lui et le bibliothécaire montent.
+- **Le passe-plat a un menu fixe.** On y glisse une fiche d'une ligne JSON : « allume le poste `shop` », « tape `snapshot -i` sur `shop` », « éteins `shop` ». Sept plats au menu (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`, `copyVolume`), et la fiche ne contient **qu'un numéro de poste** et le plat. Pas de « avec telle image », pas de « en montant tel dossier ». Une fiche avec un champ en trop est refusée (zod `strictObject`), le gardien répond `invalid request` et note le refus dans ses logs.
+- **Les commandes tapées sont dans un livre.** `exec` n'accepte que les phrases exactes que le bibliothécaire utilise : `agent-browser` + ses drapeaux fixes + `open <url http(s)>`, `click @e12`, `fill @e12 -- <texte>`… plus trois utilitaires (`base64` d'une capture, `rm -f` de la capture, `cat` du fichier de session). `sh -c`, `eval`, `file:///etc/passwd`, `--no-sandbox` glissé au milieu : refusés. Et chaque commande part sous `timeout -k 5` : si elle traîne, c'est le conteneur lui-même qui la tue, pas seulement le client qui raccroche.
+- **Le gardien ne touche qu'aux postes étiquetés.** Chaque conteneur créé porte l'étiquette de la pile. `arb-gateway-1` a pourtant un nom qui ressemble à un poste (`gateway-1` est un id de profil valide !) : sans étiquette, refusé. Pareil pour les volumes : il ne supprime que ceux qu'il a étiquetés.
+
+**Pourquoi pas de mot de passe sur le passe-plat ?** Le bibliothécaire devrait le garder dans sa poche : le voler revient à voler le bibliothécaire. La vraie barrière, c'est la porte : le socket est en 0600, dans un dossier 0700, appartenant à l'uid 1000, sur un volume monté par deux services seulement. Moins de code, même sécurité.
+
+**Le proxy de sortie reste chez le bibliothécaire.** Il a besoin des listes de sites autorisés (dans `arb.db`) et du réseau. Le gardien, lui, n'a pas de réseau du tout. Le gardien se contente de monter le volume `arb-egress` en lecture seule dans chaque poste, à son sous-dossier (`Subpath = id`) : chaque poste ne voit que **son** proxy.
+
+**Le déménagement depuis le POC.** `migrate-from-poc --apply` copie les casiers `ac-profile-<id>` vers `arb-profile-<id>`. Le bibliothécaire ne dit plus « copie ce volume-là vers celui-ci » : il dit « copie le casier POC de `shop` », et le gardien choisit lui-même la source. Mieux : par défaut, le gardien **refuse** ce plat. Il ne l'accepte que s'il a été démarré avec `ALLOW_POC_MIGRATION=1`, le temps de la migration. Sinon, un bibliothécaire manipulé pourrait aspirer les cookies de n'importe quel profil du POC.
+
+**Les postes, eux aussi, se durcissent.** Racine en lecture seule, `/tmp` et `/home/agent` en mémoire (tmpfs), et une étiquette « empreinte de config » : si la config change, le poste est recréé (le casier, lui, reste).
+
+**Ce qu'un bibliothécaire corrompu peut encore faire** (détail dans SECURITY.md) : piloter tous les navigateurs et lire leurs données, comme avant ; éteindre ou supprimer les postes et casiers de la pile ; allumer beaucoup de postes (chacun est limité à 1 Go et 1 CPU, mais leur nombre ne l'est pas). Ce qu'il ne peut plus faire : prendre la machine. Le gardien, lui, reste l'équivalent de l'hôte : sa surface d'attaque est une ligne JSON de 64 Ko au plus, sans réseau.
+
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
 2. **Le profil Chrome ne garde pas les cookies de session.** Fix : `--restore` d'agent-browser, qui sauvegarde cookies et localStorage sur le même volume.
@@ -107,10 +128,14 @@ C'est comme un hôtel : n'importe qui peut se présenter à l'accueil, mais c'es
 
 11. **La query string avalée.** Les routes `/api/auth/*` du listener public transmettaient le chemin sans `?client_id=…` : l'autorisation échouait sans message clair. Fix : `path + url.search`.
 12. **Un profil recréé héritait d'un code en attente.** Supprimer un profil effaçait ses tokens, mais pas les codes d'autorisation pas encore échangés (rangés dans `verification`). Un profil recréé sous le même nom pouvait les récupérer. Fix : `deleteProfile` les purge aussi.
+13. **Les noms de compose ressemblent à des postes.** Compose nomme ses conteneurs `arb-gateway-1` et `arb-runner-1`. Le gardien construit le nom d'un poste en `arb-<id>`, et `gateway-1` est un id valide. Sans contrôle d'étiquette, `stop gateway-1` aurait éteint le bibliothécaire. Fix : le gardien lit le conteneur avant d'y toucher et exige l'étiquette de la pile (testé en vrai : refusé).
+14. **Tuer le client ne tue pas la commande.** Un `exec` qui dépasse son délai coupait la connexion côté gateway, mais le processus continuait dans le conteneur. Fix : `timeout -k 5 <s>` devant la commande, et un filet côté runner 10 s plus tard.
+15. **Le sous-dossier de volume a ses conditions.** `VolumeOptions.Subpath` (monter un seul sous-dossier d'un volume nommé) demande l'API Docker 1.45 au moins, et le sous-dossier doit exister avant de créer le conteneur (le gateway le crée en y posant le socket du proxy). C'est ce qui permet au gardien de ne monter aucun chemin de l'hôte.
 
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
-- Le vrai risque restant n'a pas bougé : qui parle au socket Docker contrôle l'hôte. Le HostDriver ne le règle pas, il prépare le Lot 5 qui le sort du gateway.
+- Qui parle au socket Docker contrôle l'hôte. Le HostDriver a préparé le terrain, le Lot 5 a sorti le socket du gateway : c'est maintenant un gardien sans réseau, avec un menu fixe, qui le tient.
+- Une validation se fait du côté de celui qui a le pouvoir. Le gateway a ses propres contrôles, mais c'est le runner qui revalide tout, parce que c'est lui qu'on veut protéger d'un gateway corrompu.
 - Un secret ne doit jamais dormir à côté de ce qu'il protège : la clé dans un secret Docker, le carnet dans un volume. Deux sauvegardes séparées.
 - Un périmètre se donne, il ne se demande pas : le client OAuth demande « mcp », c'est le gérant qui écrit « profile:shop » sur la carte.
-- **Prochaines étapes** : le runner séparé qui sort le socket Docker du gateway (Lot 5), le tunnel nommé et Cloudflare Access en vrai (Lot 6).
+- **Prochaines étapes** : le tunnel nommé, Cloudflare Access en vrai et le runbook d'exploitation (Lot 6), puis la CI de bout en bout sur Linux avec gVisor, où la racine en lecture seule des postes n'a pas encore été vérifiée (Lot 7).
