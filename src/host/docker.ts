@@ -7,6 +7,8 @@ import { bridge } from '../egress/bridge.ts';
 import { relay, type Computer, type ExecResult, type HostDriver } from './driver.ts';
 
 const API = '/v1.47'; // pinned: Docker Engine 27+. VolumeOptions.Subpath needs >= 1.45.
+/** Throwaway image for volume copies (migrate-from-poc). */
+export const COPY_IMAGE = 'alpine:3.22';
 
 export interface DockerOptions { socket: string; prefix: string; image: string; runtime?: string }
 
@@ -164,5 +166,33 @@ export class DockerDriver implements HostDriver {
     const { body } = await this.#request('GET', `/containers/json?all=true&filters=${filters}`);
     return (body as { Labels: Record<string, string>; State: string; Created: number }[])
       .map((c) => ({ id: c.Labels[this.#label], running: c.State === 'running', startedAt: c.Created * 1000 }));
+  }
+
+  /** Copies volume `from` into a new ${prefix}-profile-<id> volume, through a throwaway container without network.
+   *  Never overwrites: an existing target is left alone. A failed copy removes the half-written target. */
+  async copyVolume(from: string, id: ProfileId): Promise<'copied' | 'no source' | 'target exists'> {
+    const to = this.#volume(id), name = `${this.#o.prefix}-migrate-${id}`;
+    if ((await this.#request('GET', `/volumes/${from}`, undefined, [200, 404])).status === 404) return 'no source';
+    if ((await this.#request('GET', `/volumes/${to}`, undefined, [200, 404])).status === 200) return 'target exists';
+    const [image, tag] = COPY_IMAGE.split(':');
+    await this.#request('POST', `/images/create?fromImage=${image}&tag=${tag}`);
+    await this.#request('POST', '/volumes/create', { Name: to, Labels: { [this.#label]: id } });
+    try {
+      try {
+        await this.#request('POST', `/containers/create?name=${name}`, {
+          Image: COPY_IMAGE, Cmd: ['cp', '-a', '/from/.', '/to/'],
+          HostConfig: { NetworkMode: 'none', SecurityOpt: ['no-new-privileges'], Mounts: [
+            { Type: 'volume', Source: from, Target: '/from', ReadOnly: true },
+            { Type: 'volume', Source: to, Target: '/to' }] },
+        });
+        await this.#request('POST', `/containers/${name}/start`);
+        const { body } = await this.#request('POST', `/containers/${name}/wait`);
+        if (body?.StatusCode !== 0) throw Error(`Copy into ${to} exited with ${body?.StatusCode}`);
+      } finally { await this.#request('DELETE', `/containers/${name}?force=true`, undefined, [204, 404]); }
+    } catch (e) {
+      await this.#request('DELETE', `/volumes/${to}`, undefined, [204, 404]);
+      throw e;
+    }
+    return 'copied';
   }
 }
