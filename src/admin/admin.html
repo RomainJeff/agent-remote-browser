@@ -814,8 +814,11 @@ function wireControl() {
   screen.classList.toggle('control', on);
   setVstate(on ? 'Vous avez la main' : 'En direct', on ? 'control' : 'watch');
   const send = (m) => on && view?.ws.readyState === 1 && view.ws.send(JSON.stringify(m));
-  const pos = (e) => { const r = img.getBoundingClientRect(), m = view.meta || { deviceWidth: r.width, deviceHeight: r.height };
-    return { x: Math.round((e.clientX - r.left) * m.deviceWidth / r.width), y: Math.round((e.clientY - r.top) * m.deviceHeight / r.height) }; };
+  // Map onto the frame itself, not metadata.deviceHeight: that is the window (720), the frame only the page (633),
+  // so y scaled by deviceHeight lands too low. deviceWidth / naturalWidth converts frame pixels to CSS pixels.
+  const pos = (e) => { const r = img.getBoundingClientRect(), w = img.naturalWidth || r.width, h = img.naturalHeight || r.height;
+    const css = (view.meta?.deviceWidth || w) / w;
+    return { x: Math.round((e.clientX - r.left) * w / r.width * css), y: Math.round((e.clientY - r.top) * h / r.height * css) }; };
   const btn = (b) => ['left', 'middle', 'right'][b] || 'none';
   let lastMove = 0;
   img.onmousedown = (e) => { if (!on) return; e.preventDefault(); img.focus(); send({ type: 'input_mouse', eventType: 'mousePressed', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) }); };
