@@ -43,6 +43,8 @@ test('auth: Cloudflare Access needs both values, a public admin needs PUBLIC_URL
   assert.equal(loadConfig(dev).access, null);
   assert.equal(loadConfig(dev).adminPublic, false);
   assert.throws(() => loadConfig({ ...dev, ADMIN_PUBLIC: '1' }), /ADMIN_PUBLIC=1 requires PUBLIC_URL/);
-  assert.equal(loadConfig({ ...dev, ADMIN_PUBLIC: '1', PUBLIC_URL: 'https://arb.example.com' }).adminPublic, true);
+  // The admin never goes public without Cloudflare Access in front.
+  assert.throws(() => loadConfig({ ...dev, ADMIN_PUBLIC: '1', PUBLIC_URL: 'https://arb.example.com' }), /ADMIN_PUBLIC=1 requires Cloudflare Access/);
+  assert.equal(loadConfig({ ...dev, ADMIN_PUBLIC: '1', PUBLIC_URL: 'https://arb.example.com', ACCESS_AUD: aud, ACCESS_TEAM: 'team' }).adminPublic, true);
   assert.throws(() => loadConfig({ ...dev, BETTER_AUTH_SECRET: 'x'.repeat(31) }), /BETTER_AUTH_SECRET/);
 });

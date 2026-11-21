@@ -29,7 +29,8 @@ const schema = z.object({
   BETTER_AUTH_SECRET_FILE: z.string().min(1).default('/run/secrets/better_auth_secret'),
   /** 1 = the admin UI is also served on the public listener (behind PUBLIC_URL). Default: admin port, localhost only. */
   ADMIN_PUBLIC: flag,
-  /** Cloudflare Access in front of the public admin: application AUD tag and team name (<team>.cloudflareaccess.com). */
+  /** Cloudflare Access in front of the public admin: application AUD tag and team name (<team>.cloudflareaccess.com).
+   *  Required with ADMIN_PUBLIC=1. */
   ACCESS_AUD: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   ACCESS_TEAM: z.string().regex(/^[a-z0-9-]{1,63}$/).optional(),
   /** Append-only JSON lines: who called which tool, when, ok or not. Never arguments. */
@@ -51,6 +52,7 @@ const schema = z.object({
   if (c.PORT === c.ADMIN_PORT) issue('PORT and ADMIN_PORT must differ');
   if (!c.ACCESS_AUD !== !c.ACCESS_TEAM) issue('Set both ACCESS_AUD and ACCESS_TEAM, or neither');
   if (c.ADMIN_PUBLIC && !c.PUBLIC_URL) issue('ADMIN_PUBLIC=1 requires PUBLIC_URL');
+  if (c.ADMIN_PUBLIC && !c.ACCESS_AUD) issue('ADMIN_PUBLIC=1 requires Cloudflare Access (ACCESS_AUD and ACCESS_TEAM)');
 });
 
 /** The runner: the only process with the Docker socket. */
