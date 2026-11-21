@@ -41,9 +41,10 @@
   .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btn[aria-busy="true"] { cursor: progress; }
   label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
-  input.in, select.in { font: 400 14px/20px var(--sans); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; min-height: 40px; padding: 0 12px; min-width: 0; width: 100%; }
+  input.in, select.in, textarea.in { font: 400 14px/20px var(--sans); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; min-height: 40px; padding: 0 12px; min-width: 0; width: 100%; }
+  textarea.in { padding: 8px 12px; resize: vertical; }
   input.in.mono { font-family: var(--mono); font-size: 13px; }
-  input.in:focus, select.in:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+  input.in:focus, select.in:focus, textarea.in:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
   input.in:user-invalid { border-color: var(--danger); }
   .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 400; color: var(--ink); cursor: pointer; }
   .check input { margin: 3px 0 0; accent-color: var(--primary); width: 16px; height: 16px; flex: none; }
@@ -253,7 +254,7 @@
     <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Admin console</span></div></div>
     <div class="badge"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Local admin only, never exposed through the tunnel</span></div>
     <nav class="navl" aria-label="Main navigation">
-      <a class="nav" href="#/profiles" data-nav="profiles"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profiles<span class="n" id="nProfiles"></span></a>
+      <a class="nav" href="#/profiles" data-nav="profiles"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profiles<span class="pill warn" id="nNeeds" title="Agents waiting for you" hidden></span><span class="n" id="nProfiles"></span></a>
       <a class="nav" href="#/access" data-nav="access"><svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Agent access<span class="n" id="nClients"></span></a>
       <a class="nav" href="#/security" data-nav="security"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Security</a>
     </nav>
@@ -295,6 +296,7 @@ const api = async (path, method = 'GET', body) => {
 };
 
 let computers = [], clients = null, me = {};
+const TITLE = document.title;
 let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control, url }
 let logins = [];     // saved logins of the selected profile (detail poll): the takeover banner offers the ones matching the page
 let authed = false;  // polling stops while the sign-in screen is up
@@ -324,8 +326,9 @@ const submit = (form, fn) => { form.onsubmit = (e) => { e.preventDefault(); act(
 const copy = (btn, text) => act(btn, async () => { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t; }, 1500); });
 
 /** In-page confirm (replaces prompt/confirm, which a nonce CSP page should not rely on).
- *  typed: text to retype. code: ask for a 2FA code and open the step-up window before resolving. Resolves true or null. */
-function ask({ title, desc = '', label = 'Confirm', danger = false, typed, code = false }) {
+ *  typed: text to retype. code: ask for a 2FA code and open the step-up window before resolving.
+ *  note: 'optional' | 'required', a note for the agent, resolved as { note }. Resolves true or null. */
+function ask({ title, desc = '', label = 'Confirm', danger = false, typed, code = false, note }) {
   const d = $('#dlg');
   d.innerHTML = `<form novalidate>
     <span class="ic${danger ? ' d' : ''}" aria-hidden="true">${danger ? '!' : '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'}</span>
@@ -333,6 +336,7 @@ function ask({ title, desc = '', label = 'Confirm', danger = false, typed, code 
     ${typed ? `<label class="f">Type <span class="mono" style="color:var(--ink)">${esc(typed)}</span> to confirm<input class="in mono" name="typed" autocomplete="off" spellcheck="false"></label>` : ''}
     ${code ? `<label class="f">2FA code<input class="in mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 digits, or a backup code"></label>
       <p class="hint">After that, sensitive actions won't ask for a code for 15 min.</p>` : ''}
+    ${note ? `<label class="f">Note for the agent${note === 'optional' ? ' (optional)' : ''}<textarea class="in" name="note" rows="3" maxlength="1000"></textarea></label>` : ''}
     <p class="msg err" aria-live="polite"></p>
     <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn ${danger ? 'btn-d' : 'btn-p'}">${esc(label)}</button></div></form>`;
   d.setAttribute('aria-labelledby', 'dlgT');
@@ -344,16 +348,17 @@ function ask({ title, desc = '', label = 'Confirm', danger = false, typed, code 
     $('[data-cancel]', f).onclick = () => finish(null);
     submit(f, async () => {
       if (typed && f.typed.value.trim() !== typed) return flash(err, 'The text does not match.', true);
+      if (note === 'required' && !f.note.value.trim()) return flash(err, 'Tell the agent what went wrong.', true);
       if (code) {
         const c = f.code.value.trim();
         if (!c) return flash(err, 'Enter a code.', true);
         try { await api('/api/step-up', 'POST', codeBody(c)); }
         catch (e) { f.code.value = ''; f.code.focus(); return flash(err, e.status === 401 ? 'Invalid code. Five wrong codes end the session.' : e.message, true); }
       }
-      finish(true);
+      finish(note ? { note: f.note.value.trim() } : true);
     });
     d.showModal();
-    $('input', f)?.focus();
+    $('input, textarea', f)?.focus();
   });
 }
 /** Confirm a sensitive action: asks for the 2FA code in the same dialog only when the step-up window is closed. */
@@ -410,6 +415,13 @@ $('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/a
 function route() {
   if (!authed) return;
   const [, a, b, c] = location.hash.split('/');
+  // Handoff link given to the agent's user: open its profile, Take over focused. No automatic takeover.
+  if (a === 'handoff') {
+    const h = computers.find((x) => x.handoff?.id === decodeURIComponent(b || ''));
+    history.replaceState(null, '', h ? `#/p/${encodeURIComponent(h.id)}/session` : '#/profiles');
+    if (!h) toast('This request is already closed', 'error');
+    route(); return $('#bTakeH')?.focus();
+  }
   if (a === 'p' && b) return showProfile(decodeURIComponent(b), c || 'session');
   if (page === 'profile') closeView();
   selected = null; allowDraft = null;
@@ -438,8 +450,9 @@ function wireMcp() {
 // ---- Profiles page --------------------------------------------------------------
 const stateOf = (c) => (c.state === 'running' ? 'up' : c.state === 'none' ? 'never' : 'down');
 const statePill = (c) => `<span class="pill dot ${stateOf(c) === 'up' ? 'up' : ''}">${({ up: 'Running', never: 'Never started', down: 'Stopped' })[stateOf(c)]}</span>`;
-const leftMin = (c) => Math.max(0, Math.ceil((Date.parse(c.leasedUntil) - Date.now()) / 60000));
-const leasePill = (c) => c.leasedUntil ? `<span class="pill dot agent">Lease · ${leftMin(c)} min left</span>` : '<span class="hint">No lease</span>';
+const leftMin = (ts) => Math.max(0, Math.ceil((Date.parse(ts) - Date.now()) / 60000));
+const leasePill = (c) => c.handoff ? `<span class="pill dot warn">${c.handoff.state === 'pending' ? 'Needs you' : 'With you'}</span>`
+  : c.leasedUntil ? `<span class="pill dot agent">Lease · ${leftMin(c.leasedUntil)} min left</span>` : '<span class="hint">No lease</span>';
 const stateNote = (c) => c.viewers ? plural(c.viewers, 'viewer') : c.state === 'running' && c.idleStopInS != null ? `Auto-stop in ${Math.ceil(c.idleStopInS / 60)} min` : !c.profile ? 'No saved data' : '';
 const nClients = () => clients ? clients.keys.length + clients.oauth.length : null;
 
@@ -590,7 +603,7 @@ function showProfile(id, t) {
 
   wireMcp();
   $('#bWatch').onclick = () => openView(id, false);
-  $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeControl(id));
+  $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeOver(id));
   $('#bLeave').onclick = () => { closeView(); renderLiveBar(); $('#bCtl').focus(); };
   $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Browser stopped. The profile is kept.');
   $('#nav').onsubmit = (e) => {
@@ -677,24 +690,51 @@ const setBtn = (b, dis, title) => { b.disabled = !!b.dataset.busy || dis; if (ti
 function renderLiveBar() {
   const c = computers.find((x) => x.id === selected);
   if (!c || !$('#bCtl')) return;
-  const up = c.state === 'running', live = view?.id === c.id, ctl = live && view.control;
+  // Under an agent lease the server drops live input unless the admin took the agent's request.
+  const h = c.handoff, locked = !!c.leasedUntil && h?.state !== 'taken';
+  const up = c.state === 'running', live = view?.id === c.id;
+  if (live && view.control && locked) { view.control = false; wireControl(); }
+  const ctl = live && view.control;
   setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'Browser stopped: use Start and take over.' : live && !ctl ? 'Already watching' : 'Watch without sending input');
   setText($('#bCtl'), up ? 'Take over' : 'Start and take over');
-  setBtn($('#bCtl'), ctl, ctl ? 'You already have control' : '');
+  setBtn($('#bCtl'), ctl || (locked && !h), ctl ? 'You already have control' : locked && !h ? 'An agent holds the lease: force release to take over' : '');
   $('#bLeave').hidden = !live;
   // ponytail: the lease holder's name is not exposed by the list API, so the banner says "an agent".
   // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
   const here = ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
-  patch('banner', [ctl, !!c.leasedUntil, here.map((l) => [l.site, l.username])], () => ctl
+  // The reason is the agent's words (untrusted): quoted, escaped, never phrased as an instruction from this page.
+  const says = h ? `<br><i style="font-weight:400">Agent says: ${esc(h.reason)}</i>` : '';
+  patch('banner', [ctl, locked, live, h && [h.id, h.state, h.reason, leftMin(h.deadline)], here.map((l) => [l.site, l.username])], () => (!h ? ''
+    : h.state === 'pending'
+      ? `<div class="banner b-ctl"><span>The agent needs you · ${leftMin(h.deadline)} min left${says}</span><button type="button" class="btn btn-sm btn-p" id="bTakeH">Take over</button><button type="button" class="btn btn-sm" id="bDecline">Decline…</button></div>`
+      : `<div class="banner b-ctl"><span>You are handling the agent's request.${says}</span>${ctl ? '' : '<button type="button" class="btn btn-sm" id="bTakeH">Take over</button>'}<button type="button" class="btn btn-sm btn-p" id="bDone">Done</button><button type="button" class="btn btn-sm" id="bFail">Failed…</button></div>`)
+    + (ctl
     ? `<div class="banner b-ctl"><span>You have control. Keyboard, mouse and copy/paste go to this browser: click the view to type.</span><button type="button" class="btn btn-sm" id="bGiveBack">Hand back</button>${here.length ? `
        <div class="fill"><span>${here.length === 1 ? `Saved login: <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} saved logins for <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
-       ${c.leasedUntil ? '<span class="hint">An agent holds this profile: release the lease to fill.</span>'
-         : here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Fill and submit' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
-    : c.leasedUntil ? '<div class="banner b-agent"><span>An agent is in control. You can watch or take over.</span><button type="button" class="btn btn-sm" id="bTake">Take over</button></div>' : '');
-  const give = $('#bGiveBack'), take = $('#bTake');
-  if (give) give.onclick = () => openView(selected, false);
-  if (take) take.onclick = (e) => act(e.currentTarget, () => takeControl(selected));
+       ${here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Fill and submit' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
+    : locked && !h ? `<div class="banner b-agent"><span>An agent is in control. You can watch, or force release to take over.</span>${live ? '' : '<button type="button" class="btn btn-sm" id="bWatchB">Watch</button>'}<button type="button" class="btn btn-sm btn-dl" id="bForce">Force release to take over</button></div>` : ''));
+  const p = `/api/computers/${encodeURIComponent(selected)}`, on = (sel, fn) => { const b = $(sel); if (b) b.onclick = (e) => fn(e.currentTarget); };
+  on('#bGiveBack', () => openView(selected, false));
+  on('#bWatchB', () => openView(selected, false));
+  on('#bTakeH', (b) => act(b, () => takeOver(selected)));
+  on('#bForce', (b) => act(b, async () => { await api(`${p}/release`, 'POST'); await takeControl(selected); }));
+  on('#bDone', (b) => endHandoff(b, 'done'));
+  on('#bFail', (b) => endHandoff(b, 'fail'));
+  on('#bDecline', (b) => endHandoff(b, 'fail', 'Decline the agent\'s request?'));
   for (const b of $$('[data-fill]')) b.onclick = () => fillHere(b, b.dataset.fill);
+}
+/** Done / Failed (or Decline): the agent reads the outcome and the note on its next handoff_status. Ends control. */
+function endHandoff(btn, how, title) {
+  const id = selected;
+  act(btn, async () => {
+    const r = await ask(how === 'done'
+      ? { title: 'Hand back to the agent?', desc: 'Its browser tools work again. Tell it what you did, if useful.', label: 'Done', note: 'optional' }
+      : { title: title || 'Tell the agent it failed?', desc: 'Its browser tools work again. It reads your note.', label: 'Send', danger: true, note: 'required' });
+    if (!r) return false;
+    await api(`/api/computers/${encodeURIComponent(id)}/handoff-${how}`, 'POST', { note: r.note });
+    if (view?.id === id) openView(id, false);
+    await refreshList();
+  }, 'The agent can continue.');
 }
 const originOf = (u) => { try { return new URL(u).origin; } catch { return null; } };
 /** Takeover: the server fills the page on screen (the password never reaches this page). */
@@ -775,6 +815,11 @@ async function takeControl(id) {
   try { await api(`/api/computers/${encodeURIComponent(id)}/start`, 'POST'); } catch (e) { setVstate(e.message); throw e; }
   await refreshList();
   openView(id, true);
+}
+/** Take over: takes the agent's open request first, if any. */
+async function takeOver(id) {
+  if (computers.find((x) => x.id === id)?.handoff) await api(`/api/computers/${encodeURIComponent(id)}/handoff-take`, 'POST');
+  await takeControl(id);
 }
 function openView(id, control) {
   if (view?.id === id) { view.control = control; wireControl(); renderLiveBar(); return; }
@@ -1005,6 +1050,9 @@ function showSecurity() {
 async function refreshList() {
   try { computers = await api('/api/computers'); } catch (e) { if (authed) toast(e.message, 'error'); return; }
   setText($('#nProfiles'), String(computers.length));
+  const n = computers.filter((c) => c.handoff?.state === 'pending').length;
+  $('#nNeeds').hidden = !n; setText($('#nNeeds'), String(n));
+  document.title = (n ? `(${n}) ` : '') + TITLE;
   if (page === 'profiles') renderProfiles();
   if (page === 'profile') { if (selected && !computers.some((c) => c.id === selected)) return route(); renderProfile(); }
 }
