@@ -420,7 +420,7 @@ function route() {
     const h = computers.find((x) => x.handoff?.id === decodeURIComponent(b || ''));
     history.replaceState(null, '', h ? `#/p/${encodeURIComponent(h.id)}/session` : '#/profiles');
     if (!h) toast('This request is already closed', 'error');
-    route(); return $('#bTakeH')?.focus();
+    route(); return $('#bCtl')?.focus();
   }
   if (a === 'p' && b) return showProfile(decodeURIComponent(b), c || 'session');
   if (page === 'profile') closeView();
@@ -706,8 +706,8 @@ function renderLiveBar() {
   const says = h ? `<br><i style="font-weight:400">Agent says: ${esc(h.reason)}</i>` : '';
   patch('banner', [ctl, locked, live, h && [h.id, h.state, h.reason, leftMin(h.deadline)], here.map((l) => [l.site, l.username])], () => (!h ? ''
     : h.state === 'pending'
-      ? `<div class="banner b-ctl"><span>The agent needs you · ${leftMin(h.deadline)} min left${says}</span><button type="button" class="btn btn-sm btn-p" id="bTakeH">Take over</button><button type="button" class="btn btn-sm" id="bDecline">Decline…</button></div>`
-      : `<div class="banner b-ctl"><span>You are handling the agent's request.${says}</span>${ctl ? '' : '<button type="button" class="btn btn-sm" id="bTakeH">Take over</button>'}<button type="button" class="btn btn-sm btn-p" id="bDone">Done</button><button type="button" class="btn btn-sm" id="bFail">Failed…</button></div>`)
+      ? `<div class="banner b-ctl"><span>The agent needs you · ${leftMin(h.deadline)} min left${says}</span><button type="button" class="btn btn-sm" id="bDecline">Decline…</button></div>`
+      : `<div class="banner b-ctl"><span>You are handling the agent's request.${says}</span><button type="button" class="btn btn-sm btn-p" id="bDone">Done</button><button type="button" class="btn btn-sm" id="bFail">Failed…</button></div>`)
     + (ctl
     ? `<div class="banner b-ctl"><span>You have control. Keyboard, mouse and copy/paste go to this browser: click the view to type.</span><button type="button" class="btn btn-sm" id="bGiveBack">Hand back</button>${here.length ? `
        <div class="fill"><span>${here.length === 1 ? `Saved login: <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} saved logins for <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
@@ -716,7 +716,6 @@ function renderLiveBar() {
   const p = `/api/computers/${encodeURIComponent(selected)}`, on = (sel, fn) => { const b = $(sel); if (b) b.onclick = (e) => fn(e.currentTarget); };
   on('#bGiveBack', () => openView(selected, false));
   on('#bWatchB', () => openView(selected, false));
-  on('#bTakeH', (b) => act(b, () => takeOver(selected)));
   on('#bForce', (b) => act(b, async () => { await api(`${p}/release`, 'POST'); await takeControl(selected); }));
   on('#bDone', (b) => endHandoff(b, 'done'));
   on('#bFail', (b) => endHandoff(b, 'fail'));
