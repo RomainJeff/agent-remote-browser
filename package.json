@@ -14,7 +14,11 @@
     "smoke": "node test/e2e/smoke.ts"
   },
   "dependencies": {
+    "@better-auth/api-key": "1.7.27",
+    "@better-auth/oauth-provider": "1.7.27",
+    "@better-auth/passkey": "1.7.27",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-auth": "1.7.27",
     "zod": "^4.6.7"
   },
   "devDependencies": {
