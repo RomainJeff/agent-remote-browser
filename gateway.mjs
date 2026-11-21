@@ -3,7 +3,7 @@
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { readFileSync, appendFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
@@ -13,24 +13,25 @@ import { createOAuth } from './src/oauth/routes.ts';
 
 import { startProxy } from './src/egress/proxy.ts';
 import { bridge } from './src/egress/bridge.ts';
+import { loadConfig } from './src/config.ts';
+import { createAudit, log } from './src/audit.ts';
+const cfg = loadConfig();
 const proxies = new Map();
 const here = (f) => new URL(f, import.meta.url).pathname;
-const store = openStore(process.env.STATE_FILE || here('data/state.json'), process.env.LOGIN_KEY_FILE || '/run/arb-keys/login.key');
+const store = openStore(cfg.stateFile, cfg.loginKeyFile);
 const { state, save, profile, principalFor, decryptLogin, encryptLogin, revoke } = store;
-const { handle: oauth, wwwAuthenticate } = createOAuth(store, process.env.PUBLIC_URL);
-const AUDIT = process.env.AUDIT_FILE || here('audit.jsonl');
-const KILL = process.env.KILL_FILE || here('KILL'); // touch it = every tool call refused
-const PORT = +process.env.PORT || 8787;
-const IDLE_MS = (+process.env.IDLE_MIN || 5) * 60_000;
+const { handle: oauth, wwwAuthenticate } = createOAuth(store, cfg.publicUrl);
+const KILL = cfg.killFile; // touch it = every tool call refused
+const PORT = cfg.port;
+const IDLE_MS = cfg.idleMs;
 // Every Docker resource name starts with PREFIX, so two stacks can share one daemon without touching each other.
-const PREFIX = process.env.ARB_PREFIX || 'arb';
-if (!/^[a-z0-9][a-z0-9-]{0,19}$/.test(PREFIX)) throw Error('Invalid ARB_PREFIX');
+const PREFIX = cfg.prefix;
 const LABEL = `${PREFIX}-computer`, VOLUME = (id) => `${PREFIX}-profile-${slug(id)}`;
-const IMAGE = process.env.IMAGE || `${PREFIX}-computer:dev`;
-const EGRESS_DIR = process.env.EGRESS_DIR || '/run/arb-egress'; // gateway side of the ${PREFIX}-egress volume
+const IMAGE = cfg.image;
+const EGRESS_DIR = cfg.egressDir; // gateway side of the ${PREFIX}-egress volume
 // Chrome profile (IndexedDB, persistent cookies) + --restore state (session cookies, localStorage), both on the volume.
 const PROFILE = '/home/agent/.agent-browser/profile';
-const RUNTIME = process.env.SANDBOX_RUNTIME; // e.g. "runsc" (gVisor) on the Linux VM
+const RUNTIME = cfg.runtime; // "runsc" (gVisor) unless ALLOW_NO_SANDBOX=1
 
 function docker(args, { input, buffer } = {}) {
   return new Promise((resolve, reject) => {
@@ -99,9 +100,7 @@ const fail = (msg) => ({ isError: true, content: [{ type: 'text', text: msg }] }
 const REF = z.string().regex(/^@?e\d+$/, 'use a ref from snapshot, e.g. @e3').describe('Element ref from snapshot, e.g. @e3');
 const at = (r) => (r.startsWith('@') ? r : '@' + r);
 
-// Persist only fields chosen by the gateway. Tool arguments and subprocess output can contain credentials.
-const audit = ({agent,tool,ok,ms,via}) => appendFileSync(AUDIT,
-  JSON.stringify({ts:new Date().toISOString(),agent,tool,ok,ms,via})+'\n',{mode:0o600});
+const audit = createAudit(cfg.auditFile);
 
 // Leases: a global-token holder gets exclusive use of a profile for a while. While leased, the profile's own token
 // is refused. ponytail: in memory, a gateway restart frees every lease. Upgrade: persist in state if it matters.
@@ -297,7 +296,7 @@ http.createServer({requestTimeout:30_000,headersTimeout:10_000}, async (req, res
   } catch (e) {
     if (!res.headersSent) send(res, 400, { error: 'Invalid request' });
   }
-}).listen(PORT, () => console.log(`agent-computer gateway on :${PORT}/mcp (idle stop ${IDLE_MS / 60_000} min)`));
+}).listen(PORT, cfg.bindAddr, () => log('info', 'mcp listening', { port: PORT }));
 
 // Close Chrome cleanly (flushes profile + restore state), stop the container. Volume stays.
 async function stopComputer(name) {
@@ -312,7 +311,7 @@ setInterval(() => {
   for (const [name, t] of lastUsed) {
     if (watching.get(name) || Date.now() - t < IDLE_MS) continue;
     lastUsed.delete(name);
-    serial(name.slice(PREFIX.length + 1), () => stopComputer(name).then(() => console.log('stopped idle computer')));
+    serial(name.slice(PREFIX.length + 1), () => stopComputer(name).then(() => log('info', 'stopped idle computer', { profile: name.slice(PREFIX.length + 1) })));
   }
 }, 30_000).unref();
 
@@ -330,12 +329,11 @@ for (const name of previous.trim().split('\n').filter(Boolean)) {
 // Admin UI: list computers, live view, human takeover. Separate port, bound to localhost by compose,
 // never behind the tunnel. ponytail: no auth beyond "localhost only" (Host + Origin checked against
 // DNS rebinding / CSRF / cross-site WebSocket). Upgrade: SSO proxy if it ever leaves the laptop.
-const ADMIN_PORT = +process.env.ADMIN_PORT || 8788;
+const ADMIN_PORT = cfg.adminPort;
 const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json'; // --restore state, saved every 30 s
 const localReq = req => localRequest(req.headers, ADMIN_PORT);
 const lines = (s) => s.split('\n').filter(Boolean);
-// ponytail: reads the whole audit file; tail it when it grows past a few MB.
-const auditLog = () => (existsSync(AUDIT) ? lines(readFileSync(AUDIT, 'utf8')).map((l) => JSON.parse(l)) : []);
+const auditLog = audit.read;
 
 async function listComputers() {
   const [ps, vols] = await Promise.all([
@@ -525,4 +523,4 @@ admin.on('upgrade', async (req, sock, head) => {
   sock.on('close', done); relay.on('exit', done);
 });
 
-admin.listen(ADMIN_PORT, () => console.log(`admin UI on http://localhost:${ADMIN_PORT}`));
+admin.listen(ADMIN_PORT, cfg.bindAddr, () => log('info', 'admin UI listening', { port: ADMIN_PORT }));

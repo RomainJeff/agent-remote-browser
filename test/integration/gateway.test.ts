@@ -33,16 +33,16 @@ before(async () => {
   const env: NodeJS.ProcessEnv = {
     ...process.env, PATH: join(root, 'test/fixtures/bin') + ':' + process.env.PATH, ARB_PREFIX: 'arb',
     PORT: String(PORT), ADMIN_PORT: String(ADMIN), STATE_FILE: f.state, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
-    LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, FAKE_DOCKER_LOG: f.docker,
+    LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, FAKE_DOCKER_LOG: f.docker, ALLOW_NO_SANDBOX: '1',
   };
-  delete env.PUBLIC_URL; delete env.IMAGE; delete env.SANDBOX_RUNTIME;
+  delete env.PUBLIC_URL; delete env.IMAGE; delete env.SANDBOX_RUNTIME; delete env.NODE_ENV;
   gateway = spawn(process.execPath, ['gateway.mjs'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('gateway did not start:\n' + out)), 10_000);
     for (const s of [gateway.stdout!, gateway.stderr!]) s.on('data', (d) => {
       out += d;
-      if (out.includes('admin UI on')) { clearTimeout(timer); resolve(); }
+      if (out.includes('admin UI listening')) { clearTimeout(timer); resolve(); }
     });
     gateway.on('exit', (code) => reject(Error(`gateway exited ${code}:\n${out}`)));
   });
