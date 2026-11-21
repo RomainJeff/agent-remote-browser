@@ -1,0 +1,19 @@
+{
+  // Node runs the .ts files directly (type stripping): tsc only type-checks.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    // ponytail: JS modules from the POC are read for types but not checked until lot 2 converts them.
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["*.mjs", "test/**/*.ts"]
+}

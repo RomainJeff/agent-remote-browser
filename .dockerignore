@@ -1,6 +1,9 @@
 node_modules
+data
+.env
+*.key
+secrets
 agents.json
 audit.jsonl
 KILL
-data
 .git
