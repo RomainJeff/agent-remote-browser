@@ -325,8 +325,6 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     } catch { return sock.destroy(); }
     relay.write(`${+port}\nGET /${m[2] || ''} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
       `Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
-    if (head?.length) relay.write(head);
-    sock.pipe(relay);
     relay.pipe(sock);
     const leave = pc.watch(id);
     audit({ agent: id, tool: 'admin:view', ok: true });
@@ -337,9 +335,49 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       leave();
       relay.destroy(); sock.destroy();
     };
+    // Client→browser: while an agent holds the lease and no handoff is taken, only acks and control frames pass
+    // (no input_mouse / input_keyboard, nor any other command). Checked per frame: taking over unlocks it live.
+    const feed = frames();
+    const pass = (chunk: Buffer) => {
+      const fs = feed(chunk);
+      if (!fs) return done();
+      for (const f of fs) {
+        if (!f.fin || f.op === 0) return done(); // ponytail: no fragmented frames; the admin page never sends any
+        if (f.op < 8 && !driving(id) && !(f.op === 1 && isAck(f.data))) continue;
+        relay.write(f.raw);
+      }
+    };
+    if (head?.length) pass(head);
+    sock.on('data', pass);
     for (const e of [sock, relay]) e.on('error', done).on('close', done);
     relay.on('end', done);
   }
 
   return { handle, upgrade };
+}
+
+const isAck = (b: Buffer) => { try { return JSON.parse(b.toString()).type === 'ack'; } catch { return false; } };
+
+/** Client→server WebSocket frames (RFC 6455, always masked). The feed buffers partial frames and returns the complete
+ *  ones, or null on a protocol violation (unmasked, or larger than `max`): close the connection then. */
+export function frames(max = 65536) {
+  let buf: Buffer = Buffer.alloc(0);
+  return (chunk: Buffer) => {
+    buf = buf.length ? Buffer.concat([buf, chunk]) : chunk;
+    const out: { raw: Buffer; op: number; fin: boolean; data: Buffer }[] = [];
+    for (;;) {
+      if (buf.length < 2) return out;
+      if (!(buf[1] & 0x80)) return null;
+      let len = buf[1] & 0x7f, off = 2;
+      if (len === 126) { if (buf.length < 4) return out; len = buf.readUInt16BE(2); off = 4; }
+      else if (len === 127) { if (buf.length < 10) return out; const n = buf.readBigUInt64BE(2); len = n > BigInt(max) ? Infinity : Number(n); off = 10; }
+      if (len > max) return null;
+      const end = off + 4 + len;
+      if (buf.length < end) return out;
+      const data = Buffer.from(buf.subarray(off + 4, end));
+      for (let i = 0; i < len; i++) data[i] ^= buf[off + (i & 3)];
+      out.push({ raw: buf.subarray(0, end), op: buf[0] & 0x0f, fin: !!(buf[0] & 0x80), data });
+      buf = buf.subarray(end);
+    }
+  };
 }
