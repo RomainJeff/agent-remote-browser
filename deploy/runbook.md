@@ -133,11 +133,15 @@ No route to `gateway:18788` is needed: the admin port is never put on the tunnel
 
 **Optional, public admin behind Cloudflare Access** (Zero Trust, Access, Applications):
 
-1. Self-hosted application **arb admin** on `browser.example.com` (whole hostname), policy **Allow**, include the admin's email only. Copy its **Application Audience (AUD) tag**.
+1. Self-hosted application **arb admin**, policy **Allow**, include the admin's email only, with these destinations on `browser.example.com`: the whole hostname, plus the paths `api/auth/sign-in`, `api/auth/two-factor`, `api/auth/get-session` and `api/auth/sign-out`. Copy its **Application Audience (AUD) tag**.
 2. Self-hosted application **arb agents** on the same hostname with the paths `mcp`, `api/auth`, `.well-known`, `login`, `consent`, policy action **Bypass**, include Everyone. The more specific paths win, so agents and OAuth servers (Notion's token calls) are not stopped by Access; `/login` and `/consent` stay protected by password + TOTP.
 3. `.env`: `ADMIN_PUBLIC=1`, `ACCESS_AUD=<AUD tag>`, `ACCESS_TEAM=<team>` (from `<team>.cloudflareaccess.com`). Restart the gateway. The Access email must be the admin's.
 
+The four `api/auth/...` paths in step 1 are the admin page's own sign-in calls. Without them, the `api/auth` Bypass covers them: Cloudflare sends no Access token there, and the admin sign-in fails with `forbidden`. Agents never call them directly (the public listener refuses them), so protecting them does not affect OAuth.
+
 The gateway verifies the `Cf-Access-Jwt-Assertion` itself: an admin path reached without Access (a missing path rule) is refused, not opened.
+
+Check from outside: `/`, `/healthz` and the four admin paths redirect (302) to `<team>.cloudflareaccess.com`; `/mcp` answers 401 from the gateway, and `/.well-known/oauth-authorization-server` and `/login` answer 200. `/healthz` is behind Access here: add `healthz` to the **arb agents** paths if an outside monitor needs it.
 
 ## 6. Connect an agent
 

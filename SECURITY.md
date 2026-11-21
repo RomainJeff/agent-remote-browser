@@ -48,7 +48,7 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 - **Cap disclosure.** The agent sees `Too many computers running (MAX_COMPUTERS=N)`. Other failures stay masked as `Browser operation failed`.
 - **Stale browser images.** A browser container is recreated on image change only when the gateway starts or the profile is next used.
 - **Leftover volumes.** Browser containers and volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
-- **Cloudflare Access rules** in the runbook are documented, not tested against a live account. A missing rule fails closed.
+- **Cloudflare Access rules** in the runbook are checked by hand against a live account, not by the test suite. A missing rule fails closed.
 - **Local Docker peers.** Native processes and containers with gateway network access remain trusted.
 
 ## Supply chain and operations
