@@ -8,6 +8,29 @@ agent-remote-browser is a remote MCP server. An agent (a Notion Custom Agent, Cl
 
 You stay in control from a small admin UI on localhost: create profiles, choose their domains, save logins, grant or revoke agent access, and watch (or take over) any browser live.
 
+## Quick start
+
+Requires Docker, and Node >= 24 for development (target runtime: Node 26). TypeScript runs as-is, no build step.
+
+```sh
+cp .env.example .env               # on macOS: ALLOW_NO_SANDBOX=1 (no gVisor)
+mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key                     # once
+openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
+docker compose up -d --build       # MCP on http://localhost:18787/mcp, admin on http://localhost:18788
+docker compose exec gateway node src/cli.ts admin create you@example.com   # once: password, then TOTP
+```
+
+Then open the admin UI, create a profile with its allowed domains, and connect your agent to `http://localhost:18787/mcp` (OAuth) or create an API key for it. Use the exact origin set in `PUBLIC_URL`: OAuth binds tokens to it.
+
+Development:
+
+```sh
+npm ci
+npm test            # unit + integration on an in-memory fake driver, no Docker needed (< 1 s)
+npm run typecheck
+npm run smoke       # end to end against a fresh stack
+```
+
 ## How it works
 
 ```mermaid
@@ -74,29 +97,6 @@ The life of one tool call, say `click`:
 | `lease_profile`, `release_profile` | `global` scope only: borrow a profile and give it back |
 
 A token scoped to `profile:<id>` drives that profile only. A `global` token drives a profile through a lease, passed to every browser tool.
-
-## Quick start
-
-Requires Docker, and Node >= 24 for development (target runtime: Node 26). TypeScript runs as-is, no build step.
-
-```sh
-cp .env.example .env               # on macOS: ALLOW_NO_SANDBOX=1 (no gVisor)
-mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key                     # once
-openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
-docker compose up -d --build       # MCP on http://localhost:18787/mcp, admin on http://localhost:18788
-docker compose exec gateway node src/cli.ts admin create you@example.com   # once: password, then TOTP
-```
-
-Then open the admin UI, create a profile with its allowed domains, and connect your agent to `http://localhost:18787/mcp` (OAuth) or create an API key for it. Use the exact origin set in `PUBLIC_URL`: OAuth binds tokens to it.
-
-Development:
-
-```sh
-npm ci
-npm test            # unit + integration on an in-memory fake driver, no Docker needed (< 1 s)
-npm run typecheck
-npm run smoke       # end to end against a fresh stack
-```
 
 ## Learn more
 
