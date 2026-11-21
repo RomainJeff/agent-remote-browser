@@ -170,6 +170,8 @@ docker compose exec -T gateway node src/cli.ts backup-db /tmp/pre-upgrade.db && 
 docker compose up -d --build                      # migrations run at gateway start, forward only
 ```
 
+With released images (GHCR, built by `release.yml` on a `v*` tag), set `ARB_IMAGE_REPO=ghcr.io/romainjeff/agent-remote-browser` and `ARB_IMAGE_TAG=<tag>` in `.env`, and replace the last line with `docker compose pull && docker compose up -d --no-build`. The checkout still matters: it brings the compose files that match the images. The package is private unless made public in its GitHub settings: `docker login ghcr.io` first, with a token that has `read:packages`.
+
 Browser containers need no manual step: their spec label hashes the computer image ID, so the gateway recreates running ones at start and the others at their next use (profile volumes are kept). Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`, bumped by Renovate PRs), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` copy taken before the upgrade (section 10, Restore).
 
 **Rotate the login key** (gateway stopped; the secret mount is read-only, so the CLI writes the host file through a bind mount of `secrets/`, which uid 1000 must be able to write for the duration):
@@ -215,11 +217,11 @@ The second way never gives the gateway a path to the POC's cookies, even for the
 ## 9. Uninstall
 
 ```sh
-docker compose down --rmi local                                    # services, networks, locally built images (-f compose.tunnel.yaml if used)
+docker compose down                                                # services, networks (-f compose.tunnel.yaml if used)
 docker ps -aq --filter label=arb-computer | xargs -r docker rm -f   # browser containers: created by the runner, not by compose
 docker volume ls -q --filter label=arb-computer | xargs -r docker volume rm   # profile volumes (cookies)
 docker volume rm arb-data arb-egress arb-runner                     # database, egress sockets, runner socket
-docker image rm arb-computer:dev
+docker image rm arb-computer:dev arb-gateway:dev                    # or the ghcr.io/... images if ARB_IMAGE_REPO is set
 sudo rm -rf secrets
 ```
 
