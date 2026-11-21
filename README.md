@@ -108,7 +108,7 @@ npm run smoke       # end to end against a fresh stack
 - [docs/reference.md](docs/reference.md): deploy settings, CI and releases, metrics, code layout, gateway and runner, database, auth details, admin API, login key, operator commands.
 - [SECURITY.md](SECURITY.md): open security topics and residual risks.
 
-Status: imported from the `agent-computer` POC, on its way to production (`projects/agent-computer/production-plan.md` in the parent workspace).
+Status: early, built for a single operator running their own stack. Expect breaking changes between commits; there are no versioned releases yet.
 
 ## License
 
