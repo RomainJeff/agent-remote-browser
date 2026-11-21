@@ -5,7 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 # Named volumes take their owner from the image path on first use: create them for the non-root user.
-RUN mkdir -p /run/arb-keys /run/arb-egress /data && chown node:node /run/arb-keys /run/arb-egress /data
+RUN mkdir -p /run/arb-egress /data && chown node:node /run/arb-egress /data && chmod 700 /data
 USER node
 # Test suite runs at build time (FakeDriver, no daemon needed); test/ is bind-mounted, never shipped.
 RUN --mount=type=bind,source=test,target=/app/test node --test "test/**/*.test.ts"
