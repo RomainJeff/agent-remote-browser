@@ -23,9 +23,11 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 ## Admin and agent auth
 
 - **Stolen session cookie without step-up** can still read state, start and stop computers, open allowed URLs, watch and drive a browser through the live view (paste, copy), test or fill saved logins, and extend or release leases. It cannot mint credentials or change what an agent may reach.
-- **Live view input under a lease.** The takeover banner is a UI rule: the WebSocket does not refuse input while an agent holds the lease, so admin and agent can act at the same time.
+- **Handoff reason is agent-written.** It is shown escaped and quoted, but it can mislead: an agent steered by a page can ask the human to "confirm a transfer". Read it as a request, not an instruction.
+- **Handoff Done / Failed are not step-up gated.** A stolen session can end a request (and Take over unlocks live input on that profile until it ends).
+- **Handoff link is relayed by the agent.** It carries no secret, but a manipulated agent can hand over another link instead: check the host before signing in.
 - **TOTP replay** within its 30 s window, for sign-in and step-up.
-- **Lease `extend` is not step-up gated** (bounded at 120 minutes from now; release is one click).
+- **Lease `extend` is not step-up gated** (bounded at 120 minutes from now; release is one click). It sets the expiry from now, so it can shorten a lease frozen by an open handoff, which is then cancelled when the lease ends.
 - **Backup codes** are as strong as where the admin keeps them.
 - **API keys without expiry** created before Lot 7b keep working. They are flagged `noExpiry` in the admin list: rotate them.
 - **Session tokens** are stored as is in `arb.db` (Better Auth), valid 12 h.

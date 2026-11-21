@@ -70,6 +70,7 @@ The life of one tool call, say `click`:
 - **Standard agent auth.** OAuth 2.1 (dynamic client registration or CIMD, PKCE) for MCP clients that support it, API keys with a mandatory expiry for the others. You pick the scope on the consent page.
 - **Leases.** A `global` agent can borrow a profile for a while (1 to 120 minutes, sliding); meanwhile no one else drives it.
 - **Human in the loop.** Live view of every browser, with a takeover mode to click and type yourself, and fill a saved login on screen.
+- **Agent asks for help.** Stuck on a captcha or a 2FA code, the agent calls `request_human` and gets a link for its user; its browser pauses until you take over and click Done. While an agent holds a lease, the live view is watch-only unless you take its request.
 - **Ops basics included.** Prometheus `/metrics`, JSON logs, an audit file, restic backups, a runbook, CI with an end-to-end smoke on gVisor.
 
 ## Tools exposed to the agent
@@ -84,6 +85,7 @@ The life of one tool call, say `click`:
 | `back` | Previous page |
 | `screenshot` | PNG of the viewport |
 | `login` | Sign in to a site with a saved login, typed by the server |
+| `request_human`, `handoff_status` | Hand the browser to a human (captcha, 2FA, consent) and wait for the outcome |
 | `list_profiles`, `create_profile` | `global` scope only: see and create profiles |
 | `lease_profile`, `release_profile` | `global` scope only: borrow a profile and give it back |
 
