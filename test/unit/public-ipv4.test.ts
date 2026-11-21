@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { publicIPv4 } from '../../egress.mjs';
+import { publicIPv4 } from '../../src/egress/proxy.ts';
 
 // RFC 6890 special-purpose IPv4 ranges (+ multicast/reserved): first and last address of each must be refused.
 const special = [

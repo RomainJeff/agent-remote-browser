@@ -3,9 +3,15 @@ import http from 'node:http';
 import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
-import { urlAllowed } from './src/policy.ts';
+import { urlAllowed } from '../policy.ts';
 
-export function publicIPv4(address) {
+export interface Proxy {
+  /** Pin every request to one origin (login), or lift the pin. Drops open connections either way. */
+  restrict(origin?: string): void
+  close(): void
+}
+
+export function publicIPv4(address: string) {
   if (!net.isIPv4(address)) return false;
   const [a,b,c] = address.split('.').map(Number);
   return !([0,10,127].includes(a) || a >= 224 || (a === 100 && b >= 64 && b <= 127) ||
@@ -14,16 +20,10 @@ export function publicIPv4(address) {
     (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) || (a === 203 && b === 0 && c === 113));
 }
 
-export const bridge = `const net=require('node:net');
-net.createServer(a=>{const b=net.connect('/egress/proxy.sock');
-a.on('error',()=>b.destroy()); b.on('error',()=>a.destroy());
-a.on('close',()=>b.destroy()); b.on('close',()=>a.destroy()); a.pipe(b).pipe(a);
-}).listen(3128,'127.0.0.1');`;
-
-export async function startProxy(dir, getAllow) {
-  let origin, epoch = 0;
-  const sockets = new Set();
-  async function target(url) {
+export async function startProxy(dir: string, getAllow: () => readonly string[]): Promise<Proxy> {
+  let origin: string | undefined, epoch = 0;
+  const sockets = new Set<net.Socket>();
+  async function target(url: URL) {
     const generation = epoch;
     if (!urlAllowed(url.href, getAllow()) || url.port || (origin && origin !== url.origin)) throw Error();
     const {address} = await lookup(url.hostname, {family:4});
@@ -32,14 +32,14 @@ export async function startProxy(dir, getAllow) {
   }
   const server = http.createServer(async (req,res) => {
     try {
-      const u = new URL(req.url);
+      const u = new URL(req.url!);
       if (u.protocol !== 'http:') throw Error();
       const address = await target(u);
       if (req.socket.destroyed) return;
       const headers = {...req.headers, host:u.host, connection:'close'};
       delete headers['proxy-authorization'];
       const out = http.request({host:address, port:80, path:u.pathname+u.search, method:req.method, headers, agent:false}, upstream=>{
-        res.writeHead(upstream.statusCode, upstream.headers); upstream.pipe(res);
+        res.writeHead(upstream.statusCode!, upstream.headers); upstream.pipe(res);
       });
       res.on('close',()=>out.destroy());
       out.on('error',()=>res.destroy());
@@ -47,10 +47,10 @@ export async function startProxy(dir, getAllow) {
     } catch { res.writeHead(403).end(); }
   });
   server.maxConnections = 128;
-  server.on('connection', s=>{ s.on('error',()=>s.destroy()); sockets.add(s); s.on('close',()=>sockets.delete(s)); });
-  server.on('connect', async (req,s,head)=>{
+  server.on('connection', (s: net.Socket)=>{ s.on('error',()=>s.destroy()); sockets.add(s); s.on('close',()=>sockets.delete(s)); });
+  server.on('connect', async (req: http.IncomingMessage, s: net.Socket, head: Buffer)=>{
     try {
-      if (!/^[a-z0-9.-]+:443$/i.test(req.url)) throw Error();
+      if (!/^[a-z0-9.-]+:443$/i.test(req.url!)) throw Error();
       const address = await target(new URL('https://'+req.url));
       if (s.destroyed) return;
       const remote = net.connect(443,address,()=>{
@@ -64,9 +64,9 @@ export async function startProxy(dir, getAllow) {
   mkdirSync(dir,{recursive:true});
   const path = dir+'/proxy.sock';
   rmSync(path,{force:true});
-  await new Promise((resolve,reject)=>server.once('error',reject).listen(path,resolve));
+  await new Promise<void>((resolve,reject)=>server.once('error',reject).listen(path,resolve));
   chmodSync(path,0o666);
-  function restrict(value) {
+  function restrict(value?: string) {
     origin=value; epoch++; for (const s of sockets) s.destroy();
   }
   return {restrict, close(){ restrict(); server.close(); }};

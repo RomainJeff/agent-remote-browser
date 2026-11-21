@@ -11,7 +11,8 @@ import { urlAllowed, localRequest, slug, validId, validDomain, hash } from './sr
 import { state, save, profile, principalFor, decryptLogin, encryptLogin, revoke, newToken } from './store.mjs';
 import { oauth, wwwAuthenticate } from './oauth.mjs';
 
-import { startProxy, bridge } from './egress.mjs';
+import { startProxy } from './src/egress/proxy.ts';
+import { bridge } from './src/egress/bridge.ts';
 const proxies = new Map();
 const here = (f) => new URL(f, import.meta.url).pathname;
 const AUDIT = process.env.AUDIT_FILE || here('audit.jsonl');

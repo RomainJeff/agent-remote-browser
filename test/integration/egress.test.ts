@@ -7,12 +7,12 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { lookup } from 'node:dns/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startProxy } from '../../egress.mjs';
+import { startProxy, type Proxy } from '../../src/egress/proxy.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-egress-'));
 const sock = join(dir, 'proxy.sock');
 let allow = ['example.com', 'localtest.me'];
-let proxy: { restrict(origin?: string): void, close(): void };
+let proxy: Proxy;
 before(async () => { proxy = await startProxy(dir, () => allow); });
 after(() => { proxy.close(); rmSync(dir, { recursive: true, force: true }); });
 
