@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "docker:pinDigests", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["npm", "dockerfile", "docker-compose", "github-actions", "custom.regex"],
+  "packageRules": [
+    {
+      "description": "One weekly PR for every minor, patch, digest and pin update",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "minor, patch and digests",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Better Auth packages move together (exact versions, one lockstep release)",
+      "matchPackageNames": ["better-auth", "@better-auth/**"],
+      "groupName": "better-auth"
+    },
+    {
+      "description": "agent-browser is 0.x and moves fast: its own PR, upgraded deliberately",
+      "matchPackageNames": ["agent-browser"],
+      "groupName": "agent-browser"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "agent-browser version baked into the computer image",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["ARG AB_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "agent-browser",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "description": "Helper image used for volume copies (runner) and backups (deploy/backup.sh)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^src/host/docker\\.ts$/"],
+      "matchStrings": ["COPY_IMAGE = '(?<depName>[^:']+):(?<currentValue>[^@']+)@(?<currentDigest>sha256:[0-9a-f]{64})'"],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
