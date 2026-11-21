@@ -166,12 +166,13 @@ test('migrate-from-poc: a volume copy failure is reported, exit code 1', async (
 /** Answers the CLI prompts like a person with an authenticator app: password, then the code for the printed URI. */
 const asker = (t: ReturnType<typeof fresh>, password: string, code?: (uri: string) => string) => async (prompt: string) =>
   prompt.startsWith('Password') ? password : (code ?? totp)(t.lines.find((l) => l.startsWith('otpauth://'))!);
+const backups = (lines: string[]) => lines.filter((l) => /^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l));
 const count = (t: ReturnType<typeof fresh>, sql: string) => {
   const db = openDb(join(t.env.DATA_DIR, 'arb.db'));
   try { return (db.prepare(sql).get() as { n: number }).n; } finally { db.close(); }
 };
 
-test('admin create: TOTP URI is the only secret printed; one admin per gateway; no session left', async () => {
+test('admin create: only the TOTP URI and backup codes are printed; one admin per gateway; no session left', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url');
   assert.equal(await t.run(['admin', 'create', 'Admin@Example.test'], undefined, asker(t, password)), 0);
   const uri = t.lines.find((l) => l.startsWith('otpauth://totp/'))!;
@@ -182,6 +183,9 @@ test('admin create: TOTP URI is the only secret printed; one admin per gateway; 
   assert.equal(count(t, 'SELECT count(*) n FROM session'), 0);
   const secret = new URL(uri).searchParams.get('secret')!;
   assert.equal(count(t, `SELECT count(*) n FROM twoFactor WHERE secret LIKE '%${secret}%'`), 0, 'TOTP secret encrypted at rest');
+  const codes = backups(t.lines);
+  assert.equal(codes.length, 10);
+  assert.equal(count(t, `SELECT count(*) n FROM twoFactor WHERE backupCodes LIKE '%${codes[0]}%'`), 0, 'backup codes encrypted at rest');
 
   await assert.rejects(t.run(['admin', 'create', 'admin@example.test'], undefined, asker(t, password)), /exists: use admin reset-2fa/);
   await assert.rejects(t.run(['admin', 'create', 'other@example.test'], undefined, asker(t, password)), /one admin per gateway/);
@@ -193,6 +197,7 @@ test('admin create: short password or wrong code refused', async () => {
   await assert.rejects(t.run(['admin', 'create', 'a@example.test'], undefined, asker(t, 'short')), /12 to 128/);
   await assert.rejects(t.run(['admin', 'create', 'a@example.test'], undefined,
     asker(t, randomBytes(12).toString('base64url'), (u) => String((Number(totp(u)) + 1) % 1e6).padStart(6, '0'))), /Code rejected/);
+  assert.equal(backups(t.lines).length, 0, 'no backup codes before the code checks out');
   assert.equal(count(t, 'SELECT count(*) n FROM user WHERE twoFactorEnabled = 1'), 0, 'not an admin until the code checks out');
 });
 
@@ -200,11 +205,12 @@ test('admin reset-2fa: new password and TOTP secret, sessions dropped', async ()
   const t = fresh(), first = randomBytes(12).toString('base64url'), second = randomBytes(12).toString('base64url');
   await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.test'], undefined, asker(t, first)), /No admin/);
   assert.equal(await t.run(['admin', 'create', 'a@example.test'], undefined, asker(t, first)), 0);
-  const before = t.lines.find((l) => l.startsWith('otpauth://'));
+  const before = t.lines.find((l) => l.startsWith('otpauth://')), oldCodes = backups(t.lines);
   t.lines.length = 0;
   assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.test'], undefined, asker(t, second)), 0);
   const after = t.lines.find((l) => l.startsWith('otpauth://'));
   assert.ok(after && after !== before, 'new TOTP secret');
+  assert.equal(backups(t.lines).filter((c) => oldCodes.includes(c)).length, 0, 'new backup codes');
   assertNoSecret(t.lines, [first, second]);
   assert.equal(count(t, 'SELECT count(*) n FROM twoFactor'), 1);
   assert.equal(count(t, 'SELECT count(*) n FROM session'), 0);

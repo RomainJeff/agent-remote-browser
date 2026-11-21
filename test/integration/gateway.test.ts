@@ -33,7 +33,7 @@ const runnerSock = join(dir, 'runner.sock');
 let runner: net.Server;
 let app: Awaited<ReturnType<typeof start>>, PORT = 0, ADMIN = 0, base = '';
 const tokens = { global: '', shop: '' };
-const owner = { email: 'admin@example.test', password: randomBytes(12).toString('base64url'), uri: '' };
+const owner = { email: 'admin@example.test', password: randomBytes(12).toString('base64url'), uri: '', backup: [] as string[] };
 /** Cookie header of the signed-in admin, sent by admin() unless a test overrides it. */
 let session = '';
 
@@ -65,8 +65,10 @@ before(async () => {
   assert.equal(await main(['admin', 'create', owner.email], env(), (l) => {
     lines.push(l);
     if (l.startsWith('otpauth://')) owner.uri = l;
+    if (/^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l)) owner.backup.push(l);
   }, undefined, async () => answers.shift()!()), 0);
   assert.equal(lines.filter((l) => l.includes(owner.password)).length, 0, 'password never printed');
+  assert.equal(owner.backup.length, 10, 'backup codes printed once at enrollment');
   // A stopped leftover of an unknown profile: startup must not touch it.
   fake.computers.set('ghost', { id: 'ghost', running: true });
   runner = await serveRunner(fake, runnerSock);
@@ -425,11 +427,19 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   assert.equal((await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q }, '', 'http://evil.test')).status, 403);
   const step1 = await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q });
   assert.equal(step1.status, 200);
-  assert.match(await step1.text(), /Two-factor code/);
+  assert.match(await step1.text(), /Two-factor code[\s\S]*name="backupCode"/, 'no-JS backup code form');
+  const badBackup = await postForm('/login', { backupCode: 'aaaaa-bbbbb', oauth_query: q }, jar(step1.headers.getSetCookie()));
+  assert.equal(badBackup.status, 401);
+  assert.match(await badBackup.text(), /Invalid or expired code/);
   const step2 = await postForm('/login', { code: totp(owner.uri), oauth_query: q }, jar(step1.headers.getSetCookie()));
   assert.equal(step2.status, 302);
   const cookie = jar(step2.headers.getSetCookie(), jar(step1.headers.getSetCookie()));
   assert.equal(new URL(step2.headers.get('location')!, base).pathname, '/consent');
+  // Lost phone: a backup code also completes the OAuth sign-in, once.
+  const again = await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q });
+  const viaBackup = await postForm('/login', { backupCode: owner.backup.shift()!, oauth_query: q }, jar(again.headers.getSetCookie()));
+  assert.equal(viaBackup.status, 302);
+  assert.equal(new URL(viaBackup.headers.get('location')!, base).pathname, '/consent');
 
   /** Consent page -> code, for a session that already signed in (authorize then goes straight to consent). */
   const grant = async (scope: string) => {
@@ -607,6 +617,9 @@ test('step-up: sensitive admin actions need a 2FA code from the last 15 minutes;
   assert.equal((await admin('POST', '/api/step-up', { body: {} })).status, 400);
   const bad = await admin('POST', '/api/step-up', { body: { code: wrong() } });
   assert.deepEqual([bad.status, bad.json], [401, { stepUp: true, error: 'Invalid code' }]);
+  const used = owner.backup.shift()!;
+  assert.equal((await admin('POST', '/api/step-up', { body: { backupCode: used } })).status, 200, 'backup code works for step-up');
+  assert.equal((await admin('POST', '/api/step-up', { body: { backupCode: used } })).status, 401, 'one use only');
   const up = await admin('POST', '/api/step-up', { body: { code: totp(owner.uri) } });
   assert.equal(up.status, 200);
   assert.ok(up.json.stepUpRemainingS > 890);

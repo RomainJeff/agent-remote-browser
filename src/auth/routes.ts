@@ -80,7 +80,10 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
 <p>Enter the 6-digit code from your authenticator app.</p>${err ? `<p class="err">${esc(err)}</p>` : ''}
 <form method="post" action="/login">${hidden(q)}
 <input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
-<button>Verify</button></form>`, cookies.length ? { 'set-cookie': cookies } : {});
+<button>Verify</button></form>
+<form method="post" action="/login">${hidden(q)}
+<input name="backupCode" placeholder="Lost the app? A backup code (xxxxx-xxxxx)" autocomplete="off" maxlength="32" required>
+<button class="alt">Use a backup code</button></form>`, cookies.length ? { 'set-cookie': cookies } : {});
 
   async function form(req: IncomingMessage) {
     return Object.fromEntries(new URLSearchParams((await rawBody(req, 8e3)).toString())) as Record<string, string>;
@@ -127,7 +130,7 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
     if (path === '/login' && req.method === 'POST') {
       if (!sameOrigin(req)) return res.writeHead(403).end(), true;
       const b = await form(req), oq = b.oauth_query ?? '';
-      if (!b.code) {
+      if (!b.code && !b.backupCode) {
         const r = await callAuth(auth, base, req, '/api/auth/sign-in/email', { email: b.email, password: b.password, oauth_query: oq });
         const j = await r.json().catch(() => ({}));
         if (r.status === 429) return count('arb_auth_failures_total', { kind: 'rate_limited' }), loginForm(res, oq, 'Too many attempts, wait a minute.'), true;
@@ -136,7 +139,7 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
         if (!r.ok || !j.twoFactorRedirect) return loginForm(res, oq, r.ok ? 'Two-factor not enrolled: run `arb admin reset-2fa`.' : 'Invalid email or password.'), true;
         return totpForm(res, oq, undefined, r.headers.getSetCookie()), true;
       }
-      const r = await callAuth(auth, base, req, '/api/auth/two-factor/verify-totp', { code: b.code, oauth_query: oq });
+      const r = await callAuth(auth, base, req, `/api/auth/two-factor/${b.code ? 'verify-totp' : 'verify-backup-code'}`, { code: b.code || b.backupCode, oauth_query: oq });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : 'totp' });
       if (!r.ok) return totpForm(res, oq, r.status === 429 ? 'Too many attempts, wait a minute.' : 'Invalid or expired code. Sign in again if this repeats.'), true;

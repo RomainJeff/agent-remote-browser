@@ -251,7 +251,7 @@
     <button class="primary" type="submit">Continue</button>
   </form>
   <form id="totpForm" hidden>
-    <label>Two-factor code<input class="f mono" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+    <label>Two-factor code<input class="f mono" name="code" maxlength="32" autocomplete="one-time-code" placeholder="6 digits, or a backup code" required></label>
     <label><input type="checkbox" name="trust"> Trust this browser for 30 days (admin port only, sensitive actions still ask for a code)</label>
     <button class="primary" type="submit">Verify</button>
   </form>
@@ -347,7 +347,8 @@ submit($('#pwForm'), async (f) => {
   } catch (e) { flash($('#loginMsg'), e.message, true); }
 });
 submit($('#totpForm'), async (f) => {
-  try { await api('/api/auth/two-factor/verify-totp', 'POST', { code: f.code.value.trim(), trustDevice: f.trust.checked }); showApp(); }
+  const c = f.code.value.trim(), totp = /^\d{6}$/.test(c);
+  try { await api(`/api/auth/two-factor/${totp ? 'verify-totp' : 'verify-backup-code'}`, 'POST', { code: c, trustDevice: f.trust.checked }); showApp(); }
   catch (e) { flash($('#loginMsg'), e.message, true); f.reset(); }
 });
 $('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/api/auth/sign-out', 'POST'); showLogin(); });

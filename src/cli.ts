@@ -130,7 +130,7 @@ async function migrateFromPoc(cfg: Config, stateFile: string, keyFile: string, a
 }
 
 /** One admin (single-operator gateway). `create` makes it, `reset-2fa` sets a new password and TOTP secret.
- *  Both end with a verified TOTP code and no session left behind; backup codes are never printed. */
+ *  Both end with a verified TOTP code, 10 fresh one-time backup codes printed once, and no session left behind. */
 async function adminCmd(cfg: Config, sub: string, email: string, ask: Ask, out: Out) {
   if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw Error('Invalid email');
   email = email.toLowerCase();
@@ -167,6 +167,8 @@ async function adminCmd(cfg: Config, sub: string, email: string, ask: Ask, out: 
     try { await auth.api.verifyTOTP({ body: { code: (await ask('Code from the app: ')).trim() }, headers }); }
     catch { throw Error(`Code rejected: run admin reset-2fa ${email}`); }
     finally { db.prepare('DELETE FROM session WHERE userId = ?').run(user.id); }
+    out('Backup codes, one use each (shown once, store them offline; reset-2fa makes new ones):');
+    for (const c of enrolled.backupCodes) out(c);
     out(`Admin ${email} ready: sign in with the password and a TOTP code.`);
   } finally { db.close(); }
 }
