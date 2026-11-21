@@ -88,7 +88,7 @@ test('migrate-from-poc dry run: verifies everything, writes nothing, prints the 
   assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key], docker), 0);
   assert.deepEqual(docker.copies, []);
   assert.match(t.lines[0], /^Would import 2 profile\(s\), 2 login\(s\)/);
-  assert.ok(t.lines.includes('docker run --rm --network none -v ac-profile-shop:/from:ro -v arb-profile-shop:/to alpine:3.22 cp -a /from/. /to/'));
+  assert.ok(t.lines.includes('docker run --rm --network none -v ac-profile-shop:/from:ro -v arb-profile-shop:/to alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f cp -a /from/. /to/'));
   assert.ok(t.lines.includes('docker volume create --label arb-computer=news arb-profile-news'));
   assert.equal(t.withStore((s) => s.profiles().length), 0);
   assertNoSecret(t.lines, poc.secrets);

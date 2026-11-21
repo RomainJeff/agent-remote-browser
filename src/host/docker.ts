@@ -9,8 +9,8 @@ import { bridge } from '../egress/bridge.ts';
 import { relay, type Computer, type ExecResult, type HostDriver } from './driver.ts';
 
 const API = '/v1.47'; // pinned: Docker Engine 27+. VolumeOptions.Subpath needs >= 1.45.
-/** Throwaway image for volume copies (migrate-from-poc). */
-export const COPY_IMAGE = 'alpine:3.22';
+/** Throwaway image for volume copies (migrate-from-poc). Pinned by digest, like every image of the stack. */
+export const COPY_IMAGE = 'alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f';
 
 export interface DockerOptions { socket: string; prefix: string; image: string; runtime?: string }
 
@@ -199,8 +199,8 @@ export class DockerDriver implements HostDriver {
     const to = this.#volume(id), name = `${this.#o.prefix}-migrate-${id}`;
     if ((await this.#request('GET', `/volumes/${from}`, undefined, [200, 404])).status === 404) return 'no source';
     if ((await this.#request('GET', `/volumes/${to}`, undefined, [200, 404])).status === 200) return 'target exists';
-    const [image, tag] = COPY_IMAGE.split(':');
-    await this.#request('POST', `/images/create?fromImage=${image}&tag=${tag}`);
+    const [ref, digest] = COPY_IMAGE.split('@');
+    await this.#request('POST', `/images/create?fromImage=${ref.split(':')[0]}&tag=${digest}`);
     await this.#request('POST', '/volumes/create', { Name: to, Labels: { [this.#label]: id } });
     try {
       try {

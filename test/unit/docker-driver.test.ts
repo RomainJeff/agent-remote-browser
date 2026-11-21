@@ -161,7 +161,7 @@ test('copyVolume: read-only source, no network, throwaway container removed; nev
   assert.deepEqual(log.map((l) => `${l.method} ${l.url}`), [
     'GET /v1.47/volumes/ac-profile-shop',
     'GET /v1.47/volumes/arb-profile-shop',
-    'POST /v1.47/images/create?fromImage=alpine&tag=3.22',
+    'POST /v1.47/images/create?fromImage=alpine&tag=sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f',
     'POST /v1.47/volumes/create',
     'POST /v1.47/containers/create?name=arb-migrate-shop',
     'POST /v1.47/containers/arb-migrate-shop/start',
