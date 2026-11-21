@@ -114,6 +114,29 @@ Le Lot 5 lui reprend la clé et la confie à un **gardien** : le service `runner
 
 **Ce qu'un bibliothécaire corrompu peut encore faire** (détail dans SECURITY.md) : piloter tous les navigateurs et lire leurs données, comme avant ; éteindre ou supprimer les postes et casiers de la pile ; allumer beaucoup de postes (chacun est limité à 1 Go et 1 CPU, mais leur nombre ne l'est pas). Ce qu'il ne peut plus faire : prendre la machine. Le gardien, lui, reste l'équivalent de l'hôte : sa surface d'attaque est une ligne JSON de 64 Ko au plus, sans réseau.
 
+## Lot 6 : deux façons d'ouvrir la boutique
+
+Jusqu'ici, la bibliothèque tournait sur le laptop. Le Lot 6 la met en carton pour n'importe quel serveur Linux, avec **deux plans d'aménagement** au choix.
+
+**Plan A, `compose.yaml` : une porte sur rue, fermée à clé par défaut.** Le guichet MCP (18787) est publié sur `BIND_ADDR`, qui vaut `127.0.0.1` tant qu'on n'y touche pas. Le bureau du gérant (l'admin, 18788) reste dans l'arrière-boutique, sur `127.0.0.1`, quoi qu'on mette dans `BIND_ADDR`. Pour servir des agents distants, on pose un Caddy devant (le serrurier qui fournit le TLS), pas de service fourni.
+
+**Plan B, `compose.tunnel.yaml` : pas de porte du tout, un passe-muraille.** Le fichier fait `include: compose.yaml`, puis `ports: !reset []` sur le gateway : on reprend le plan A et on **mure** toutes les portes. Le seul accès est un tunnel Cloudflare nommé : le service `cloudflared` sort de la machine (connexion sortante) et Cloudflare renvoie les visiteurs de `browser.example.com` vers `gateway:18787`. Le jeton du tunnel est un secret Docker (`TUNNEL_TOKEN_FILE`), pas une variable : `docker inspect` ne le montre pas. Pas de tunnel jetable `trycloudflare` : le gateway tourne en `NODE_ENV=production` et les refuse.
+
+Le piège du `!reset` : sans lui, un `ports: []` dans le fichier qui inclut **s'ajoute** à la liste du fichier inclus au lieu de la remplacer. On croit murer la porte, elle reste ouverte. Le script `npm run check:compose` vérifie le plan résolu (aucun port publié côté tunnel, images épinglées, jeton en fichier) et on l'a vu échouer quand on retire `!reset`.
+
+**Les quatre réparations héritées du Lot 4 :**
+
+1. **Le badge d'adresse (TRUST_PROXY).** Les limites de débit comptent les tentatives par adresse IP, lue dans l'en-tête `Cf-Connecting-IP`. Problème : sans Cloudflare devant, n'importe qui écrit ce qu'il veut dans cet en-tête, comme un visiteur qui épinglerait lui-même son badge « visiteur n°1, 2, 3… » pour rejouer ses 5 essais à l'infini. Désormais le gateway **arrache le badge à l'entrée** et le remplace par la vraie adresse TCP, sauf si `TRUST_PROXY=cloudflare` (posé uniquement par le plan B, où seul Cloudflare peut entrer). Testé en vrai : en plan A, six inscriptions avec six faux badges donnent `201,201,201,201,429,429`.
+2. **Les cookies de l'arrière-boutique.** Quand `PUBLIC_URL` est en https, Better Auth pose des cookies `__Secure-` qu'un navigateur refuse de renvoyer sur `http://localhost:18788` (le tunnel SSH du gérant). Solution : une **deuxième instance** Better Auth pour le port admin, même base, même secret, mais en base URL `http://localhost:18788`. Deux serrures, une seule clé.
+3. **Le trousseau de Cloudflare Access.** Les clés publiques d'Access étaient gardées 1 h. Si Cloudflare change de clé, le gérant restait dehors jusqu'à une heure. Maintenant, une clé inconnue déclenche un nouveau téléchargement, au plus une fois par minute (sinon, un jeton bidon par requête suffirait à faire marteler Cloudflare).
+4. **Le nombre de postes (MAX_COMPUTERS).** Chaque navigateur prend ~1 Go. Le gardien (runner) refuse désormais d'en allumer plus de 4 à la fois (réglable), et c'est lui qui compte, pas le gateway : un gateway corrompu ne peut plus noyer la machine. L'agent reçoit le vrai message (`Too many computers running`), pas un « Browser operation failed » qui l'aurait laissé deviner.
+
+Et `ADMIN_PUBLIC=1` sans Cloudflare Access ? Refus de démarrer. Le bureau du gérant ne donne jamais sur la rue sans videur.
+
+**Tout est épinglé par empreinte.** `node:26-bookworm-slim@sha256:5df7…`, `alpine:3.22@sha256:4934…`, `cloudflare/cloudflared:2026.10.7@sha256:4955…`. Un tag, c'est une étiquette sur un carton qu'on peut recoller sur un autre carton ; un digest, c'est l'empreinte du contenu. Contrepartie : les mises à jour de sécurité des images ne viennent plus toutes seules, il faudra un Renovate (Lot 7).
+
+**Le runbook (`deploy/runbook.md`)** est le mode d'emploi du gérant : prérequis (Docker 27+, Compose 2.24+, gVisor), secrets avec leurs propriétaires (uid 1000 pour le gateway, 65532 pour cloudflared, lecture seule), premier démarrage, accès admin par SSH (en plan B, vers l'adresse du conteneur, puisque rien n'est publié), tunnel et Access, mises à jour, rotation de clé, migration du POC avec et sans `ALLOW_POC_MIGRATION`, désinstallation.
+
 ## Les pièges rencontrés
 1. **Chrome for Testing n'existe pas en Linux ARM64.** On installe le paquet `chromium` de Debian.
 2. **Le profil Chrome ne garde pas les cookies de session.** Fix : `--restore` d'agent-browser, qui sauvegarde cookies et localStorage sur le même volume.
@@ -132,10 +155,16 @@ Le Lot 5 lui reprend la clé et la confie à un **gardien** : le service `runner
 14. **Tuer le client ne tue pas la commande.** Un `exec` qui dépasse son délai coupait la connexion côté gateway, mais le processus continuait dans le conteneur. Fix : `timeout -k 5 <s>` devant la commande, et un filet côté runner 10 s plus tard.
 15. **Le sous-dossier de volume a ses conditions.** `VolumeOptions.Subpath` (monter un seul sous-dossier d'un volume nommé) demande l'API Docker 1.45 au moins, et le sous-dossier doit exister avant de créer le conteneur (le gateway le crée en y posant le socket du proxy). C'est ce qui permet au gardien de ne monter aucun chemin de l'hôte.
 
+16. **`ports: []` n'efface rien.** Avec `include`, Compose fusionne les listes : un `ports: []` vide ajoute zéro élément à la liste héritée. Il faut `!reset []`. Le script de vérification l'attrape.
+17. **Le refus poli devenu muet.** Le premier smoke du cap `MAX_COMPUTERS` a échoué : le gateway transformait le refus du gardien en « Browser operation failed ». Fix : le message de capacité passe jusqu'à l'agent, un test d'intégration le verrouille.
+18. **Les postes survivent au déménagement.** Les conteneurs navigateurs sont créés par le gardien, pas par Compose : `docker compose down -v` ne les voit pas, et les volumes qu'ils utilisent restent. La désinstallation passe par l'étiquette `arb-computer`. Même chose à la mise à jour : un poste existant garde l'ancienne image, il faut le supprimer pour qu'il renaisse sur la nouvelle (son casier reste).
+19. **`NODE_ENV` jamais posé.** Le garde-fou « PUBLIC_URL obligatoire, pas de trycloudflare » ne s'activait qu'en production… et aucun compose ne disait qu'on était en production. Le plan B le pose maintenant.
+
 ## Ce que je retiens
 - Une interface étroite vaut mieux qu'une interface puissante. Six mots, aucun « plan de montage » : c'est ce qui rend le gateway testable **et** plus sûr.
 - Qui parle au socket Docker contrôle l'hôte. Le HostDriver a préparé le terrain, le Lot 5 a sorti le socket du gateway : c'est maintenant un gardien sans réseau, avec un menu fixe, qui le tient.
 - Une validation se fait du côté de celui qui a le pouvoir. Le gateway a ses propres contrôles, mais c'est le runner qui revalide tout, parce que c'est lui qu'on veut protéger d'un gateway corrompu.
 - Un secret ne doit jamais dormir à côté de ce qu'il protège : la clé dans un secret Docker, le carnet dans un volume. Deux sauvegardes séparées.
 - Un périmètre se donne, il ne se demande pas : le client OAuth demande « mcp », c'est le gérant qui écrit « profile:shop » sur la carte.
-- **Prochaines étapes** : le tunnel nommé, Cloudflare Access en vrai et le runbook d'exploitation (Lot 6), puis la CI de bout en bout sur Linux avec gVisor, où la racine en lecture seule des postes n'a pas encore été vérifiée (Lot 7).
+- Une porte qu'on n'ouvre pas n'a pas besoin de serrure : en plan B, rien n'est publié, et l'en-tête de Cloudflare devient digne de confiance précisément parce qu'il n'y a pas d'autre entrée.
+- **Prochaines étapes** : CI de bout en bout sur Linux avec gVisor (la racine en lecture seule des postes n'y est pas encore vérifiée), Renovate pour les digests, sauvegardes et métriques (Lot 7) ; puis un vrai hébergeur, un vrai tunnel et Access, et la bascule depuis le POC (Lot 8).
