@@ -1,6 +1,6 @@
 # Reference
 
-Operator and developer details. Overview: [README](../README.md). Running it on a server: [deploy/runbook.md](../deploy/runbook.md). Threat model: [SECURITY.md](../SECURITY.md).
+Operator and developer details. Overview: [README](../README.md). Running it on a server: [deploy/runbook.md](../deploy/runbook.md). Open security topics: [SECURITY.md](../SECURITY.md).
 
 ## Deploy
 
@@ -67,7 +67,7 @@ Database driver: `node:sqlite` (built into Node, no native dependency, no build 
 
 ## Auth
 
-Better Auth `1.7.27` (pinned, with `@better-auth/oauth-provider`, `@better-auth/api-key`, `@better-auth/cimd`; `twoFactor` built in), on the same `arb.db`. Model and threats: [SECURITY.md](../SECURITY.md).
+Better Auth `1.7.27` (pinned, with `@better-auth/oauth-provider`, `@better-auth/api-key`, `@better-auth/cimd`; `twoFactor` built in), on the same `arb.db`. Open security topics: [SECURITY.md](../SECURITY.md).
 
 - **Agents, OAuth 2.1**: `/.well-known/oauth-protected-resource` points to the issuer `${PUBLIC_URL}/api/auth`. Dynamic client registration (or a CIMD client id URL), PKCE S256 only, access tokens `arb_at_` (1 h), refresh tokens `arb_rt_` (30 days, rotated). The admin signs in on `/login` (password + TOTP or a backup code) and picks on `/consent` which scope the client gets: `profile:<id>` or `global`. The consent page shows the client id, whether it is a self-registered DCR client ("unverified": its name is self-declared) or a CIMD client (name vouched for by its metadata URL's domain), how long ago it registered, and a note for loopback redirect URIs. Granting `global` to a DCR client takes a second, explicit confirmation behind a warning. Both pages work without JavaScript, and send `Referrer-Policy: same-origin` (under `no-referrer` a browser sends `Origin: null` on the form POST, which the Origin check refuses). Signups are disabled.
 - **Agents, API keys**: `arb_k_...`, created in the admin UI with a scope (`profile:<id>` or `global`) and a mandatory expiry (30 days, 90 days, 1 year, or a date 1 to 365 days ahead), shown once. Send as `Authorization: Bearer` or `x-api-key`. The key list shows each key's expiry and last client IP (as normalized by `TRUST_PROXY`). Keys created before Lot 7b have no expiry: they keep working, are listed with `noExpiry: true`, and should be rotated (create a new one, revoke the old one).

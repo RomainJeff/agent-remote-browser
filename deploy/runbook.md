@@ -1,6 +1,6 @@
 # Operator runbook
 
-How to run agent-remote-browser on one Linux host you control. Hosting-agnostic: any VM or bare-metal box that runs Docker. Commands assume the repository root as working directory and the default `ARB_PREFIX=arb` (containers `arb-*`, volumes `arb-*`). Threat model: [SECURITY.md](../SECURITY.md).
+How to run agent-remote-browser on one Linux host you control. Hosting-agnostic: any VM or bare-metal box that runs Docker. Commands assume the repository root as working directory and the default `ARB_PREFIX=arb` (containers `arb-*`, volumes `arb-*`). Open security topics: [SECURITY.md](../SECURITY.md).
 
 ## 1. Prerequisites
 

@@ -1,87 +1,54 @@
-# agent-remote-browser security boundaries
+# agent-remote-browser: open security topics
 
-The public listener accepts untrusted OAuth clients. MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, runner, Docker daemon and local machine are trusted. The gateway is trusted with the browsers and their data, not with the host.
+Known residual risks, accepted or not yet fixed. How the design works (isolation, runner, auth, step-up, leases): [docs/reference.md](docs/reference.md).
 
-| Finding | Severity × effort | Disposition |
-| --- | --- | --- |
-| Gateway socket grants host control | Critical × high | Fixed (Lot 5). The gateway has no Docker socket. A separate runner owns it and accepts only validated requests (below). The runner itself remains host-equivalent. |
-| Browser access to LAN, metadata or other profiles | High × high | Fixed for private and special-use destinations. Docker network mode is none. A per-profile Unix socket accepts allowed domains on ports 80/443 and connects to a checked IPv4 address. Deployments routing globally numbered addresses to private services need additional routing policy. |
-| Cross-origin admin writes and WebSocket access | High × low | Fixed. Require same-origin browser requests, loopback Host and JSON writes. |
-| Clear saved passwords | High × medium | Fixed. Encrypt and authenticate credentials with a key mounted as a Docker secret, outside the data volume. Each envelope records the id of its key; the gateway refuses to start with a missing or different key. |
-| Sensitive request arguments and errors in logs | High × low | Fixed for new entries. Record operation metadata only. Historical logs require separate operator review. |
-| Public registration and consent abuse | Medium × low | Fixed. Every grant needs the admin's password + TOTP on the consent page. Registration: 5/min per IP, 20/h and 1000 clients gateway-wide; unused clients purged after 24 h. Sign-in, TOTP, consent and token endpoints rate-limited in the database. |
-| Rate limits bypassed by a forged client IP | Medium × low | Fixed (Lot 6). `Cf-Connecting-IP` is read only with `TRUST_PROXY=cloudflare` (set by `compose.tunnel.yaml`, where no port is published); otherwise the gateway overwrites it with the TCP peer address. The admin listener never trusts it. |
-| Admin reachable from the internet | High × low | Fixed (Lot 6). Port 18788 is published on loopback only and never on the tunnel. `ADMIN_PUBLIC=1` refuses to boot without Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`). |
-| Stolen admin password | High × low | Fixed. TOTP is mandatory: password alone yields no session with admin rights. 5 failed codes = 15 min lockout. |
-| Malicious content on a trusted login site | High × high | Residual. A saved login trusts the configured site, its scripts and the browser automation package. |
-| Saved browser sessions and host backups | High × medium | Residual. Use encrypted host storage and protect backups. |
+Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, runner, Docker daemon and local machine are trusted. The gateway is trusted with the browsers and their data, not with the host.
 
+## Browsers and saved logins
 
-Local native processes and Docker peers with gateway network access remain trusted. Shared OAuth budgets can be exhausted deliberately, delaying new connections. Public sites and scripts on an allowed origin can still receive data available to that browser. A CONNECT proxy controls the upstream IP and port, while the browser validates TLS. It does not inspect encrypted application traffic.
+- **Malicious content on a trusted login site** (high). A saved login trusts the configured site, its scripts and the browser automation package.
+- **Saved browser sessions on disk** (high). Profile volumes (`arb-profile-*`: cookies, sessions) are plaintext on the host disk, and so is a restored profile tar from a backup. Use encrypted host storage and protect backups.
+- **Allowed origins see what the browser sees.** Public sites and scripts on an allowed origin can receive any data available to that browser. The egress proxy controls the upstream IP and port; it does not inspect encrypted traffic.
+- **Private services on public addresses.** Egress refuses private and special-use destinations. A deployment that routes globally numbered addresses to private services needs its own routing policy.
+- **`fill` accepts passwords.** Its description says never a password; nothing enforces it.
+- **Untrusted page wrapping is a hint.** `<untrusted_page_content>` tells the model that page text is data, not instructions. It does not prevent prompt injection.
 
-## Gateway compromise
+## Gateway and runner
 
-The gateway parses untrusted input (MCP, OAuth, pages through the browsers), so it is the likely first foothold. Since Lot 5 it has no Docker socket and runs read-only, no capabilities, as uid 1000. It reaches Docker only through the runner's Unix socket (`/run/arb-runner/runner.sock`, 0600 in a 0700 directory on a volume mounted by the gateway and the runner only). The runner validates every request with strict zod schemas (unknown fields refused) before the Engine API is reached.
+- **Gateway compromise** gives the browsers and their data: drive any profile, read its pages and session file, use and decrypt its saved logins (`arb.db` and the login key are both in reach), control egress. It can also stop or delete any computer and profile volume of the stack, and hold all `MAX_COMPUTERS` slots to deny browsers to other agents. Beyond that, the runner's validation holds.
+- **Runner compromise = host compromise.** It holds the Docker socket.
+- **Runner auth is the socket's file mode.** Anything running as uid 1000 on the `arb-runner` volume, or as root on the host, counts as the gateway.
+- **POC migration.** Leave `ALLOW_POC_MIGRATION` unset outside the migration run, or the runner copies `ac-profile-*` volumes on request.
 
-A gateway compromise yields:
+## Admin and agent auth
 
-- **The browsers and their data, as today.** Drive any profile, read its pages, session file and screenshots, use its saved logins. Control egress (the proxies and allowlists live in the gateway). Read `arb.db` and the login key, so decrypt saved passwords.
-- **Availability of this stack.** Stop or remove any computer of the stack, and delete any profile volume carrying the stack's label (cookies lost). Create computers for any valid profile id, up to `MAX_COMPUTERS` running at once (default 4, enforced by the runner), each limited to 1 GiB, 1 CPU and 512 pids. Holding the slots denies browsers to the other agents.
-- **Nothing beyond that, as long as the runner holds.** No image choice (the computer image the operator configured, `IMAGE` in the runner's environment), no mount (only the profile's volume and its read-only egress subpath), no host option (runtime, no network, no caps, read-only rootfs and resource limits are fixed). No command line: `exec` accepts the exact `agent-browser` calls the gateway makes and three helpers, with no NUL, no leading-dash value, and a `timeout -k 5` that kills the process in the container. No container or volume without the stack's label: compose's own `arb-gateway-1` / `arb-runner-1` match the profile id format but are refused, and so are the POC's `ac-*` resources.
-- **POC profiles only during the migration.** `copyVolume` (source fixed to `ac-profile-<id>`) is refused unless the runner runs with `ALLOW_POC_MIGRATION=1`. Leave it unset outside the migration run.
+- **Stolen session cookie without step-up** can still read state, start and stop computers, open allowed URLs, watch and drive a browser through the live view (paste, copy), test or fill saved logins, and extend or release leases. It cannot mint credentials or change what an agent may reach.
+- **Live view input under a lease.** The takeover banner is a UI rule: the WebSocket does not refuse input while an agent holds the lease, so admin and agent can act at the same time.
+- **TOTP replay** within its 30 s window, for sign-in and step-up.
+- **Lease `extend` is not step-up gated** (bounded at 120 minutes from now; release is one click).
+- **Backup codes** are as strong as where the admin keeps them.
+- **API keys without expiry** created before Lot 7b keep working. They are flagged `noExpiry` in the admin list: rotate them.
+- **Session tokens** are stored as is in `arb.db` (Better Auth), valid 12 h.
+- **Login "Test"** proves the form was filled and submitted, not that the site accepted the password: check the final URL.
+- **CIMD client fetching** is enabled but not exercised by the tests.
+- **Consent profile choice** is held in memory for the duration of one request.
+- **Shared OAuth budgets** (registration, sign-in rate limits) can be exhausted deliberately, delaying new connections.
+- **Historical logs** written before the logging fix may contain sensitive arguments and errors: review them separately.
 
-Runner compromise = host compromise: it holds the Docker socket. Its attack surface is one JSON line per connection (64 KiB max, 10 s to send it), parsed by zod, and no network (`network_mode: none`).
+## Deployment
 
-Auth between the two is the socket's file mode, not a shared secret: only uid 1000 in containers mounting `arb-runner` can connect, and a secret would sit in the gateway anyway. Anything that runs as uid 1000 on that volume (or as root on the host) is the gateway, for the runner.
+- **Forged client IP from the host.** With `TRUST_PROXY=cloudflare`, a local process or a container on the stack's network can reach the gateway directly and choose its `Cf-Connecting-IP`. Local processes are trusted; a shared host is not a supported deployment.
+- **Reverse proxy on `compose.yaml`.** Every client shares the proxy's rate-limit budget: a stranger can slow the admin's sign-in or new client registrations (availability only).
+- **Serialized `ensure`.** The runner starts containers one at a time so the cap holds: a slow start delays the others.
+- **Cap disclosure.** The agent sees `Too many computers running (MAX_COMPUTERS=N)`. Other failures stay masked as `Browser operation failed`.
+- **Stale browser images.** A browser container is recreated on image change only when the gateway starts or the profile is next used.
+- **Leftover volumes.** Browser containers and volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
+- **Cloudflare Access rules** in the runbook are documented, not tested against a live account. A missing rule fails closed.
+- **Local Docker peers.** Native processes and containers with gateway network access remain trusted.
 
-Verified in CI (Lot 7, e2e job on Linux): under gVisor (`runsc`) a computer has a read-only rootfs, writable `/tmp` and `/home/agent` tmpfs, no network, and the runner refuses and logs hostile requests sent from the gateway container. gVisor runs with `--host-uds=open` so the browser can connect to its egress socket, created outside the sandbox; the only such socket mounted into a computer is its own, read-only.
+## Supply chain and operations
 
-## Authentication model
-
-Better Auth 1.7.27 (pinned) on `arb.db`. One human, the admin; every agent credential is a grant the admin made. Settings, endpoints and operator commands: [docs/reference.md](docs/reference.md).
-
-| Who | Proves itself with | Gets |
-| --- | --- | --- |
-| Admin | Email + password (hashed, scrypt) + TOTP, then a session cookie (12 h, HttpOnly, SameSite=Lax; `Secure` on the public listener when `PUBLIC_URL` is https, not on the plain-http `:18788` listener, which has its own Better Auth instance on the same database) | Admin UI and API. Created only by `arb admin create` on the host; signups are disabled and not routed. |
-| OAuth client (Notion, Claude, ...) | Access token `arb_at_` (1 h) / refresh token `arb_rt_` (30 days, rotated) from the authorization code flow with PKCE S256 | The scope the admin picked on the consent page: `profile:<id>` (browser tools on that profile only) or `global` (profile management and leases). Requested OAuth scopes (`mcp`, `offline_access`) never widen it. |
-| Script / orchestrator | API key `arb_k_`, Bearer or `x-api-key`; every new key expires (30 days to 1 year, mandatory) | The scope set at creation, same two shapes. |
-
-- **Consent is the gate.** An unauthenticated client can register (DCR) or present a CIMD URL, but gets nothing until the admin signs in on `/login` (password + TOTP) and accepts on `/consent`. Consent without a session redirects to `/login`. Login and consent forms check Origin and refuse framing (`frame-ancestors 'none'`). They send `Referrer-Policy: same-origin`, not `no-referrer`: under `no-referrer` browsers send `Origin: null` on form POSTs and the check would refuse every real browser. When the gateway relays a form POST to Better Auth as JSON, `callAuth` drops the browser's navigation hints (`sec-fetch-mode`/`-dest`/`-user`, `accept: text/html`) so Better Auth answers with JSON, not a redirect the gateway would misread as a failure.
-- **Tokens are opaque and hashed.** Access tokens, refresh tokens, API keys and leases are stored as sha256; `/mcp` looks the token up and re-checks that the profile still exists. Revocation (admin UI, "Connected clients") deletes the rows: effective on the next call. Replaying an authorization code revokes the tokens it produced. Deleting a profile deletes every token, key, consent and pending code scoped to it.
-- **Admin surface.** Port 18788, published on localhost only; Host and Origin checked on every call (DNS rebinding, CSRF, cross-site WebSocket). `ADMIN_PUBLIC=1` also serves it on `PUBLIC_URL`, and requires Cloudflare Access (`ACCESS_AUD`/`ACCESS_TEAM`, else the gateway refuses to boot): the gateway verifies the `Cf-Access-Jwt-Assertion` itself (RS256, WebCrypto, team JWKS cached 1 h and refetched on an unknown key id at most once a minute, `aud`, `iss`, `exp`/`nbf`) and requires its email to be the admin's.
-- **Consent page.** Shows the client id, DCR ("unverified", self-declared name) or CIMD (name from its metadata URL's domain; a DB flag, so anything not marked CIMD shows as unverified), registration age and a loopback note; everything HTML-escaped, no JavaScript. `global` for a DCR client needs a second POST through a warning page: one stray click cannot hand an unknown client every profile. Accepting answers with a 200 page carrying `Refresh: 0;url=<redirect_uri>` and a link, not a 302: Chrome applies the page's `form-action 'self'` to a redirect that follows a form POST and would block the hop to the client.
-- **Step-up.** Creating or revoking a key or client, saving or deleting a login, changing a profile's domains and deleting a profile need a TOTP or backup code proven in the last 15 minutes on that session (`step_up` table, per session id, deleted with the session). Otherwise `401 {stepUp: true}`. A stolen session cookie alone can still read state, start/stop computers, open allowed URLs, watch and drive a browser through the live view (paste, copy its selection), test or fill saved logins and extend or release leases, but cannot mint credentials or change what an agent may reach. Step-up attempts share Better Auth's 5 per minute per IP limit on the two-factor endpoints, and 5 failures on one session sign it out.
-- **Trusted device.** Admin listener only: a 30-day HMAC cookie that skips the TOTP at sign-in (rotated on every use). The public listener forces `trustDevice: false` on sign-in and strips the cookie from incoming requests, so it is never issued nor honoured there. A trusted sign-in does not open the step-up window.
-- **API keys.** Expiry is mandatory from Lot 7b (no "never"). Older keys without one keep working and are flagged `noExpiry` in the admin list for rotation. The last client IP per key (normalized per `TRUST_PROXY`) is recorded and shown, to spot a key used from somewhere unexpected.
-- **Saved login test and takeover fill.** The admin "test" and the takeover's "Fill and submit" (`/api/computers/:id/login-fill`) run the same fill as the agent's `login` tool (password through stdin, in-container vault entry deleted afterwards, egress restricted to the login origin during the fill). The test navigates to the login URL and stores only `ok`/`fail` and a timestamp; the takeover fill acts on the page already open and is refused (`reason: 'origin'`) unless that page is on the login's exact origin. Both return the final URL, never the password, and are refused while an agent holds the lease.
-- **Live view and takeover.** The admin's live view is agent-browser's stream WebSocket, relayed as raw bytes by the runner (no network between gateway and computers). The upgrade goes through the same session, Host and Origin checks as the API. In takeover mode the admin page sends keyboard and mouse events to the remote Chrome, and bridges the clipboard through `paste` (5000 characters, typed with `keyboard inserttext`) and `copy` (the page's selection). Every view is an `admin:view` audit line. Residual: the takeover banner is a UI rule; the WebSocket itself does not refuse input while an agent holds the lease, so admin and agent can act at the same time.
-- **Agent calls.** Every tool call checks the kill switch first (`KILL_FILE`: if the file exists, every call fails), then resolves the profile, runs in that profile's serial queue and writes an audit line (operation metadata only). Text read from a page (`snapshot`, `get_text`) comes back inside `<untrusted_page_content origin="…">` with a reminder that it is data, not instructions: a hint to the model, not a guarantee. Saved passwords reach the browser through `login` only; `fill` types whatever text the agent sends (its description says never a password, nothing enforces it).
-- **Leases.** A `global` token drives a profile only through a lease (`arb_l_`, 1 to 120 minutes, sliding with each use, stored as sha256, kept across restarts). While a profile is leased, its own `profile:<id>` token is refused, and the admin's login test and fill too. The admin can extend or release a lease at any time.
-- **Secrets.** `BETTER_AUTH_SECRET` (Docker secret) signs cookies and encrypts TOTP secrets and backup codes in `arb.db`. The CLI prints two kinds of secret, once, at enrolment: the `otpauth://` URI and the 10 backup codes. 2FA enrolment and reset are CLI-only (host access).
-- **Residual.** A TOTP code can be replayed within its 30 s window (also for step-up). The consent page's profile choice is held in memory for the duration of one request. A backup code is as strong as where the admin keeps it. The lease `extend` action is not step-up gated (bounded at 120 minutes from now, release is one click). "Test" proves the form was filled and submitted, not that the site accepted the password: the final URL tells. CIMD client fetching is enabled but not exercised by the tests.
-
-## Deployment (Lot 6)
-
-Two setups (operator guide: [deploy/runbook.md](deploy/runbook.md)). `compose.yaml` publishes MCP on `BIND_ADDR` (default loopback) and the admin on loopback. `compose.tunnel.yaml`, an override of it, publishes nothing: inbound traffic arrives through a Cloudflare named tunnel whose token is a Docker secret (`TUNNEL_TOKEN_FILE`, never in the environment or `docker inspect`), and cloudflared runs read-only with no capabilities. Every image is pinned by digest. `npm run check:compose` asserts these rules on the resolved configuration.
-
-Residual:
-
-- With `TRUST_PROXY=cloudflare`, a local process on the host (or a container on the stack's network) can reach the gateway's container address directly and choose its `Cf-Connecting-IP`. Local processes are trusted (above); a shared host is not a supported deployment.
-- Behind a reverse proxy on `compose.yaml`, every client shares the proxy's rate-limit budget: a stranger can slow the admin's sign-in or new client registrations (availability only).
-- The runner serializes every `ensure` behind one queue so the cap holds: a slow container start delays the others (deliberate ceiling; per-profile locks plus a counter if it matters).
-- The agent sees `Too many computers running (MAX_COMPUTERS=N)`: it discloses the cap, nothing else. Other failures stay masked as `Browser operation failed`.
-- Digests do not update themselves: Renovate opens the PRs (weekly group for minor, patch and digests), a human merges them. Until merged, base-image fixes are not deployed.
-- A browser container is recreated when its image changes (the image ID is part of its spec hash), but only when the gateway starts or the profile is next used: an idle stopped container keeps the old image on disk until then.
-- Browser containers and their volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
-- The Cloudflare Access path rules in the runbook (admin protected, agent paths bypassed) are documented, not tested against a live account. A missing rule fails closed: the gateway refuses admin requests without a valid Access token.
-
-## Supply chain and operations (Lot 7)
-
-- **CI** (`.github/workflows/ci.yml`): every action pinned by commit SHA, `contents: read` only, checkout without persisted credentials, no repository secret. Trivy is a release binary checked against a pinned sha256 (not the Trivy action), and fails the build on a CRITICAL vulnerability that has a fix, on both images.
-- **Releases** (`release.yml`, on a `v*` tag): the same Trivy gate on the amd64 build, then amd64 + arm64 pushed to GHCR with `GITHUB_TOKEN` (`packages: write` on that job only), an SBOM and a provenance attestation. Residual: the arm64 image is not scanned separately; release images are selected by tag in `.env`, not by digest, so a re-pushed tag would be pulled (only this repository's workflow can push).
-- **Metrics** (`/metrics`, Prometheus text): admin listener only (404 on the public one), GET only, Host must be an IP or single-label name (a scraper on the host or the stack's network). No auth: anything that can reach port 18788 reads counters (requests, tool calls by name and outcome, auth failures, egress denials, running computers, leases). No profile id, token or URL is ever a label.
-- **Backups** (`deploy/backup.sh`, restic): a consistent `arb.db` snapshot and, with `BACKUP_PROFILES=1`, a tar of each profile volume. The restic repository is encrypted, but a restored profile tar is plaintext cookies, as the volume is. The login key and `BETTER_AUTH_SECRET` are deliberately not in the restic repository: a backup holding both `arb.db` and the key would hold every saved password. They, and the restic password, are kept elsewhere (runbook, section 10).
-
-## State at rest
-
-`arb.db` (SQLite, data volume, 0600) holds hashes of every token (OAuth access and refresh, API key, lease), the admin's password hash, TOTP secrets encrypted with `BETTER_AUTH_SECRET`, sessions, allowlists, OAuth client registrations and saved logins as AES-256-GCM envelopes bound to profile, site, URL and username. No plaintext credential is written to it (session tokens excepted: they are the cookie values, valid 12 h; Better Auth stores them as is). The login key lives in a separate Docker secret: a copy of the database or of the data volume alone discloses no password; a copy of both does. `rotate-login-key` re-encrypts every login in one transaction and keeps the previous key as `<key>.old` until the operator deletes it. Browser profile volumes (`arb-profile-*`: cookies, sessions) remain plaintext on the host disk (residual, row above).
+- **Digests do not update themselves.** Renovate opens the PRs, a human merges them. Until merged, base-image fixes are not deployed.
+- **arm64 release image** is not scanned separately by Trivy.
+- **Release images are selected by tag** in `.env`, not by digest: a re-pushed tag would be pulled (only this repository's workflow can push).
+- **`/metrics` has no auth.** Anything that can reach port 18788 reads the counters. No profile id, token or URL is ever a label.
