@@ -473,7 +473,7 @@ test('restart reconnects running computers of known profiles only', async () => 
   fake.computers.set(id, { id, running: true });
   fake.computers.set('ghost', { id: 'ghost', running: true });
   await restart();
-  assert.deepEqual(fake.calls, [{ op: 'list' }, { op: 'ensure', id: 'shop2' }]);
+  assert.deepEqual(fake.calls, [{ op: 'list' }, { op: 'list' }, { op: 'ensure', id: 'shop2' }], 'the runner counts before ensure');
   assert.equal(fake.computers.get(id)!.running, true, 'graceful close left the computer running');
 });
 

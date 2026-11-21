@@ -90,8 +90,8 @@ test('RunnerDriver round trip; copyVolume source forced to the POC volume of the
   assert.equal(await r.copyVolume(id), 'copied');
   await assert.rejects(r.exec(id, ['cat', '/etc/shadow'], { timeoutMs: 5000 }), /invalid request/);
   await r.remove(id, { keepVolume: false });
-  assert.deepEqual(fake.calls.map((c) => c.op), ['ensure', 'exec', 'list', 'copyVolume', 'remove']);
-  assert.deepEqual(fake.calls[3], { op: 'copyVolume', id: 'shop', from: 'ac-profile-shop' });
+  assert.deepEqual(fake.calls.map((c) => c.op), ['list', 'ensure', 'exec', 'list', 'copyVolume', 'remove'], 'ensure counts first');
+  assert.deepEqual(fake.calls[4], { op: 'copyVolume', id: 'shop', from: 'ac-profile-shop' });
 });
 
 test('copyVolume is refused unless the runner was started for the migration', async () => {
@@ -100,4 +100,18 @@ test('copyVolume is refused unless the runner was started for the migration', as
   await assert.rejects(new RunnerDriver(p2).copyVolume(parseProfileId('shop')!), /ALLOW_POC_MIGRATION/);
   assert.deepEqual(fake.calls, []);
   s2.close();
+});
+
+test('MAX_COMPUTERS: concurrent starts cannot pass the cap; running ones and starts after a stop still go through', async () => {
+  const p3 = join(dir, 'runner3.sock'), s3 = await serveRunner(fake, p3, { maxComputers: 2 });
+  const r = new RunnerDriver(p3), id = (s: string) => parseProfileId(s)!;
+  fake.computers.clear();
+  const results = await Promise.all(['a', 'b', 'c'].map((x) => r.ensure(id(x), { egressDir: '' }).then(() => 'ok', (e: Error) => e.message)));
+  assert.deepEqual(results, ['ok', 'ok', 'Too many computers running (MAX_COMPUTERS=2)']);
+  assert.equal((await r.ensure(id('a'), { egressDir: '' })).id, 'a', 'already running: not counted twice');
+  await r.stop(id('a'));
+  assert.equal((await r.ensure(id('c'), { egressDir: '' })).id, 'c');
+  await assert.rejects(r.ensure(id('a'), { egressDir: '' }), /MAX_COMPUTERS/);
+  fake.computers.clear();
+  s3.close();
 });

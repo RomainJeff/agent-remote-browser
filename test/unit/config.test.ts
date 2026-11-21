@@ -12,6 +12,8 @@ test('defaults: loopback bind, POC ports, runner socket; runner: prefixed image'
   const r = loadRunnerConfig(dev);
   assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket, r.migration], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock', false]);
   assert.equal(loadRunnerConfig({ ...dev, ALLOW_POC_MIGRATION: '1' }).migration, true);
+  assert.deepEqual([r.maxComputers, loadRunnerConfig({ ...dev, MAX_COMPUTERS: '10' }).maxComputers], [4, 10]);
+  assert.throws(() => loadRunnerConfig({ ...dev, MAX_COMPUTERS: '0' }), /- MAX_COMPUTERS:/);
   assert.equal(c.trustProxy, false);
   assert.equal(loadConfig({ ...dev, TRUST_PROXY: 'cloudflare' }).trustProxy, true);
   assert.throws(() => loadConfig({ ...dev, TRUST_PROXY: 'yes' }), /- TRUST_PROXY:/);
