@@ -2,6 +2,10 @@
 
 Known residual risks, accepted or not yet fixed. How the design works (isolation, runner, auth, step-up, leases): [docs/reference.md](docs/reference.md).
 
+## Reporting a vulnerability
+
+Report it privately through GitHub: **Security** tab of this repository, **Report a vulnerability**. Do not open a public issue or pull request for it. Include the commit, the setup (`compose.yaml` or tunnel) and the steps to reproduce. This is a personal project: reports are handled on a best-effort basis, and there is no bug bounty or paid reward. Risks already listed below are known; a report that changes their severity is still welcome.
+
 Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, runner, Docker daemon and local machine are trusted. The gateway is trusted with the browsers and their data, not with the host.
 
 ## Browsers and saved logins
