@@ -12,9 +12,9 @@ import { randomBytes, createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { openStore } from '../../src/store/state.ts';
 import { hash } from '../../src/policy.ts';
+import { createOAuth } from '../../src/oauth/routes.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-oauth-'));
-delete process.env.PUBLIC_URL;
 const store = openStore(join(dir, 'state.json'), join(dir, 'login.key'));
 const { state } = store;
 
@@ -24,10 +24,8 @@ const servers: http.Server[] = [];
 before(() => { state.profiles.fixture = { allow: [], tokenHash: hash(token), logins: {}, createdAt: 0 }; });
 after(() => { for (const s of servers) s.close(); rmSync(dir, { recursive: true, force: true }); });
 
-let n = 0;
 async function serve() {
-  const { createOAuth } = await import(new URL(`../../oauth.mjs?${++n}`, import.meta.url).href);
-  const oauth = createOAuth(store);
+  const { handle: oauth } = createOAuth(store);
   const server = http.createServer((req, res) => oauth(req, res, { audit() {} }).catch(() => res.writeHead(500).end()));
   servers.push(server);
   server.listen(0, '127.0.0.1');

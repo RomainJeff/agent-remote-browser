@@ -9,7 +9,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { urlAllowed, localRequest, slug, validId, validDomain, hash } from './src/policy.ts';
 import { openStore, newToken } from './src/store/state.ts';
-import { createOAuth, wwwAuthenticate } from './oauth.mjs';
+import { createOAuth } from './src/oauth/routes.ts';
 
 import { startProxy } from './src/egress/proxy.ts';
 import { bridge } from './src/egress/bridge.ts';
@@ -17,7 +17,7 @@ const proxies = new Map();
 const here = (f) => new URL(f, import.meta.url).pathname;
 const store = openStore(process.env.STATE_FILE || here('data/state.json'), process.env.LOGIN_KEY_FILE || '/run/arb-keys/login.key');
 const { state, save, profile, principalFor, decryptLogin, encryptLogin, revoke } = store;
-const oauth = createOAuth(store);
+const { handle: oauth, wwwAuthenticate } = createOAuth(store, process.env.PUBLIC_URL);
 const AUDIT = process.env.AUDIT_FILE || here('audit.jsonl');
 const KILL = process.env.KILL_FILE || here('KILL'); // touch it = every tool call refused
 const PORT = +process.env.PORT || 8787;
