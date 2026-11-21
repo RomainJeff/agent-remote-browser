@@ -64,6 +64,8 @@ const runnerSchema = z.object({
   SANDBOX_RUNTIME: z.string().optional(),
   /** 1 = accept the Docker default runtime (dev on macOS, CI). */
   ALLOW_NO_SANDBOX: flag,
+  /** 1 = accept copyVolume (migrate-from-poc --apply). Set for the migration only: it lets the gateway read POC profiles. */
+  ALLOW_POC_MIGRATION: flag,
   RUNNER_SOCKET: runnerSocket,
 }).refine((c) => c.SANDBOX_RUNTIME === 'runsc' || c.ALLOW_NO_SANDBOX, 'SANDBOX_RUNTIME=runsc is required (or ALLOW_NO_SANDBOX=1)');
 
@@ -91,5 +93,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env) {
   const c = parse(runnerSchema, env);
   return { prefix: c.ARB_PREFIX, image: c.IMAGE ?? `${c.ARB_PREFIX}-computer:dev`, dockerSocket: c.DOCKER_SOCKET,
-    runtime: c.SANDBOX_RUNTIME, socket: c.RUNNER_SOCKET };
+    runtime: c.SANDBOX_RUNTIME, socket: c.RUNNER_SOCKET, migration: !!c.ALLOW_POC_MIGRATION };
 }

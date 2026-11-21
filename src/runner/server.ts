@@ -14,8 +14,9 @@ import { Request, MAX_REQUEST, pocVolume, readLine } from './protocol.ts';
 
 export type Runner = HostDriver & { copyVolume(from: string, id: ProfileId): Promise<string> };
 
-/** One request per connection. Invalid requests get a generic error: the reason stays in the runner. */
-export function serveRunner(driver: Runner, path: string) {
+/** One request per connection. Invalid requests get a generic error: the reason stays in the runner.
+ *  `migration`: accept copyVolume, which copies a POC profile (cookies included) into this stack. */
+export function serveRunner(driver: Runner, path: string, { migration = false } = {}) {
   rmSync(path, { force: true }); // stale socket of a previous run
   const server = net.createServer(async (sock) => {
     sock.on('error', () => {}); // the gateway hung up: nothing to do
@@ -47,7 +48,8 @@ export function serveRunner(driver: Runner, path: string) {
         : req.op === 'stop' ? driver.stop(req.id)
         : req.op === 'remove' ? driver.remove(req.id, { keepVolume: req.keepVolume })
         : req.op === 'list' ? driver.list()
-        : driver.copyVolume(pocVolume(req.id), req.id));
+        : migration ? driver.copyVolume(pocVolume(req.id), req.id)
+        : Promise.reject(Error('copyVolume disabled: set ALLOW_POC_MIGRATION=1 on the runner for the migration')));
       reply({ ok: true, result });
       done(true);
     } catch (e) {
@@ -68,7 +70,8 @@ if (import.meta.main) {
   if (process.argv[2] === 'check') {
     process.exit(await new RunnerDriver(cfg.socket).list().then(() => 0, () => 1));
   }
-  const server = await serveRunner(new DockerDriver({ socket: cfg.dockerSocket, prefix: cfg.prefix, image: cfg.image, runtime: cfg.runtime }), cfg.socket);
-  log('info', 'runner listening');
+  const server = await serveRunner(new DockerDriver({ socket: cfg.dockerSocket, prefix: cfg.prefix, image: cfg.image, runtime: cfg.runtime }), cfg.socket,
+    { migration: cfg.migration });
+  log(cfg.migration ? 'warn' : 'info', cfg.migration ? 'runner listening, copyVolume ENABLED (ALLOW_POC_MIGRATION)' : 'runner listening');
   for (const sig of ['SIGTERM', 'SIGINT'] as const) process.once(sig, () => server.close(() => process.exit(0)));
 }

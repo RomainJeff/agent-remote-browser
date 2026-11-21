@@ -61,7 +61,7 @@ const dir = mkdtempSync(join(tmpdir(), 'arb-run-'));
 const path = join(dir, 'runner.sock');
 const fake = new FakeDriver();
 let server: net.Server;
-before(async () => { server = await serveRunner(fake, path); });
+before(async () => { server = await serveRunner(fake, path, { migration: true }); });
 after(() => { server.close(); rmSync(dir, { recursive: true, force: true }); });
 
 /** Raw request line(s) as a compromised gateway could send them; resolves with everything the runner wrote back. */
@@ -92,4 +92,12 @@ test('RunnerDriver round trip; copyVolume source forced to the POC volume of the
   await r.remove(id, { keepVolume: false });
   assert.deepEqual(fake.calls.map((c) => c.op), ['ensure', 'exec', 'list', 'copyVolume', 'remove']);
   assert.deepEqual(fake.calls[3], { op: 'copyVolume', id: 'shop', from: 'ac-profile-shop' });
+});
+
+test('copyVolume is refused unless the runner was started for the migration', async () => {
+  const p2 = join(dir, 'runner2.sock'), s2 = await serveRunner(fake, p2);
+  fake.calls = [];
+  await assert.rejects(new RunnerDriver(p2).copyVolume(parseProfileId('shop')!), /ALLOW_POC_MIGRATION/);
+  assert.deepEqual(fake.calls, []);
+  s2.close();
 });

@@ -10,7 +10,8 @@ test('defaults: loopback bind, POC ports, runner socket; runner: prefixed image'
   assert.deepEqual([c.port, c.adminPort, c.idleMs, c.prefix, c.runnerSocket], [8787, 8788, 300_000, 'arb', '/run/arb-runner/runner.sock']);
   assert.equal(loadConfig({ ...dev, PUBLIC_URL: 'https://arb.example.com/' }).publicUrl, 'https://arb.example.com');
   const r = loadRunnerConfig(dev);
-  assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock']);
+  assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket, r.migration], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock', false]);
+  assert.equal(loadRunnerConfig({ ...dev, ALLOW_POC_MIGRATION: '1' }).migration, true);
   assert.equal(loadRunnerConfig({ ...dev, ARB_PREFIX: 'x1', IMAGE: '' }).image, 'x1-computer:dev');
   assert.throws(() => loadRunnerConfig({ ...dev, ARB_PREFIX: 'Bad_' }), /- ARB_PREFIX:/);
 });
