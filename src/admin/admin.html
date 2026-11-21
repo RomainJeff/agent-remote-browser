@@ -159,6 +159,9 @@
   .screen .nosig { display: grid; place-items: center; height: clamp(200px, 36vh, 360px); padding: 20px; text-align: center; color: #9199A1;
     background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; }
   .screen .nosig b { display: block; color: #E9EBEC; font-size: 15px; margin-bottom: 4px; }
+  .screen .veil { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(13,17,22,.55); color: #fff; font-weight: 600; text-align: center; }
+  .b-ctl .fill { flex-basis: 100%; display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--warn-line); font-weight: 400; color: var(--ink); }
+  .b-ctl .fill > span { flex: 1 1 220px; }
   .vfoot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .vfoot .pt { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .big { font: 700 28px/36px var(--mono); }
@@ -292,7 +295,8 @@ const api = async (path, method = 'GET', body) => {
 };
 
 let computers = [], clients = null, me = {};
-let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control }
+let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control, url }
+let logins = [];     // saved logins of the selected profile (detail poll): the takeover banner offers the ones matching the page
 let authed = false;  // polling stops while the sign-in screen is up
 let keys = {};       // last rendered data per section: polling only touches the DOM when data changed
 let allowDraft = null, filter = 'all', search = '';
@@ -679,12 +683,31 @@ function renderLiveBar() {
   setBtn($('#bCtl'), ctl, ctl ? 'Vous avez déjà la main' : '');
   $('#bLeave').hidden = !live;
   // ponytail: the lease holder's name is not exposed by the list API, so the banner says "un agent".
-  patch('banner', [ctl, !!c.leasedUntil], () => ctl
-    ? '<div class="banner b-ctl"><span>Vous avez la main. Clavier, souris et copier/coller vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button></div>'
+  // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
+  const here = ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
+  patch('banner', [ctl, !!c.leasedUntil, here.map((l) => [l.site, l.username])], () => ctl
+    ? `<div class="banner b-ctl"><span>Vous avez la main. Clavier, souris et copier/coller vont à ce navigateur : cliquez la vue pour taper.</span><button type="button" class="btn btn-sm" id="bGiveBack">Rendre la main</button>${here.length ? `
+       <div class="fill"><span>${here.length === 1 ? `Identifiant enregistré : <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} identifiants enregistrés pour <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
+       ${c.leasedUntil ? '<span class="hint">Un agent tient ce profil : libérez le bail pour remplir.</span>'
+         : here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Remplir et envoyer' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
     : c.leasedUntil ? '<div class="banner b-agent"><span>Un agent est aux commandes. Vous pouvez regarder ou prendre la main.</span><button type="button" class="btn btn-sm" id="bTake">Prendre la main</button></div>' : '');
   const give = $('#bGiveBack'), take = $('#bTake');
   if (give) give.onclick = () => openView(selected, false);
   if (take) take.onclick = (e) => act(e.currentTarget, () => takeControl(selected));
+  for (const b of $$('[data-fill]')) b.onclick = () => fillHere(b, b.dataset.fill);
+}
+const originOf = (u) => { try { return new URL(u).origin; } catch { return null; } };
+/** Takeover: the server fills the page on screen (the password never reaches this page). */
+function fillHere(btn, site) {
+  const veil = document.createElement('div');
+  veil.className = 'veil'; veil.textContent = 'Remplissage par le serveur… ne touchez pas la vue';
+  act(btn, async () => {
+    $('#screen')?.append(veil);
+    const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-fill`, 'POST', { site });
+    if (r.ok) return toast(`${site} : formulaire envoyé. Vérifiez dans la vue.`);
+    toast(r.reason === 'origin' ? `La page n'est plus sur ${originOf(logins.find((l) => l.site === site)?.url) ?? 'le site de cet identifiant'} : rien n'a été rempli.`
+      : 'Formulaire introuvable (identifiant et mot de passe visibles requis). Rien n\'a été envoyé.', 'error');
+  }).finally(() => { veil.remove(); $('#frame')?.focus(); });
 }
 
 function patch(name, data, html) {
@@ -701,6 +724,7 @@ async function refreshDetail() {
   const id = selected;
   let d; try { d = await api(`/api/computers/${encodeURIComponent(id)}`); } catch (e) { if ($('#logins')) toast(e.message, 'error'); return; }
   if (id !== selected || !$('#logins')) return;
+  if (JSON.stringify(logins) !== JSON.stringify(d.logins)) { logins = d.logins; renderLiveBar(); }
   setText($('#pageinfo'), d.page ? `${d.page.title || 'Page sans titre'} · ${d.page.url}` : 'Navigateur arrêté');
 
   if (patch('logins', d.logins, () => d.logins.length
@@ -768,7 +792,10 @@ function openView(id, control) {
       v.meta = msg.metadata; v.frames++;
       img.onload = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'ack', seq: msg.seq }));
       img.src = 'data:image/jpeg;base64,' + msg.data;
-    } else if (msg.type === 'url' && $('#vurl') && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
+    } else if (msg.type === 'url') {
+      v.url = msg.url; renderLiveBar();
+      if ($('#vurl') && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
+    }
   };
   wireControl();
   renderLiveBar();

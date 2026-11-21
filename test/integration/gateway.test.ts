@@ -286,6 +286,23 @@ test('saved login: password only reaches the host through stdin', async () => {
   } finally { fake.failOn = ''; }
   assert.equal((await result()).lastResult, 'fail');
   assert.equal(agentBrowser('delete').length, 3, 'vault entry deleted on failure');
+  // Takeover fill: the page already open (fake: https://example.com/), never navigated, only on the login's origin.
+  const fill = (site: string) => admin('POST', '/api/computers/shop/login-fill', { body: { site } });
+  assert.equal((await fill('other')).status, 404);
+  const filled = await fill('main');
+  assert.deepEqual([filled.status, filled.json], [200, { ok: true, url: 'https://example.com/' }]);
+  assert.deepEqual(agentBrowser('--no-navigate').at(-1)!.argv!.slice(-3), ['login', 'gw-main', '--no-navigate']);
+  assert.equal(agentBrowser('delete').length, 4, 'vault entry deleted after the fill');
+  assert.equal((await result()).lastResult, 'fail', 'a fill is not a test');
+  assert.equal((await admin('POST', '/api/computers/shop/login-save',
+    { body: { site: 'sub', url: 'https://app.example.com/login', username: 'fixture', password } })).status, 200);
+  const saved = agentBrowser('--password-stdin').length;
+  const wrong = await fill('sub');
+  assert.deepEqual([wrong.status, wrong.json], [200, { ok: false, reason: 'origin', url: 'https://example.com/' }]);
+  assert.equal(agentBrowser('--password-stdin').length, saved, 'wrong origin: password never sent to the browser');
+  fake.failOn = 'auth login';
+  try { assert.deepEqual((await fill('main')).json, { ok: false, reason: 'form', url: 'https://example.com/' }); } finally { fake.failOn = ''; }
+  assert.equal((await admin('POST', '/api/computers/shop/login-delete', { body: { site: 'sub' } })).status, 200);
   assert.equal((await admin('POST', '/api/computers/shop/login-save',
     { body: { site: 'main', url: 'https://example.com/login', username: 'fixture', password } })).status, 200);
   assert.deepEqual([(await result()).lastTestedAt, (await result()).lastResult], [null, null], 're-save clears the result');

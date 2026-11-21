@@ -46,6 +46,7 @@ const agentBrowser = z.union([
   z.tuple([lit('eval'), lit(SELECTION)]),
   z.tuple([lit('auth'), lit('save'), vault, lit('--url'), z.url({ protocol: /^https$/ }).max(4096), lit('--username'), value(200), lit('--password-stdin')]),
   z.tuple([lit('auth'), z.enum(['login', 'delete']), vault]),
+  z.tuple([lit('auth'), lit('login'), vault, lit('--no-navigate')]),
 ]);
 
 /** Screenshot file written by agent-browser inside the computer. */

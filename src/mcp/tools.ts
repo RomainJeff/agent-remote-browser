@@ -22,17 +22,20 @@ const LEASE = z.string().describe('Lease id from lease_profile');
 const at = (r: string) => (r.startsWith('@') ? r : '@' + r);
 
 class PolicyError extends Error {}
+export class WrongOrigin extends Error {}
 
-/** Fills a saved login in the profile's browser: the MCP `login` tool and the admin's "test" use this one path.
+/** Fills a saved login in the profile's browser: the MCP `login` tool, the admin's "test" and its takeover fill use this one path.
  *  The password goes through stdin into the in-container vault for this call only (never argv, logs or the result),
- *  and the browser may only reach the login origin meanwhile. Returns the final URL. Caller holds pc.serial(id). */
-export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: string, c: LoginRef, password: string) {
-  const vault = `gw-${slug(site)}`;
+ *  and the browser may only reach the login origin meanwhile. Returns the final URL. Caller holds pc.serial(id).
+ *  `here`: fill the page already open instead of navigating to the login URL; refused unless it is on the login's origin. */
+export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: string, c: LoginRef, password: string, here = false) {
+  const vault = `gw-${slug(site)}`, origin = new URL(c.url).origin;
   await pc.ensure(id);
-  pc.restrict(id, new URL(c.url).origin);
+  if (here && await pc.ab(id, ['get', 'url']).then((u) => new URL(u.url as string).origin, () => null) !== origin) throw new WrongOrigin();
+  pc.restrict(id, origin);
   try {
     await pc.ab(id, ['auth', 'save', vault, '--url', c.url, '--username', c.username, '--password-stdin'], { stdin: password });
-    await pc.ab(id, ['auth', 'login', vault]);
+    await pc.ab(id, here ? ['auth', 'login', vault, '--no-navigate'] : ['auth', 'login', vault]);
   } finally {
     await pc.ab(id, ['auth', 'delete', vault]).catch(() => {});
     pc.restrict(id);

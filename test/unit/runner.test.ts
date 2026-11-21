@@ -38,7 +38,7 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ab('back'), ab('screenshot'), ab('close'), ab('stream', 'status'),
     ab('keyboard', 'inserttext', 'two\nlines'), ab('keyboard', 'inserttext', '-'), ab('eval', SELECTION),
     ab('auth', 'save', 'gw-shop-1', '--url', 'https://example.com/login', '--username', 'me@example.test', '--password-stdin'),
-    ab('auth', 'login', 'gw-shop-1'), ab('auth', 'delete', 'gw-shop-1'),
+    ab('auth', 'login', 'gw-shop-1'), ab('auth', 'login', 'gw-shop-1', '--no-navigate'), ab('auth', 'delete', 'gw-shop-1'),
     ['base64', '-w0', '/tmp/shot.png'], ['rm', '-f', '/home/agent/.agent-browser/tmp/s-1.png'], ['cat', SESSION]])
     assert.ok(ok(exec(a)), a.join(' '));
   for (const a of [['sh', '-c', 'id'], ['agent-browser', 'open', 'https://example.com'], ab('eval', '1'),
@@ -48,7 +48,7 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ab('keyboard', 'type', 'x'), ab('eval', SELECTION + ';1'), ab('fill', '@e1', 'no separator'),
     ab('auth', 'save', 'gw-x', '--url', 'http://example.com', '--username', 'u', '--password-stdin'),
     ab('auth', 'save', 'gw-x', '--url', 'https://example.com', '--username', '--password', '--password-stdin'),
-    ab('auth', 'login', 'someone-else'),
+    ab('auth', 'login', 'someone-else'), ab('auth', 'login', 'gw-x', '--url', 'https://evil.test'), ab('auth', 'delete', 'gw-x', '--no-navigate'),
     ['cat', '/etc/shadow'], ['cat', '/home/agent/.agent-browser/../../../etc/shadow'], ['base64', '-w0', '/etc/x.png'],
     ['base64', '-w0', '/tmp/../etc/x.png'], ['rm', '-rf', '/tmp/x.png'], ['rm', '-f', '/tmp/x.png', '/tmp/y.png'],
     ab('get', 'text', 'body\0'), ab('fill', '@e1', '--', 'x'.repeat(5001)), []])
