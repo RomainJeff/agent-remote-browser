@@ -18,6 +18,11 @@
       "description": "agent-browser is 0.x and moves fast: its own PR, upgraded deliberately",
       "matchPackageNames": ["agent-browser"],
       "groupName": "agent-browser"
+    },
+    {
+      "description": "Types track the oldest supported Node (engines >=24) so tsc rejects 26-only APIs; images and CI can still move to newer Node",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<25"
     }
   ],
   "customManagers": [
