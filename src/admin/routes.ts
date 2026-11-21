@@ -21,6 +21,14 @@ const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', '/api/auth/two-factor/verify-totp': 'totp' };
 const AUTH_API = new Set(['/api/auth/sign-in/email', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out', '/api/auth/get-session']);
 const html = new URL('./admin.html', import.meta.url).pathname;
+const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
+/** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
+ *  Null = refused: every new key expires. */
+function keyTtl(expiresIn: unknown, expiresAt: unknown) {
+  if (typeof expiresIn === 'string' && Object.hasOwn(KEY_DAYS, expiresIn)) return KEY_DAYS[expiresIn] * 86400;
+  const s = typeof expiresAt === 'string' ? Math.floor((Date.parse(expiresAt) - Date.now()) / 1000) : NaN;
+  return s >= 86400 && s <= 365 * 86400 ? s : null;
+}
 
 export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
@@ -48,8 +56,9 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     return s && (email === undefined || s.user.email.toLowerCase() === email) ? s : null;
   }
 
-  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest
-    FROM apikey ORDER BY createdAt DESC`).all());
+  // Keys created before expiry became mandatory (Lot 7b) keep working; noExpiry flags them for rotation.
+  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest, expiresAt
+    FROM apikey ORDER BY createdAt DESC`).all() as { expiresAt: string | null }[]).map((k) => ({ ...k, noExpiry: k.expiresAt === null }));
   const listClients = () => (db.prepare(`SELECT c.clientId id, c.name, c.createdAt,
     (SELECT group_concat(DISTINCT referenceId) FROM oauthConsent WHERE clientId = c.clientId) scopes,
     (SELECT max(createdAt) FROM oauthAccessToken WHERE clientId = c.clientId) lastToken
@@ -133,13 +142,15 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       // Connected clients: OAuth clients (with the scopes granted) and API keys. A key is shown once, at creation.
       if (path === '/api/clients' && !post) return send(res, 200, { oauth: listClients(), keys: listKeys() });
       if (path === '/api/keys' && post) {
-        const { name, scope } = (await readJson(req)) || {};
+        const { name, scope, expiresIn, expiresAt } = (await readJson(req)) || {};
         if (typeof name !== 'string' || !/^[\w .-]{1,60}$/.test(name)) return send(res, 400, { error: 'Name: letters, digits, spaces, dots, dashes (max 60)' });
         const pid = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
         if (scope !== 'global' && !(pid && profile(pid))) return send(res, 400, { error: 'Scope: global or an existing profile' });
-        const k = await pubAuth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope } } });
+        const ttl = keyTtl(expiresIn, expiresAt);
+        if (!ttl) return send(res, 400, { error: 'Expiry required: expiresIn 30d, 90d or 1y, or expiresAt 1 to 365 days ahead' });
+        const k = await pubAuth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope }, expiresIn: ttl } });
         audit({ agent: pid ?? 'global', tool: 'admin:api-key', ok: true });
-        return send(res, 201, { id: k.id, key: k.key });
+        return send(res, 201, { id: k.id, key: k.key, expiresAt: new Date(k.expiresAt!).toISOString() });
       }
       const rv = path.match(/^\/api\/(keys|clients)\/([^/]+)\/revoke$/);
       if (rv && post) {

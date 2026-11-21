@@ -393,6 +393,7 @@ function showClients() {
         <label>Name<input class="f" name="name" placeholder="ci-agent" maxlength="60" required autocomplete="off"></label>
         <label>Scope<select name="scope">${computers.map((c) => `<option value="profile:${esc(c.id)}">Profile ${esc(c.id)}</option>`).join('')}
           <option value="global">Global: manage and lease every profile</option></select></label>
+        <label>Expires<select name="expiresIn"><option value="30d">in 30 days</option><option value="90d" selected>in 90 days</option><option value="1y">in 1 year</option></select></label>
         <div class="row"><button type="submit">Create key</button></div>
         <p class="hint wide">Send it as <code>Authorization: Bearer arb_k_…</code> or <code>x-api-key</code>. Shown once.</p>
       </form>
@@ -403,7 +404,7 @@ function showClients() {
       <p class="hint">MCP clients register themselves, then you sign in and pick a scope on the consent page. Unused registrations are purged after 24 h.</p>
     </section>`;
   submit($('#keyForm'), async (f) => {
-    const r = await api('/api/keys', 'POST', { name: f.name.value.trim(), scope: f.scope.value });
+    const r = await api('/api/keys', 'POST', { name: f.name.value.trim(), scope: f.scope.value, expiresIn: f.expiresIn.value });
     f.reset(); showSecret(`API key ${r.key.slice(0, 10)}…`, r.key); refreshClients();
   });
   renderSecret(); refreshClients(); $('#dTitle').focus({ preventScroll: true });
@@ -416,8 +417,9 @@ async function refreshClients() {
   if (!$('#keyList')) return;
   setText($('#rKeys'), `${d.keys.length} active`); setText($('#rOauth'), `${d.oauth.length} registered`);
   $('#keyList').innerHTML = d.keys.length
-    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
+    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th>Expires</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
       <tr><td>${esc(k.name)}</td><td class="mono nw">${esc(k.start)}…</td><td class="mono">${esc(scopeLabel(k.scope))}</td><td class="num">${k.lastRequest ? ago(k.lastRequest) : 'never'}</td>
+      <td class="num">${k.noExpiry ? 'never: rotate it' : esc(k.expiresAt.slice(0, 10))}</td>
       <td class="act">${revokeBtn('keys', k.id, k.name)}</td></tr>`).join('')}</table></div>`
     : '<p class="empty-row">No API keys.</p>';
   $('#oauthList').innerHTML = d.oauth.length

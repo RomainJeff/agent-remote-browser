@@ -70,7 +70,7 @@ log('admin login with TOTP ok');
 
 // 3. A profile and an API key scoped to it.
 assert.equal((await admin('POST', '/api/profiles', { id: 'smoke', allow: ['example.com'] })).status, 201);
-const key = await admin('POST', '/api/keys', { name: 'smoke key', scope: 'profile:smoke' });
+const key = await admin('POST', '/api/keys', { name: 'smoke key', scope: 'profile:smoke', expiresIn: '30d' });
 assert.equal(key.status, 201);
 assert.match(key.json.key, /^arb_k_/);
 

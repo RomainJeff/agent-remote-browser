@@ -168,18 +168,33 @@ test('admin creates profiles and scoped API keys; MCP without a valid bearer get
   assert.equal((await admin('POST', '/api/profiles', { body: { id: 'lan', allow: ['nas.lan'] } })).status, 400);
 
   for (const scope of ['profile:nope', 'profile:../x', 'admin', undefined])
-    assert.equal((await admin('POST', '/api/keys', { body: { name: 'k', scope } })).status, 400, String(scope));
-  const key = async (name: string, scope: string) => {
-    const r = await admin('POST', '/api/keys', { body: { name, scope } });
+    assert.equal((await admin('POST', '/api/keys', { body: { name: 'k', scope, expiresIn: '30d' } })).status, 400, String(scope));
+  // Expiry is mandatory: no "never", no lifetime over a year, no date in the past or under a day.
+  const day = 86400_000, inDays = (n: number) => new Date(Date.now() + n * day).toISOString();
+  for (const exp of [{}, { expiresIn: 'never' }, { expiresIn: null }, { expiresIn: '7d' }, { expiresIn: 31536000 }, { expiresAt: 'soon' },
+    { expiresAt: inDays(-1) }, { expiresAt: inDays(0.5) }, { expiresAt: inDays(366) }])
+    assert.equal((await admin('POST', '/api/keys', { body: { name: 'k', scope: 'global', ...exp } })).status, 400, JSON.stringify(exp));
+  const key = async (name: string, scope: string, exp: object = { expiresIn: '90d' }) => {
+    const r = await admin('POST', '/api/keys', { body: { name, scope, ...exp } });
     assert.equal(r.status, 201);
     assert.match(r.json.key, /^arb_k_/);
-    return r.json as { id: string, key: string };
+    return r.json as { id: string, key: string, expiresAt: string };
   };
-  tokens.global = (await key('orchestrator', 'global')).key;
-  tokens.shop = (await key('shop agent', 'profile:shop')).key;
+  const g = await key('orchestrator', 'global');
+  tokens.global = g.key;
+  assert.ok(Math.abs(Date.parse(g.expiresAt) - Date.now() - 90 * day) < 60_000, g.expiresAt);
+  tokens.shop = (await key('shop agent', 'profile:shop', { expiresIn: '1y' })).key;
+  const dated = await key('dated', 'profile:shop', { expiresAt: inDays(10) });
+  assert.ok(Math.abs(Date.parse(dated.expiresAt) - Date.now() - 10 * day) < 60_000, dated.expiresAt);
+  // A key from before mandatory expiry (expiresAt NULL) still works, flagged noExpiry for rotation.
+  const legacy = new DatabaseSync(dbFile());
+  try { legacy.prepare('UPDATE apikey SET expiresAt = NULL WHERE id = ?').run(dated.id); } finally { legacy.close(); }
+  assert.notEqual(await mcpStatus({ authorization: `Bearer ${dated.key}` }), 401);
   const listed = (await admin('GET', '/api/clients')).json.keys;
-  assert.deepEqual(listed.map((k: any) => `${k.name}=${k.scope}`).sort(), ['orchestrator=global', 'shop agent=profile:shop']);
+  assert.deepEqual(listed.map((k: any) => `${k.name}=${k.scope} ${k.noExpiry}`).sort(), ['dated=profile:shop true', 'orchestrator=global false', 'shop agent=profile:shop false']);
+  assert.equal(listed.find((k: any) => k.name === 'orchestrator').expiresAt, g.expiresAt);
   assert.ok(listed.every((k: any) => /^arb_k_.{6}$/.test(k.start)), 'only the first characters are listed');
+  assert.equal((await admin('POST', `/api/keys/${dated.id}/revoke`, { body: {} })).status, 200);
 
   const state = dump() + rawDb();
   assert.ok(!state.includes(tokens.global) && !state.includes(tokens.shop), 'keys stored as hashes only');
@@ -324,7 +339,7 @@ test('/metrics: admin listener only, no session, counts without ids or secrets',
 
 test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes, even with a session', async () => {
   const state = dump();
-  const write = { name: 'csrf', scope: 'global' };
+  const write = { name: 'csrf', scope: 'global', expiresIn: '30d' };
   for (const headers of [{ origin: 'http://evil.test' }, { origin: 'null' }, { 'sec-fetch-site': 'cross-site' },
     { 'sec-fetch-site': 'same-site' }, { host: `evil.test:${ADMIN}` }, { host: `127.0.0.1:${PORT}` }] as Record<string, string>[]) {
     assert.equal((await admin('GET', '/api/computers', { headers })).status, 403, JSON.stringify(headers));
