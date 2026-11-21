@@ -4,15 +4,13 @@
 #   mkdir -m 700 secrets && head -c 32 /dev/urandom > secrets/login_key            # once
 #   openssl rand -base64 48 | tr -d '\n' > secrets/better_auth_secret && chmod 600 secrets/*   # once
 #   docker compose up -d --build                    # gateway on http://127.0.0.1:18787/mcp, admin on :18788
-#   Released images instead of a local build (deploy/runbook.md, Upgrade): ARB_IMAGE_REPO=ghcr.io/romainjeff/agent-remote-browser
-#   ARB_IMAGE_TAG=v1.2.3 in .env, then docker compose pull && docker compose up -d --no-build
 #   docker compose exec gateway node src/cli.ts admin create you@example.com   # once: password, TOTP
 name: ${ARB_PREFIX:-arb}
 services:
   # Builds the per-agent "computer" image, then exits. The runner starts one container per agent from it.
   computer-image:
     build: .
-    image: ${ARB_IMAGE_REPO:-${ARB_PREFIX:-arb}}-computer:${ARB_IMAGE_TAG:-dev}
+    image: ${ARB_PREFIX:-arb}-computer:dev
     entrypoint: ["true"]
     restart: "no"
 
@@ -20,7 +18,7 @@ services:
   # and only with the fixed computer spec, the allowlisted commands and this stack's labeled containers.
   runner:
     build: { context: ., dockerfile: Dockerfile.gateway }   # same image, other entry point
-    image: ${ARB_IMAGE_REPO:-${ARB_PREFIX:-arb}}-gateway:${ARB_IMAGE_TAG:-dev}
+    image: ${ARB_PREFIX:-arb}-gateway:dev
     command: ["node", "src/runner/server.ts"]
     init: true
     restart: unless-stopped
@@ -34,7 +32,7 @@ services:
     group_add: ["${DOCKER_GID:-0}"]
     environment:
       ARB_PREFIX: ${ARB_PREFIX:-arb}
-      IMAGE: ${ARB_IMAGE_REPO:-${ARB_PREFIX:-arb}}-computer:${ARB_IMAGE_TAG:-dev}   # what the computers run
+      IMAGE: ${ARB_PREFIX:-arb}-computer:dev   # what the computers run
       SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}  # runsc (gVisor) on Linux; required unless ALLOW_NO_SANDBOX=1
       ALLOW_NO_SANDBOX: ${ALLOW_NO_SANDBOX:-}  # 1 = Docker default runtime (macOS dev). Empty = refuse to start without runsc
       MAX_COMPUTERS: ${MAX_COMPUTERS:-}  # running computers at most (default 4, ~1 GB RAM each)
@@ -50,7 +48,7 @@ services:
 
   gateway:
     build: { context: ., dockerfile: Dockerfile.gateway }
-    image: ${ARB_IMAGE_REPO:-${ARB_PREFIX:-arb}}-gateway:${ARB_IMAGE_TAG:-dev}
+    image: ${ARB_PREFIX:-arb}-gateway:dev
     init: true
     restart: unless-stopped
     depends_on:

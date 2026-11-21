@@ -11,12 +11,11 @@ Two compose files, same stack:
 
 `TRUST_PROXY=cloudflare` is the only setting under which `Cf-Connecting-IP` (the rate-limit key) is read from the request; otherwise the gateway overwrites it with the TCP peer address. The admin UI is never on the tunnel unless `ADMIN_PUBLIC=1`, which requires Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`): the gateway refuses to boot without it. The runner starts at most `MAX_COMPUTERS` browsers at once (default 4); past that the agent gets `Too many computers running`. Every image is pinned by digest (`node` in the `Dockerfile`s, `alpine` in `deploy/backup.sh`, `cloudflared` in `compose.tunnel.yaml`); `npm run check:compose` validates both setups and these exposure rules.
 
-## CI and releases
+## CI
 
 - `.github/workflows/ci.yml`, on every push and PR: typecheck + tests on Node 24 and 26, `check:compose`; both images built and scanned by Trivy (fails on a CRITICAL vulnerability that has a fix); and the e2e job: gVisor installed from its signed apt repository and registered with Docker, the stack up with `SANDBOX_RUNTIME=runsc` (no `ALLOW_NO_SANDBOX`), the smoke, a second profile seeded with a saved login and a marker on its volume, then `deploy/backup.sh` into a local restic repository and the runbook's restore drill, real restore and profile-volume restore. Every credential is generated in the job; only `GITHUB_TOKEN` is used.
-- `.github/workflows/release.yml`, on a `v*` tag: Trivy gate on the amd64 build, then `linux/amd64` + `linux/arm64` images pushed to `ghcr.io/<owner>/agent-remote-browser-{gateway,computer}:<tag>` (and `:sha-<commit>`), with an SBOM and a provenance attestation. Run them with `ARB_IMAGE_REPO=ghcr.io/<owner>/agent-remote-browser ARB_IMAGE_TAG=<tag>` (runbook, Upgrade); without these variables compose builds locally as before.
 - `renovate.json`: npm, Dockerfile and compose digests, GitHub Actions (pinned by commit SHA), the `agent-browser` version and the backup helper image in `deploy/backup.sh`. Minor, patch and digest updates come as one weekly PR; Better Auth and `agent-browser` get their own. Needs the Renovate GitHub app on the repository.
-- Actions are pinned by commit SHA; workflows get `contents: read` (release adds `packages: write`). Trivy is a checksum-verified release binary (`.github/trivy.sh`), not `trivy-action`.
+- Actions are pinned by commit SHA; the workflow gets `contents: read`. Trivy is a checksum-verified release binary (`.github/trivy.sh`), not `trivy-action`.
 
 ## Metrics
 
@@ -46,7 +45,7 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/metrics.ts`: Prometheus counters and exposition.
 - `src/egress/`, `src/policy.ts`, `src/audit.ts`: egress proxy, allowlist rules, audit file and JSON logs.
 - `deploy/`: operator runbook, `backup.sh` (restic), `check-compose.ts` (`npm run check:compose`).
-- `test/unit`, `test/integration` (`npm test`), `test/e2e` (smoke), `.github/` (CI, release, Trivy).
+- `test/unit`, `test/integration` (`npm test`), `test/e2e` (smoke), `.github/` (CI, Trivy).
 
 Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
 
@@ -55,7 +54,7 @@ Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments o
 Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-only root filesystem, all capabilities dropped:
 
 - **gateway**: MCP, admin UI, OAuth, egress proxies, `arb.db`. No Docker socket. On Linux, `secrets/login_key` must be readable by uid 1000.
-- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It starts at most `MAX_COMPUTERS` computers at once (default 4; ensures are serialized so the count holds). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`), never an image, mount, container name or free command line. Containers are created from the computer image (`IMAGE`, set by compose to `${ARB_PREFIX}-computer:dev` or the released one) with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
+- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It starts at most `MAX_COMPUTERS` computers at once (default 4; ensures are serialized so the count holds). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`), never an image, mount, container name or free command line. Containers are created from the computer image (`IMAGE`, set by compose to `${ARB_PREFIX}-computer:dev`, built locally) with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
 - Healthcheck: `node src/runner/server.ts check` (one `list` round trip). The gateway starts once the runner is healthy.
 
 ## State

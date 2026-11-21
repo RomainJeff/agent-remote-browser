@@ -171,12 +171,10 @@ To stop everything instead: `docker compose stop`, then stop the browsers (they 
 **Upgrade**:
 
 ```sh
-git fetch && git checkout <release commit or tag>
+git fetch && git checkout <commit>
 deploy/backup.sh                                  # restic snapshot of arb.db first (section 9)
 docker compose up -d --build                      # migrations run at gateway start, forward only
 ```
-
-With released images (GHCR, built by `release.yml` on a `v*` tag), set `ARB_IMAGE_REPO=ghcr.io/romainjeff/agent-remote-browser` and `ARB_IMAGE_TAG=<tag>` in `.env`, and replace the last line with `docker compose pull && docker compose up -d --no-build`. The checkout still matters: it brings the compose files that match the images. The package is private unless made public in its GitHub settings: `docker login ghcr.io` first, with a token that has `read:packages`.
 
 Browser containers need no manual step: their spec label hashes the computer image ID, so the gateway recreates running ones at start and the others at their next use (profile volumes are kept). Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`, bumped by Renovate PRs), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` copy taken before the upgrade (section 9, Restore).
 
@@ -207,7 +205,7 @@ docker compose down                                                # services, n
 docker ps -aq --filter label=arb-computer | xargs -r docker rm -f   # browser containers: created by the runner, not by compose
 docker volume ls -q --filter label=arb-computer | xargs -r docker volume rm   # profile volumes (cookies)
 docker volume rm arb-data arb-egress arb-runner                     # database, egress sockets, runner socket
-docker image rm arb-computer:dev arb-gateway:dev                    # or the ghcr.io/... images if ARB_IMAGE_REPO is set
+docker image rm arb-computer:dev arb-gateway:dev                    # with another ARB_PREFIX: <prefix>-computer:dev, <prefix>-gateway:dev
 sudo rm -rf secrets
 ```
 

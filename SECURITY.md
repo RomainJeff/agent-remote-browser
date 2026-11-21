@@ -54,6 +54,4 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 ## Supply chain and operations
 
 - **Digests do not update themselves.** Renovate opens the PRs, a human merges them. Until merged, base-image fixes are not deployed.
-- **arm64 release image** is not scanned separately by Trivy.
-- **Release images are selected by tag** in `.env`, not by digest: a re-pushed tag would be pulled (only this repository's workflow can push).
 - **`/metrics` has no auth.** Anything that can reach port 18788 reads the counters. No profile id, token or URL is ever a label.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Scans local images with Trivy, failing on CRITICAL vulnerabilities that have a fix. Used by ci.yml and release.yml.
+# Scans local images with Trivy, failing on CRITICAL vulnerabilities that have a fix. Used by ci.yml.
 #   .github/trivy.sh arb-gateway:ci arb-computer:ci
 # The Trivy binary comes from its GitHub release, checked against the sha256 pinned here (not trivy-action: its
 # 2026 supply-chain compromise). ponytail: version + sum bumped by hand (Renovate cannot recompute the sum).
