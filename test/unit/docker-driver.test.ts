@@ -16,7 +16,7 @@ let log: { method: string; url: string; body?: any }[] = [];
 const containers = new Map<string, { Labels: Record<string, string> | null; running: boolean }>(
   [['arb-gateway-1', { Labels: { 'com.docker.compose.service': 'gateway' }, running: true }]]);
 const volumes = new Map<string, Record<string, string> | null>([['ac-profile-shop', null], ['arb-profile-gateway-1', null]]);
-let copyExit = 0;
+let copyExit = 0, imageId = 'sha256:aaa';
 
 const frame = (stream: number, s: string) => {
   const p = Buffer.from(s), h = Buffer.alloc(8);
@@ -40,6 +40,7 @@ const server = http.createServer((req, res) => {
     if (method === 'DELETE' && name) { containers.delete(name); return reply(204); }
     const created = url.match(/^\/v1\.47\/containers\/create\?name=([\w-]+)$/)?.[1];
     if (created) containers.set(created, { Labels: JSON.parse(raw).Labels ?? null, running: false });
+    if (url === '/v1.47/images/arb-computer:dev/json') return reply(200, { Id: imageId });
     if (url === '/v1.47/containers/arb-shop/exec') return reply(201, { Id: 'e1' });
     if (url === '/v1.47/exec/e1/json') return reply(200, { Running: false, ExitCode: 3 });
     if (url.startsWith('/v1.47/containers/json')) return reply(200, [
@@ -80,14 +81,15 @@ test('ensure on a missing computer: volume, fixed hardened spec, start', async (
   const c = await driver.ensure(id, { egressDir: '/unused' });
   assert.deepEqual(c, { id: 'shop', running: true, startedAt: Date.parse('2026-01-01T00:00:00Z') });
   assert.deepEqual(log.map((l) => `${l.method} ${l.url}`), [
+    'GET /v1.47/images/arb-computer:dev/json',
     'GET /v1.47/containers/arb-shop/json',
     'POST /v1.47/volumes/create',
     'POST /v1.47/containers/create?name=arb-shop',
     'POST /v1.47/containers/arb-shop/start',
     'GET /v1.47/containers/arb-shop/json',
   ]);
-  assert.deepEqual(log[1].body, { Name: 'arb-profile-shop', Labels: { 'arb-computer': 'shop' } });
-  const spec = log[2].body;
+  assert.deepEqual(log[2].body, { Name: 'arb-profile-shop', Labels: { 'arb-computer': 'shop' } });
+  const spec = log[3].body;
   assert.equal(spec.Image, 'arb-computer:dev');
   assert.equal(spec.Labels['arb-computer'], 'shop');
   assert.match(spec.Labels['arb-spec'], /^[0-9a-f]{16}$/);
@@ -107,15 +109,25 @@ test('ensure on a missing computer: volume, fixed hardened spec, start', async (
 
   log = [];
   await driver.ensure(id, { egressDir: '/unused' });
-  assert.deepEqual(log.map((l) => l.method), ['GET'], 'running computer: inspect only');
+  assert.deepEqual(log.map((l) => l.method), ['GET', 'GET'], 'running computer: inspect only');
 
   containers.get('arb-shop')!.Labels!['arb-spec'] = 'older';
   log = [];
   await driver.ensure(id, { egressDir: '/unused' });
-  assert.deepEqual(log.map((l) => `${l.method} ${l.url}`).slice(0, 4), [
+  assert.deepEqual(log.map((l) => `${l.method} ${l.url}`).slice(1, 5), [
     'GET /v1.47/containers/arb-shop/json', 'GET /v1.47/containers/arb-shop/json',
     'DELETE /v1.47/containers/arb-shop?force=true', 'POST /v1.47/volumes/create'], 'older spec: recreated, volume kept');
   assert.ok(!log.some((l) => l.method === 'DELETE' && l.url.includes('/volumes/')));
+
+  // Same tag, new image (rebuilt or pulled on upgrade): recreated too, volume kept.
+  imageId = 'sha256:bbb';
+  log = [];
+  await driver.ensure(id, { egressDir: '/unused' });
+  assert.ok(log.some((l) => l.method === 'DELETE' && l.url === '/v1.47/containers/arb-shop?force=true'), 'new image: recreated');
+  assert.ok(!log.some((l) => l.method === 'DELETE' && l.url.includes('/volumes/')));
+  log = [];
+  await driver.ensure(id, { egressDir: '/unused' });
+  assert.deepEqual(log.map((l) => l.method), ['GET', 'GET'], 'then stable');
 });
 
 test('a container of the same name without our label is never touched', async () => {

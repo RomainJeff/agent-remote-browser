@@ -166,11 +166,11 @@ To stop everything instead: `docker compose stop`, then stop the browsers (they 
 
 ```sh
 git fetch && git checkout <release commit or tag>
+docker compose exec -T gateway node src/cli.ts backup-db /tmp/pre-upgrade.db && docker compose cp gateway:/tmp/pre-upgrade.db ./pre-upgrade.db
 docker compose up -d --build                      # migrations run at gateway start, forward only
-docker ps -aq --filter label=arb-computer | xargs -r docker rm -f   # browsers restart on the new image at next use; profile volumes are kept
 ```
 
-The last line is needed when the browser image changed: an existing browser container keeps the image it was created from. Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` backup taken before the upgrade.
+Browser containers need no manual step: their spec label hashes the computer image ID, so the gateway recreates running ones at start and the others at their next use (profile volumes are kept). Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`, bumped by Renovate PRs), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` copy taken before the upgrade (section 10, Restore).
 
 **Rotate the login key** (gateway stopped; the secret mount is read-only, so the CLI writes the host file through a bind mount of `secrets/`, which uid 1000 must be able to write for the duration):
 

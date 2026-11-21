@@ -36,7 +36,8 @@ export class DockerDriver implements HostDriver {
   #name = (id: ProfileId) => `${this.#o.prefix}-${id}`;
   #volume = (id: ProfileId) => `${this.#o.prefix}-profile-${id}`;
   get #label() { return `${this.#o.prefix}-computer`; }
-  /** Hash of the spec the container was created from: a different one (new runner version) = recreate. */
+  /** Hash of the spec the container was created from, image ID included: a different one (new runner version,
+   *  rebuilt or pulled computer image under the same tag) = recreate. */
   get #specLabel() { return `${this.#o.prefix}-spec`; }
 
   #request(method: string, path: string, body?: object, ok = [200, 201, 204]): Promise<Reply> {
@@ -59,7 +60,7 @@ export class DockerDriver implements HostDriver {
   }
 
   /** The only container spec the runner ever creates. Callers choose the profile, nothing else. */
-  #spec(id: ProfileId) {
+  #spec(id: ProfileId, imageId: string) {
     const { prefix, image, runtime } = this.#o;
     const spec = {
       Image: image,
@@ -84,7 +85,7 @@ export class DockerDriver implements HostDriver {
         ],
       },
     };
-    spec.Labels[this.#specLabel] = createHash('sha256').update(JSON.stringify(spec)).digest('hex').slice(0, 16);
+    spec.Labels[this.#specLabel] = createHash('sha256').update(imageId + JSON.stringify(spec)).digest('hex').slice(0, 16);
     return spec;
   }
 
@@ -104,7 +105,8 @@ export class DockerDriver implements HostDriver {
   // ponytail: egressDir is where the gateway sees the proxy socket; Docker reaches it through the
   // ${prefix}-egress volume (Subpath = id), so only drivers that bind host paths need it.
   async ensure(id: ProfileId, _opts: { egressDir: string }): Promise<Computer> {
-    const name = this.#name(id), spec = this.#spec(id);
+    const { body: image } = await this.#request('GET', `/images/${this.#o.image}/json`, undefined, [200]);
+    const name = this.#name(id), spec = this.#spec(id, image.Id);
     let c = await this.#own(id);
     if (c && c.Config.Labels![this.#specLabel] !== spec.Labels[this.#specLabel]) { // older spec: recreate, keep the volume
       await this.remove(id, { keepVolume: true });

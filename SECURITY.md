@@ -63,7 +63,7 @@ Residual:
 - The runner serializes every `ensure` behind one queue so the cap holds: a slow container start delays the others (deliberate ceiling; per-profile locks plus a counter if it matters).
 - The agent sees `Too many computers running (MAX_COMPUTERS=N)`: it discloses the cap, nothing else. Other failures stay masked as `Browser operation failed`.
 - Digests do not update themselves: base-image security fixes need a commit (Renovate or equivalent, Lot 7).
-- A browser container keeps the image it was created from: after an upgrade, remove the containers (runbook, Upgrade) or they run the old image. Their volumes keep the profile.
+- A browser container is recreated when its image changes (the image ID is part of its spec hash), but only when the gateway starts or the profile is next used: an idle stopped container keeps the old image on disk until then.
 - Browser containers and their volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
 - The Cloudflare Access path rules in the runbook (admin protected, agent paths bypassed) are documented, not tested against a live account. A missing rule fails closed: the gateway refuses admin requests without a valid Access token.
 
