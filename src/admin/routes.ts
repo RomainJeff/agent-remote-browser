@@ -16,7 +16,7 @@ import { createAccessVerifier } from '../auth/access-jwt.ts';
 import { SESSION } from '../runner/protocol.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|delete';
+const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|extend|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -254,6 +254,12 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return send(res, 200, { deleted: body.site });
       }
       if (act === 'release') { leases.drop(id); return send(res, 200, { released: true }); }
+      if (act === 'extend') {
+        const n = body.minutes;
+        if (!Number.isInteger(n) || n < 1 || n > 120) return send(res, 400, { error: 'minutes: 1 to 120' });
+        const l = leases.extend(id, n);
+        return l ? send(res, 200, { leasedUntil: new Date(l.exp).toISOString() }) : send(res, 404, { error: 'no live lease' });
+      }
       if (act === 'delete') { await pc.serial(id, () => deleteProfile(id)); return send(res, 200, { deleted: id }); }
     } catch {
       if (!res.headersSent) send(res, 500, { error: 'Admin operation failed' });

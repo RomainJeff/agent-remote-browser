@@ -648,11 +648,14 @@ function renderFacts() {
   if (keys.facts !== k) {
     keys.facts = k;
     $('#fLease').innerHTML = c.leasedUntil
-      ? `<span class="mark ok">Leased</span><span>by an agent until ${esc(new Date(c.leasedUntil).toLocaleTimeString())}</span><button type="button" class="small" id="bRelease">Release</button>`
+      ? `<span class="mark ok">Leased</span><span>by an agent until ${esc(new Date(c.leasedUntil).toLocaleTimeString())}</span><button type="button" class="small" id="bExtend">+30 min</button><button type="button" class="small" id="bRelease">Release</button>`
       : '<span class="mark none">Free</span>';
     if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => {
       await api(`/api/computers/${encodeURIComponent(selected)}/release`, 'POST'); refreshList(); refreshDetail();
     }, 'Lease released.');
+    if ($('#bExtend')) $('#bExtend').onclick = (e) => act(e.currentTarget, async () => {
+      await api(`/api/computers/${encodeURIComponent(selected)}/extend`, 'POST', { minutes: 30 }); refreshList(); refreshDetail();
+    }, 'Lease extended by 30 minutes from now.');
   }
   const ka = JSON.stringify(c.allow);
   if (keys.allow !== ka) {

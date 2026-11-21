@@ -295,7 +295,17 @@ test('a lease locks the profile key; the global key drives the profile through t
   assert.match((await call(tokens.global, 'lease_profile', { profile: 'shop' })).text, /already leased/);
   const viaLease = await call(tokens.global, 'open', { lease, url: 'https://example.com/a' });
   assert.ok(!viaLease.error, viaLease.text);
+  // Admin extends the lease: now + N minutes, and the agent's next call slides it by N (not the original 5).
+  const extend = (minutes: unknown) => admin('POST', '/api/computers/shop/extend', { body: { minutes } });
+  for (const bad of [0, 121, 1.5, '60']) assert.equal((await extend(bad)).status, 400, String(bad));
+  const ext = await extend(60);
+  assert.equal(ext.status, 200);
+  assert.ok(Math.abs(Date.parse(ext.json.leasedUntil) - Date.now() - 3600_000) < 5000);
+  await call(tokens.global, 'open', { lease, url: 'https://example.com/b' });
+  const until = (await admin('GET', '/api/computers')).json.find((c: any) => c.id === 'shop').leasedUntil;
+  assert.ok(Date.parse(until) - Date.now() > 3500_000, until);
   assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', { lease })).text), { released: true });
+  assert.equal((await extend(60)).status, 404, 'no live lease');
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
   const last = JSON.parse(readFileSync(f.audit, 'utf8').trim().split('\n').findLast((l) => l.includes('"via"'))!);
   assert.equal(last.via, 'global');
