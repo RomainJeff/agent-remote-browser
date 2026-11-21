@@ -1,4 +1,4 @@
-# Agent Computer security boundaries
+# agent-remote-browser security boundaries
 
 The public listener accepts untrusted OAuth clients. MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, gateway, Docker daemon and local machine are trusted.
 

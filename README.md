@@ -8,17 +8,29 @@ Status: imported from the `agent-computer` POC, on its way to production. See th
 
 ## Dev
 
-Requires Node >= 24 (target runtime: Node 26) and Docker.
+Requires Node >= 24 (target runtime: Node 26) and Docker. TypeScript runs as-is (Node type stripping), no build step.
 
 ```sh
 npm ci
-npm test            # unit + integration, no Docker needed (< 30 s)
+npm test            # unit + integration on an in-memory FakeDriver, no Docker needed (< 1 s)
 npm run typecheck
 
-cp .env.example .env
-docker compose up -d --build   # MCP on http://127.0.0.1:18787/mcp, admin on http://127.0.0.1:18788
+cp .env.example .env               # on macOS: ALLOW_NO_SANDBOX=1 (no gVisor)
+docker compose up -d --build       # MCP on http://127.0.0.1:18787/mcp, admin on http://127.0.0.1:18788
+curl 127.0.0.1:18787/readyz        # /healthz = process up, /readyz = Docker reachable
+TOKEN=acp_... npm run smoke        # end-to-end MCP calls against the running stack
 ```
 
 All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>`, volumes `arb-profile-<profile>`, `arb-keys`, `arb-egress`).
 
-Browser check (real Chromium, inside the gateway): `docker compose exec -T gateway node check-browser.mjs`.
+## Layout
+
+- `src/server.ts`: entry point (`npm start`). Two listeners, graceful SIGTERM (drains, leaves browsers running), reconnects running browsers at startup.
+- `src/config.ts`: every env var, validated with zod. Invalid config = exit 1. Refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production, requires `PUBLIC_URL` and refuses quick tunnels.
+- `src/host/`: the `HostDriver` contract. `DockerDriver` talks to the Engine API (`/v1.47`) over the Unix socket; the gateway image has no docker CLI. `FakeDriver` backs the tests.
+- `src/mcp/`, `src/admin/`, `src/oauth/`: MCP tools and leases, admin UI, OAuth server.
+- `src/egress/`, `src/store/`, `src/policy.ts`, `src/audit.ts`: egress proxy, state file, allowlist rules, audit file and JSON logs.
+
+Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
+
+The gateway runs as `node` (uid 1000). It reaches the Docker socket through `DOCKER_GID` (`group_add` in compose); on Linux, `./data` must be writable by uid 1000.
