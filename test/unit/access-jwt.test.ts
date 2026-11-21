@@ -48,3 +48,19 @@ test('Access JWT: a failed JWKS fetch is not cached', async () => {
   assert.equal(await verify(await jwt()), null);
   assert.equal(await verify(await jwt()), 'admin@example.test');
 });
+
+test('Access JWT: an unknown kid refetches the JWKS at once (rotation), at most once a minute', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1e12 });
+  let fetches = 0, keys = [jwk];
+  const verify = createAccessVerifier({ aud, team }, async () => { fetches++; return keys; });
+  const at = (s: number) => t.mock.timers.setTime(1e12 + s * 1000);
+  const rotated = () => jwt({}, { kid: 'k2' }); // exp follows the mocked clock
+  assert.equal(await verify(await rotated()), null);
+  assert.equal(fetches, 1, 'first download, then no refetch within the minute');
+  keys = [jwk, { ...jwk, kid: 'k2' }];
+  at(61);
+  assert.equal(await verify(await rotated()), 'admin@example.test', 'new key picked up without waiting for the hour');
+  assert.equal(fetches, 2);
+  for (const s of [61, 90, 122]) { at(s); assert.equal(await verify(await jwt({}, { kid: 'forged' })), null); }
+  assert.equal(fetches, 3, 'forged kids: one refetch a minute');
+});

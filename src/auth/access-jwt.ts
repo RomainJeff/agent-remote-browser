@@ -14,16 +14,18 @@ export function createAccessVerifier(c: AccessConfig, fetchKeys?: () => Promise<
     if (!r.ok) throw Error(`Access certs: HTTP ${r.status}`);
     return ((await r.json()) as { keys: Jwk[] }).keys;
   };
-  // ponytail: JWKS cached 1 h, no refetch on an unknown kid; Cloudflare publishes a new key well before signing with it.
+  // JWKS cached 1 h. An unknown kid (key rotation) refetches at once, at most once a minute: forged kids cannot
+  // turn every request into a download. A failed download is not cached.
   let cache: { at: number; keys: Promise<Jwk[]> } | null = null;
-  const keys = () => {
-    if (!cache || Date.now() - cache.at > 3600_000) {
+  const keys = (maxAge = 3600_000) => {
+    if (!cache || Date.now() - cache.at > maxAge) {
       const p = fetchKeys!();
       cache = { at: Date.now(), keys: p };
       p.catch(() => { cache = null; });
     }
     return cache.keys;
   };
+  const find = async (kid: unknown, maxAge?: number) => (await keys(maxAge)).find((k) => k.kid === kid);
 
   return async function verify(token: unknown): Promise<string | null> {
     try {
@@ -32,7 +34,7 @@ export function createAccessVerifier(c: AccessConfig, fetchKeys?: () => Promise<
       if (!sig || extra !== undefined) return null;
       const head = JSON.parse(b64(h).toString()), claims = JSON.parse(b64(p).toString());
       if (head.alg !== 'RS256') return null;
-      const jwk = (await keys()).find((k) => k.kid === head.kid);
+      const jwk = await find(head.kid) ?? await find(head.kid, 60_000);
       if (!jwk) return null;
       const key = await crypto.subtle.importKey('jwk', { kty: jwk.kty, n: jwk.n, e: jwk.e }, ALG, false, ['verify']);
       if (!await crypto.subtle.verify(ALG, key, b64(sig), Buffer.from(`${h}.${p}`))) return null;
