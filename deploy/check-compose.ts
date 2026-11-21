@@ -23,6 +23,7 @@ for (const bind of ['', '0.0.0.0']) {
 const t = config('compose.tunnel.yaml', { BIND_ADDR: '0.0.0.0' });
 for (const [n, v] of Object.entries(t.services)) assert.ok(!v.ports?.length, `${n} publishes ${JSON.stringify(v.ports)}`);
 assert.equal(t.services.gateway.environment!.TRUST_PROXY, 'cloudflare');
+assert.equal(t.services.gateway.environment!.NODE_ENV, 'production', 'PUBLIC_URL required, quick tunnels refused');
 const cf = t.services.cloudflared;
 assert.deepEqual(cf.command, ['tunnel', '--no-autoupdate', 'run'], 'named tunnel only, never a quick tunnel (--url)');
 assert.equal(cf.environment!.TUNNEL_TOKEN_FILE, '/run/secrets/cloudflared_token');
