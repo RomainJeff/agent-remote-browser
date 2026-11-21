@@ -10,6 +10,8 @@ The public listener accepts untrusted OAuth clients. MCP tokens delegate use of 
 | Clear saved passwords | High × medium | Fixed. Encrypt and authenticate credentials with a key mounted as a Docker secret, outside the data volume. Each envelope records the id of its key; the gateway refuses to start with a missing or different key. |
 | Sensitive request arguments and errors in logs | High × low | Fixed for new entries. Record operation metadata only. Historical logs require separate operator review. |
 | Public registration and consent abuse | Medium × low | Fixed. Every grant needs the admin's password + TOTP on the consent page. Registration: 5/min per IP, 20/h and 1000 clients gateway-wide; unused clients purged after 24 h. Sign-in, TOTP, consent and token endpoints rate-limited in the database. |
+| Rate limits bypassed by a forged client IP | Medium × low | Fixed (Lot 6). `Cf-Connecting-IP` is read only with `TRUST_PROXY=cloudflare` (set by `compose.tunnel.yaml`, where no port is published); otherwise the gateway overwrites it with the TCP peer address. The admin listener never trusts it. |
+| Admin reachable from the internet | High × low | Fixed (Lot 6). Port 18788 is published on loopback only and never on the tunnel. `ADMIN_PUBLIC=1` refuses to boot without Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`). |
 | Stolen admin password | High × low | Fixed. TOTP is mandatory: password alone yields no session with admin rights. 5 failed codes = 15 min lockout. |
 | Malicious content on a trusted login site | High × high | Residual. A saved login trusts the configured site, its scripts and the browser automation package. |
 | Saved browser sessions and host backups | High × medium | Residual. Use encrypted host storage and protect backups. |
@@ -24,7 +26,7 @@ The gateway parses untrusted input (MCP, OAuth, pages through the browsers), so 
 A gateway compromise yields:
 
 - **The browsers and their data, as today.** Drive any profile, read its pages, session file and screenshots, use its saved logins. Control egress (the proxies and allowlists live in the gateway). Read `arb.db` and the login key, so decrypt saved passwords.
-- **Availability of this stack.** Stop or remove any computer of the stack, and delete any profile volume carrying the stack's label (cookies lost). Create computers for any valid profile id. Per-computer limits apply (1 GiB, 1 CPU, 512 pids), the count does not: a flood of computers can exhaust the host (deliberate ceiling: add a cap in the runner if it matters).
+- **Availability of this stack.** Stop or remove any computer of the stack, and delete any profile volume carrying the stack's label (cookies lost). Create computers for any valid profile id, up to `MAX_COMPUTERS` running at once (default 4, enforced by the runner), each limited to 1 GiB, 1 CPU and 512 pids. Holding the slots denies browsers to the other agents.
 - **Nothing beyond that, as long as the runner holds.** No image choice (the pinned `${ARB_PREFIX}-computer:dev` image only), no mount (only the profile's volume and its read-only egress subpath), no host option (runtime, no network, no caps, read-only rootfs and resource limits are fixed). No command line: `exec` accepts the exact `agent-browser` calls the gateway makes and three helpers, with no NUL, no leading-dash value, and a `timeout -k 5` that kills the process in the container. No container or volume without the stack's label: compose's own `arb-gateway-1` / `arb-runner-1` match the profile id format but are refused, and so are the POC's `ac-*` resources.
 - **POC profiles only during the migration.** `copyVolume` (source fixed to `ac-profile-<id>`) is refused unless the runner runs with `ALLOW_POC_MIGRATION=1`. Leave it unset outside the migration run.
 
@@ -40,15 +42,30 @@ Better Auth 1.7.27 (pinned) on `arb.db`. One human, the admin; every agent crede
 
 | Who | Proves itself with | Gets |
 | --- | --- | --- |
-| Admin | Email + password (hashed, scrypt) + TOTP, then a session cookie (12 h, HttpOnly, SameSite=Lax, Secure when `PUBLIC_URL` is https) | Admin UI and API. Created only by `arb admin create` on the host; signups are disabled and not routed. |
+| Admin | Email + password (hashed, scrypt) + TOTP, then a session cookie (12 h, HttpOnly, SameSite=Lax; `Secure` on the public listener when `PUBLIC_URL` is https, not on the plain-http `:18788` listener, which has its own Better Auth instance on the same database) | Admin UI and API. Created only by `arb admin create` on the host; signups are disabled and not routed. |
 | OAuth client (Notion, Claude, ...) | Access token `arb_at_` (1 h) / refresh token `arb_rt_` (30 days, rotated) from the authorization code flow with PKCE S256 | The scope the admin picked on the consent page: `profile:<id>` (browser tools on that profile only) or `global` (profile management and leases). Requested OAuth scopes (`mcp`, `offline_access`) never widen it. |
 | Script / orchestrator | API key `arb_k_`, Bearer or `x-api-key` | The scope set at creation, same two shapes. |
 
 - **Consent is the gate.** An unauthenticated client can register (DCR) or present a CIMD URL, but gets nothing until the admin signs in on `/login` (password + TOTP) and accepts on `/consent`. Consent without a session redirects to `/login`. Login and consent forms check Origin and refuse framing (`frame-ancestors 'none'`).
 - **Tokens are opaque and hashed.** Access tokens, refresh tokens, API keys and leases are stored as sha256; `/mcp` looks the token up and re-checks that the profile still exists. Revocation (admin UI, "Connected clients") deletes the rows: effective on the next call. Replaying an authorization code revokes the tokens it produced. Deleting a profile deletes every token, key, consent and pending code scoped to it.
-- **Admin surface.** Port 18788, published on localhost only; Host and Origin checked on every call (DNS rebinding, CSRF, cross-site WebSocket). `ADMIN_PUBLIC=1` also serves it on `PUBLIC_URL`; then put Cloudflare Access in front and set `ACCESS_AUD`/`ACCESS_TEAM`: the gateway verifies the `Cf-Access-Jwt-Assertion` itself (RS256, WebCrypto, team JWKS cached 1 h, `aud`, `iss`, `exp`/`nbf`) and requires its email to be the admin's.
+- **Admin surface.** Port 18788, published on localhost only; Host and Origin checked on every call (DNS rebinding, CSRF, cross-site WebSocket). `ADMIN_PUBLIC=1` also serves it on `PUBLIC_URL`, and requires Cloudflare Access (`ACCESS_AUD`/`ACCESS_TEAM`, else the gateway refuses to boot): the gateway verifies the `Cf-Access-Jwt-Assertion` itself (RS256, WebCrypto, team JWKS cached 1 h and refetched on an unknown key id at most once a minute, `aud`, `iss`, `exp`/`nbf`) and requires its email to be the admin's.
 - **Secrets.** `BETTER_AUTH_SECRET` (Docker secret) signs cookies and encrypts TOTP secrets in `arb.db`. The CLI prints exactly one secret, the `otpauth://` URI at enrolment, once.
-- **Residual.** The client IP for rate limits is `cf-connecting-ip`, spoofable when the listener is reached without Cloudflare (limits then bound per header value; the TOTP lockout still applies per account). A TOTP code can be replayed within its 30 s window. The consent page's profile choice is held in memory for the duration of one request. No backup codes: losing the authenticator needs host access (`admin reset-2fa`). The JWKS is not refetched on an unknown key id until the hour is up (Access key rotation can lock the public admin out for up to 1 h; the localhost admin still works). CIMD client fetching is enabled but not exercised by the tests.
+- **Residual.** A TOTP code can be replayed within its 30 s window. The consent page's profile choice is held in memory for the duration of one request. No backup codes: losing the authenticator needs host access (`admin reset-2fa`). CIMD client fetching is enabled but not exercised by the tests.
+
+## Deployment (Lot 6)
+
+Two compose files (operator guide: [deploy/runbook.md](deploy/runbook.md)). `compose.yaml` publishes MCP on `BIND_ADDR` (default loopback) and the admin on loopback. `compose.tunnel.yaml` publishes nothing: inbound traffic arrives through a Cloudflare named tunnel whose token is a Docker secret (`TUNNEL_TOKEN_FILE`, never in the environment or `docker inspect`), and cloudflared runs read-only with no capabilities. Every image is pinned by digest. `npm run check:compose` asserts these rules on the resolved configuration.
+
+Residual:
+
+- With `TRUST_PROXY=cloudflare`, a local process on the host (or a container on the stack's network) can reach the gateway's container address directly and choose its `Cf-Connecting-IP`. Local processes are trusted (above); a shared host is not a supported deployment.
+- Behind a reverse proxy on `compose.yaml`, every client shares the proxy's rate-limit budget: a stranger can slow the admin's sign-in or new client registrations (availability only).
+- The runner serializes every `ensure` behind one queue so the cap holds: a slow container start delays the others (deliberate ceiling; per-profile locks plus a counter if it matters).
+- The agent sees `Too many computers running (MAX_COMPUTERS=N)`: it discloses the cap, nothing else. Other failures stay masked as `Browser operation failed`.
+- Digests do not update themselves: base-image security fixes need a commit (Renovate or equivalent, Lot 7).
+- A browser container keeps the image it was created from: after an upgrade, remove the containers (runbook, Upgrade) or they run the old image. Their volumes keep the profile.
+- Browser containers and their volumes are created by the runner, not compose: `docker compose down -v` leaves them (cookies on disk). Uninstall removes them by label (runbook, Uninstall).
+- The Cloudflare Access path rules in the runbook (admin protected, agent paths bypassed) are documented, not tested against a live account. A missing rule fails closed: the gateway refuses admin requests without a valid Access token.
 
 ## State at rest
 
