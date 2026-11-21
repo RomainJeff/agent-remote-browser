@@ -1,0 +1,5 @@
+node_modules/
+agents.json
+audit.jsonl
+KILL
+data/

@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Computers</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #e6e9ec; --panel: #f7f8f9; --sunk: #dde1e5; --ink: #161b21; --muted: #56616c; --line: #c4ccd4;
+    --primary: #1d252e; --primary-ink: #f7f8f9;
+    --ok: #17734a; --off: #7b8590;
+    --signal: #b25000; --signal-soft: #fff1e0; --signal-ink: #6b3000;
+    --danger: #be1e2d; --danger-soft: #fde8ea;
+    --focus: #1f63e0;
+    --bezel: #252c34; --screen: #0d1116;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font: 13.5px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181d; --panel: #1b2026; --sunk: #10141a; --ink: #e4e8ec; --muted: #8e99a5; --line: #2d353e;
+      --primary: #e4e8ec; --primary-ink: #14181d;
+      --ok: #3fd18b; --off: #69737e;
+      --signal: #f5a524; --signal-soft: #2b2112; --signal-ink: #ffd79a;
+      --danger: #ff6b6b; --danger-soft: #2e1719;
+      --focus: #6ea2ff;
+      --bezel: #262d35; --screen: #07090c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  .mono, code { font-family: var(--mono); font-size: .92em; }
+  .sr { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* Header */
+  .top { display: flex; align-items: center; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .top h1 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
+  .top h1 svg { flex: none; }
+  .top .tagline { margin: 0; color: var(--muted); font-size: 12px; flex: 1; min-width: 0; }
+  .fleet { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 860px) { .top .tagline { display: none; } }
+
+  main { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 47px); }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Buttons and fields */
+  button { font: inherit; font-weight: 550; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+  button.primary:hover:not(:disabled) { opacity: .88; }
+  button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+  button.danger:hover:not(:disabled) { border-color: var(--danger); background: var(--danger-soft); }
+  button.danger.solid { background: var(--danger); color: #fff; border-color: var(--danger); }
+  button.small { padding: 2px 9px; font-size: 12px; }
+  button:disabled { opacity: .42; cursor: not-allowed; }
+  button[aria-busy="true"] { cursor: progress; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 550; color: var(--muted); }
+  input.f { font: inherit; font-weight: 400; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-width: 0; width: 100%; }
+  input.f.mono { font-family: var(--mono); font-size: 12.5px; }
+  input.f:focus { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
+  input.f:user-invalid { border-color: var(--danger); }
+  .hint { color: var(--muted); font-size: 12px; margin: 0; }
+  .msg { font-size: 12px; margin: 0; min-height: 1.5em; color: var(--muted); transition: opacity .4s; }
+  .msg.err { color: var(--danger); }
+  .msg.fade { opacity: 0; }
+
+  /* Sidebar */
+  aside { border-right: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  @media (max-width: 860px) { aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  .fold > summary { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 7px 10px; border-radius: 6px; }
+  .fold > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; margin-right: 2px; }
+  .fold[open] > summary::before { transform: rotate(45deg); }
+  .newbox { border: 1px dashed var(--line); border-radius: 8px; }
+  .newbox[open] { border-style: solid; background: var(--panel); }
+  .newbox form { display: flex; flex-direction: column; gap: 9px; padding: 2px 10px 10px; }
+  .list-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); padding: 0 2px; }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .card { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; font-weight: 400; padding: 9px 11px 9px 12px; border-radius: 8px; background: var(--panel); position: relative; }
+  .card[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+  .c-top { display: flex; align-items: center; gap: 8px; }
+  .c-id { font-family: var(--mono); font-weight: 600; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .c-state { font-size: 11.5px; color: var(--muted); }
+  .card[data-state="up"] .c-state { color: var(--ok); font-weight: 600; }
+  .c-meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .c-tags:not(:has(.tag:not([hidden]))) { display: none; }
+  .tag { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; line-height: 17px; }
+  .tag.live { color: var(--signal); }
+  .tag.lease { color: var(--focus); }
+  .tag.plain { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  /* Status LED: shape + text, never color alone */
+  .led { width: 9px; height: 9px; border-radius: 50%; flex: none; border: 1.5px solid var(--off); }
+  [data-state="up"] .led { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+  [data-state="down"] .led { background: var(--off); }
+  .global { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; }
+  .global > summary { color: var(--muted); font-weight: 550; }
+  .global .gstate { margin-left: auto; font-weight: 400; font-size: 12px; }
+  .global .body { display: flex; flex-direction: column; gap: 9px; padding: 4px 10px 6px; }
+
+  /* Detail */
+  #detail { padding: 0 24px 40px; min-width: 0; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 0; }
+  .placeholder { margin: 64px auto; max-width: 340px; text-align: center; color: var(--muted); }
+  .placeholder b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+  .toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 14px 0 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .tb-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 200px; }
+  .tb-title h2 { margin: 0; font-family: var(--mono); font-size: 18px; font-weight: 650; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-title h2:focus { outline: none; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .state[data-state="up"] { color: var(--ok); font-weight: 600; }
+  .actions { display: flex; gap: 6px; flex-wrap: nowrap; }
+  @media (max-width: 600px) {
+    .actions { width: 100%; }
+    .actions button { flex: 1 1 auto; padding-inline: 8px; }
+    #detail { padding: 0 16px 32px; }
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .ph { display: flex; align-items: baseline; gap: 10px; }
+  .ph h3, .panel h3 { margin: 0; font-size: 14px; font-weight: 650; }
+  .readout { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1180px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Connect */
+  .copyfield { display: flex; gap: 6px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mark { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+  .mark.ok { color: var(--ok); } .mark.ok::before { content: "✓"; }
+  .mark.none { color: var(--muted); } .mark.none::before { content: "–"; }
+  .methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 700px) { .methods { grid-template-columns: 1fr; } }
+  .method { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; }
+  .method b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .method p { margin: 0; color: var(--muted); }
+  .method code { color: var(--ink); background: var(--sunk); padding: 1px 4px; border-radius: 3px; word-break: break-all; }
+
+  /* One-time secret */
+  .secret { border: 2px solid var(--signal); background: var(--signal-soft); border-radius: 8px; padding: 11px 13px; display: flex; flex-direction: column; gap: 8px; }
+  .secret:focus { outline: 3px solid color-mix(in srgb, var(--signal) 40%, transparent); outline-offset: 2px; }
+  .secret-head { display: flex; align-items: center; gap: 8px; color: var(--signal-ink); }
+  .secret-head span { margin-left: auto; font-size: 11.5px; font-weight: 700; border: 1.5px solid var(--signal); color: var(--signal); border-radius: 4px; padding: 0 6px; }
+  .secret code { display: block; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; word-break: break-all; user-select: all; font-size: 12.5px; }
+  .secret p { margin: 0; font-size: 12px; color: var(--signal-ink); }
+  .secret .row { display: flex; gap: 6px; }
+
+  /* Live view: the bezel is the one loud element */
+  .nav { display: flex; gap: 6px; }
+  .vstate { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .vstate::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--off); }
+  .vstate[data-mode="watch"] { color: var(--ink); }
+  .vstate[data-mode="watch"]::before { background: var(--ok); border-color: var(--ok); }
+  .vstate[data-mode="control"] { color: var(--signal); font-weight: 700; }
+  .vstate[data-mode="control"]::before { background: var(--signal); border-color: var(--signal); }
+  .fps { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+  .bezel { background: var(--bezel); border-radius: 12px; padding: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.2); }
+  .bezel:has(.screen.control) { padding: 6px; background: repeating-linear-gradient(-45deg, var(--signal) 0 10px, #1a1a1a 10px 20px); }
+  .banner { display: none; align-items: center; gap: 8px; padding: 5px 10px 7px; color: #fff; font-size: 12.5px; font-weight: 600; }
+  .banner b { background: var(--signal); color: #1a1205; padding: 0 6px; border-radius: 3px; }
+  .bezel:has(.screen.control) .banner { display: flex; background: #1a1a1a; border-radius: 6px 6px 0 0; margin: -2px -2px 6px; }
+  .screen { background: var(--screen); border-radius: 6px; overflow: hidden; position: relative; min-height: 120px; }
+  .screen img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+  .screen.control img { cursor: crosshair; }
+  .screen img:focus { outline: none; }
+  .screen .empty { display: grid; place-items: center; height: clamp(180px, 32vh, 320px); width: 100%; padding: 20px; text-align: center; color: #8d98a4; font-size: 13px;
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; }
+  .screen .empty b { display: block; color: #d3d9df; font-size: 14px; margin-bottom: 4px; }
+  .pageinfo { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); margin: 0; min-width: 0; }
+  .pageinfo span:first-child { color: var(--ink); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+  .pageinfo span:last-child { font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Tables */
+  .tbl { overflow-x: auto; position: relative; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { color: var(--muted); font-weight: 550; font-size: 11.5px; }
+  td.mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+  td.nw { white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+  td.err { color: var(--danger); overflow-wrap: anywhere; }
+  td.ok { color: var(--ok); }
+  td.act { width: 1%; padding-right: 0; }
+  @media (max-width: 600px) { .tbl table { min-width: 540px; } }
+  .icon-del { padding: 3px 5px; border-color: transparent; background: transparent; color: var(--muted); line-height: 0; }
+  .icon-del:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+  .empty-row { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+  /* Forms in panels */
+  .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .grid-form .wide { grid-column: 1 / -1; }
+  .grid-form .row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+  @media (max-width: 500px) { .grid-form { grid-template-columns: 1fr; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-family: var(--mono); font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--sunk); border: 1px solid var(--line); }
+  .stack { display: flex; flex-direction: column; gap: 9px; }
+
+  /* Diagnostics */
+  .diag { padding: 0; gap: 0; }
+  .diag > summary { display: flex; align-items: baseline; gap: 10px; padding: 13px 16px; border-radius: 10px; }
+  .diag > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; align-self: center; }
+  .diag[open] > summary::before { transform: rotate(45deg); }
+  .diag .body { padding: 0 16px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
+  .diag .body > div { min-width: 0; }
+  .diag .body .full { grid-column: 1 / -1; }
+  .diag h4 { margin: 0 0 4px; font-size: 12.5px; font-weight: 650; }
+  @media (max-width: 1000px) { .diag .body { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Danger zone */
+  .dz { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+  .dz h3 { color: var(--danger); }
+  .drow { display: flex; align-items: center; gap: 16px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .drow:first-of-type { border-top: 0; padding-top: 0; }
+  .drow div { flex: 1; min-width: 0; }
+  .drow b { font-size: 13px; }
+  .drow p { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
+  @media (max-width: 500px) { .drow { flex-direction: column; align-items: stretch; gap: 8px; } }
+
+  /* Toast */
+  .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+  .toast { pointer-events: auto; max-width: min(420px, calc(100vw - 32px)); padding: 9px 13px; border-radius: 8px; background: var(--primary); color: var(--primary-ink); font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); animation: tin .18s ease-out; }
+  .toast.error { background: var(--danger); color: #fff; }
+  .toast.error::before { content: "Error: "; font-weight: 700; }
+  @keyframes tin { from { transform: translateY(6px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1><svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><rect x="1" y="1" width="16" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="6.5" r="1.6" fill="currentColor"/><path d="M6 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Agent Computers</h1>
+  <p class="tagline">Localhost only. Cookie values and passwords are never shown. Tokens are shown once.</p>
+  <span class="fleet" id="fleet" aria-live="polite"></span>
+</header>
+<main>
+  <aside aria-label="Profiles">
+    <details class="fold newbox" id="newbox"><summary>New profile</summary>
+      <form id="newProfile">
+        <label>Profile id
+          <input class="f mono" name="id" placeholder="notion-veille" pattern="[a-z0-9][a-z0-9-]{0,39}" title="Lowercase letters, digits and dashes, 40 max. Starts with a letter or digit." required autocomplete="off"></label>
+        <label>Allowed domains
+          <input class="f mono" name="allow" placeholder="notion.so, example.com" required autocomplete="off"></label>
+        <button class="primary" type="submit">Create profile</button>
+        <p class="msg err" id="newErr" aria-live="polite"></p>
+      </form>
+    </details>
+    <div class="list-head"><span>Profiles</span><span id="listErr" class="msg err" aria-live="polite"></span></div>
+    <div class="list" id="list"></div>
+    <p class="hint" id="listEmpty" hidden>No profiles yet. Create one, then take control to log in.</p>
+    <details class="fold global" id="globalBox"><summary>Global token <span class="gstate" id="global"></span></summary>
+      <div class="body">
+        <div id="globalSecret"></div>
+        <p class="hint">Lets an agent create and lease profiles over MCP. It never gives out profile tokens.</p>
+        <div><button id="bGlobal" type="button">Generate</button></div>
+      </div>
+    </details>
+  </aside>
+  <section id="detail" aria-label="Profile details"><div class="placeholder"><b>No profile selected</b>Pick a profile on the left to connect an agent, watch its browser or take control.</div></section>
+</main>
+<div class="toasts" id="toast" role="status" aria-live="polite"></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ago = (ts) => { if (!ts) return '—'; const s = Math.round((Date.now() - Date.parse(ts)) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const api = async (path, method = 'GET', body) => { const r = await fetch(path, { method, ...(method === 'POST' && { body: JSON.stringify(body || {}), headers: { 'content-type': 'application/json' } }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; };
+const setText = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+const domains = (s) => s.split(/[\s,]+/).filter(Boolean);
+const narrow = matchMedia('(max-width: 860px)');
+
+let computers = [], selected = null, view = null; // view = { id, ws, control }
+let secret = null; // { owner: profile id | 'global', label, token, copied }
+let keys = {};     // last rendered state key per section: polling only touches the DOM when data changed
+
+// ---- Feedback --------------------------------------------------------------
+function toast(msg, kind = '') {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`; el.textContent = msg;
+  $('#toast').append(el);
+  setTimeout(() => el.remove(), kind === 'error' ? 7000 : 3500);
+}
+function flash(el, msg, isErr) {
+  clearTimeout(el._t); el.classList.toggle('err', !!isErr); el.classList.remove('fade'); el.textContent = msg;
+  if (!isErr) el._t = setTimeout(() => { el.classList.add('fade'); el._t = setTimeout(() => { el.textContent = ''; el.classList.remove('fade'); }, 400); }, 3000);
+}
+/** Busy button + error reporting for every action. fn returning false = cancelled (no success toast). */
+async function act(btn, fn, done) {
+  if (btn?.dataset.busy) return;
+  if (btn) { btn.dataset.busy = '1'; btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  try { const r = await fn(); if (done && r !== false) toast(done); }
+  catch (e) { toast(e.message || String(e), 'error'); }
+  finally { if (btn) { delete btn.dataset.busy; btn.disabled = false; btn.removeAttribute('aria-busy'); renderToolbar(); } }
+}
+const submit = (form, fn) => { form.onsubmit = (e) => { e.preventDefault(); act(e.submitter || $('[type=submit]', form), () => fn(form)); }; };
+
+// ---- One-time secret --------------------------------------------------------
+// A token is shown once, right after it is generated. The server only keeps its hash.
+function showSecret(label, token, owner) { secret = { label, token, owner, copied: false }; renderSecret(true); renderFacts(); }
+function renderSecret(focus) {
+  for (const s of [$('#secret'), $('#globalSecret')]) if (s) s.innerHTML = '';
+  if (!secret) return;
+  const slot = secret.owner === 'global' ? $('#globalSecret') : secret.owner === selected ? $('#secret') : null;
+  if (!slot) return;
+  if (secret.owner === 'global') $('#globalBox').open = true;
+  slot.innerHTML = `<div class="secret" role="alert" tabindex="-1">
+    <div class="secret-head"><b>${esc(secret.label)}</b><span>Shown once</span></div>
+    <code>${esc(secret.token)}</code>
+    <p>Copy it now. The server keeps only a hash, so it cannot be shown again.</p>
+    <div class="row"><button type="button" class="primary" data-copy>Copy token</button><button type="button" data-hide>Hide</button></div></div>`;
+  const box = $('.secret', slot), s = secret;
+  $('[data-copy]', box).onclick = (e) => act(e.currentTarget, async () => {
+    await navigator.clipboard.writeText(s.token); s.copied = true; e.target.textContent = 'Copied';
+  }, 'Token copied.');
+  $('[data-hide]', box).onclick = () => {
+    if (!s.copied && !confirm('You have not copied this token. It cannot be shown again. Hide it anyway?')) return;
+    secret = null; renderSecret(); renderFacts();
+  };
+  if (focus) box.focus();
+}
+
+// ---- Create profile, global token -------------------------------------------
+submit($('#newProfile'), async (f) => {
+  try {
+    const r = await api('/api/profiles', 'POST', { id: f.elements.id.value.trim(), allow: domains(f.allow.value) });
+    f.reset(); setText($('#newErr'), ''); $('#newbox').open = false;
+    await refreshList(); select(r.id);
+    showSecret(`Token for ${r.id}`, r.token, r.id);
+  } catch (err) { flash($('#newErr'), err.message, true); }
+});
+async function refreshGlobal() {
+  try { const s = await api('/api/settings'); setText($('#global'), s.globalToken ? 'Set' : 'Not set'); setText($('#bGlobal'), s.globalToken ? 'Regenerate' : 'Generate'); } catch {}
+}
+$('#bGlobal').onclick = (e) => act(e.currentTarget, async () => {
+  if ($('#bGlobal').textContent === 'Regenerate' && !confirm('Regenerate the global token? The old one and its OAuth sessions stop working.')) return false;
+  const r = await api('/api/global-token', 'POST'); showSecret('Global token', r.token, 'global'); refreshGlobal();
+});
+refreshGlobal();
+
+// ---- Profile list: cards are created once and updated in place ---------------
+function cardEl(id) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'card'; b.dataset.id = id;
+  b.innerHTML = `<span class="c-top"><span class="led" aria-hidden="true"></span><span class="c-id"></span><span class="c-state"></span></span>
+    <span class="c-tags"><span class="tag lease" hidden>Leased</span><span class="tag live" hidden></span><span class="tag plain c-vol" hidden>No saved data</span></span>
+    <span class="c-meta c-status"></span><span class="c-meta c-call"></span>`;
+  $('.c-id', b).textContent = id;
+  b.onclick = () => select(id, true);
+  return b;
+}
+const stateOf = (c) => (c.state === 'running' ? 'up' : c.state === 'none' ? 'never' : 'down');
+const stateLabel = (c) => ({ up: 'Running', never: 'Never started', down: 'Stopped' })[stateOf(c)];
+function updateCard(b, c) {
+  const st = stateOf(c);
+  if (b.dataset.state !== st) b.dataset.state = st;
+  const pressed = String(c.id === selected);
+  if (b.getAttribute('aria-pressed') !== pressed) b.setAttribute('aria-pressed', pressed);
+  setText($('.c-state', b), stateLabel(c));
+  $('.lease', b).hidden = !c.leasedUntil;
+  $('.live', b).hidden = !c.viewers; setText($('.live', b), `${c.viewers} watching`);
+  $('.c-vol', b).hidden = c.profile;
+  setText($('.c-status', b), c.status + (c.idleStopInS != null && c.state === 'running' && !c.viewers ? `, idle stop in ${Math.ceil(c.idleStopInS / 60)} min` : ''));
+  setText($('.c-call', b), c.lastCall ? `Last call: ${c.lastCall.tool}${c.lastCall.ok ? '' : ' (failed)'}, ${ago(c.lastCall.ts)}` : 'No calls yet');
+}
+async function refreshList() {
+  try { computers = await api('/api/computers'); } catch (e) { setText($('#listErr'), e.message); return; }
+  setText($('#listErr'), '');
+  const list = $('#list'), ids = new Set(computers.map((c) => c.id));
+  for (const b of [...list.children]) if (!ids.has(b.dataset.id)) b.remove();
+  computers.forEach((c, i) => {
+    const b = [...list.children].find((x) => x.dataset.id === c.id) || cardEl(c.id);
+    if (list.children[i] !== b) list.insertBefore(b, list.children[i] || null);
+    updateCard(b, c);
+  });
+  $('#listEmpty').hidden = computers.length > 0;
+  const up = computers.filter((c) => c.state === 'running').length;
+  setText($('#fleet'), `${computers.length} profile${computers.length === 1 ? '' : 's'}, ${up} running`);
+  if (selected) { renderToolbar(); renderFacts(); }
+}
+
+// ---- Detail panel -----------------------------------------------------------
+const MCP_KEY = 'agentComputer.mcpUrl';
+const mcpUrl = () => { try { return localStorage.getItem(MCP_KEY); } catch { return null; } };
+const TRASH = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function select(id, byUser) {
+  if (view && view.id !== id) closeView();
+  const diagOpen = $('#diag')?.open;
+  selected = id; keys = {};
+  $('#detail').innerHTML = `
+    <div class="toolbar" id="toolbar">
+      <div class="tb-title"><h2 id="dTitle" tabindex="-1"></h2><span class="state" id="dState"><span class="led" aria-hidden="true"></span><span></span></span></div>
+      <div class="actions">
+        <button type="button" id="bWatch">Watch</button>
+        <button type="button" id="bCtl" class="primary"></button>
+        <button type="button" id="bLeave" hidden>Leave</button>
+        <button type="button" id="bStop">Stop</button>
+      </div>
+    </div>
+
+    <section class="panel" aria-labelledby="hConnect">
+      <div class="ph"><h3 id="hConnect">Connect agent</h3><span class="readout">MCP over HTTPS</span></div>
+      <div id="secret"></div>
+      <div class="stack">
+        <label for="mcpUrl">MCP server URL</label>
+        <div class="copyfield"><input class="f mono" id="mcpUrl" spellcheck="false" autocomplete="off"><button type="button" id="bCopyUrl">Copy</button></div>
+        <p class="hint">Notion needs the public tunnel URL: run <code>docker compose logs tunnel</code>, then add <code>/mcp</code>. Your edit is kept in this browser.</p>
+      </div>
+      <dl class="facts">
+        <dt>Profile token</dt><dd id="fToken"></dd>
+        <dt>Lease</dt><dd id="fLease"></dd>
+      </dl>
+      <div class="methods">
+        <div class="method"><b>OAuth</b><p>Add the URL in Notion. A page opens and asks for a token: paste the profile token.</p></div>
+        <div class="method"><b>Header</b><p>Send <code>Authorization: Bearer &lt;profile token&gt;</code>. <code>x-api-key</code> also works.</p></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="hLive">
+      <div class="ph"><h3 id="hLive">Live view</h3><span class="vstate" id="vstate" aria-live="polite">No live view</span><span class="readout fps" id="vfps"></span></div>
+      <form class="nav" id="nav"><label for="vurl" class="sr">Address</label>
+        <input class="f mono" id="vurl" placeholder="https://… (allowed domains only)" autocomplete="off"><button type="submit">Go</button></form>
+      <div class="bezel">
+        <div class="banner"><b>Control</b>Your keyboard and mouse go to this browser. Click the view to type.</div>
+        <div class="screen" id="screen"><div class="empty"><div><b>No signal</b>Watch shows a running computer. Take control starts it if needed.</div></div></div>
+      </div>
+      <p class="pageinfo" id="pageinfo"><span></span><span></span></p>
+    </section>
+
+    <div class="pair">
+      <section class="panel" aria-labelledby="hLogins">
+        <div class="ph"><h3 id="hLogins">Saved logins</h3><span class="readout" id="rLogins"></span></div>
+        <div id="logins"></div>
+        <form class="grid-form" id="loginForm">
+          <label>Site name<input class="f mono" name="site" placeholder="notion" pattern="[a-z0-9-]{1,40}" title="Lowercase letters, digits and dashes, 40 max" required autocomplete="off"></label>
+          <label>Login page URL<input class="f mono" name="url" placeholder="https://www.notion.so/login" required autocomplete="off"></label>
+          <label>Username or email<input class="f" name="username" autocomplete="off" required></label>
+          <label>Password<input class="f" name="password" type="password" placeholder="Empty keeps the saved one" autocomplete="new-password"></label>
+          <div class="row"><button type="submit">Save login</button><p class="msg" id="loginErr" aria-live="polite"></p></div>
+          <p class="hint wide">The agent calls <code>login</code> with the site name. It never sees the password.</p>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="hAllow">
+        <div class="ph"><h3 id="hAllow">Allowed domains</h3><span class="readout" id="rAllow"></span></div>
+        <div class="chips" id="chips"></div>
+        <form class="stack" id="allowForm">
+          <label>Domains, comma separated<input class="f mono" name="allow" required autocomplete="off"></label>
+          <div><button type="submit">Save domains</button></div>
+          <p class="hint">Saving restarts the browser: the DNS allowlist is set at launch.</p>
+        </form>
+      </section>
+    </div>
+
+    <details class="panel diag" id="diag"${diagOpen ? ' open' : ''}>
+      <summary><h3>Diagnostics</h3><span class="readout" id="rDiag"></span></summary>
+      <div class="body">
+        <div class="full"><h4>Recent calls</h4><div class="tbl" id="audit"></div></div>
+        <div><h4>Cookies</h4><div class="tbl" id="cookies"></div></div>
+        <div><h4>Local storage</h4><div class="tbl" id="storage"></div><p class="hint" style="margin-top:12px">Container <span class="mono" id="fContainer"></span></p></div>
+      </div>
+    </details>
+
+    <section class="panel dz" aria-labelledby="hDanger">
+      <h3 id="hDanger">Danger zone</h3>
+      <div class="drow"><div><b>Regenerate token</b><p>The old token and its OAuth sessions stop working. Agents must reconnect.</p></div><button type="button" class="danger" id="bToken">Regenerate token</button></div>
+      <div class="drow"><div><b>Delete profile</b><p>Container, cookies, saved logins and tokens are destroyed. This cannot be undone.</p></div><button type="button" class="danger solid" id="bDelete">Delete profile</button></div>
+    </section>`;
+
+  const p = `/api/computers/${encodeURIComponent(id)}`;
+  const u = $('#mcpUrl');
+  u.value = mcpUrl() || `${location.protocol}//${location.hostname}:8787/mcp`;
+  u.onchange = () => { try { localStorage.setItem(MCP_KEY, u.value.trim()); } catch {} };
+  $('#bCopyUrl').onclick = (e) => act(e.currentTarget, () => navigator.clipboard.writeText(u.value.trim()), 'MCP URL copied.');
+
+  $('#bWatch').onclick = () => openView(id, false);
+  $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeControl(id));
+  $('#bLeave').onclick = () => { closeView(); renderToolbar(); $('#bCtl').focus(); };
+  $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Browser stopped.');
+
+  $('#nav').onsubmit = (e) => {
+    e.preventDefault();
+    act(e.submitter, async () => {
+      let url = $('#vurl').value.trim(); if (!url) return false;
+      if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+      setVstate('Opening…');
+      try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
+      catch (err) { setVstate(err.message); return false; }
+      refreshDetail();
+    });
+  };
+  $('#allowForm').allow.value = (computers.find((x) => x.id === id)?.allow || []).join(', ');
+  submit($('#allowForm'), async (f) => {
+    closeView();
+    try { await api(`${p}/config`, 'POST', { allow: domains(f.allow.value) }); toast('Domains saved. The browser restarts on next use.'); }
+    finally { refreshList(); refreshDetail(); }
+  });
+  submit($('#loginForm'), async (f) => {
+    try {
+      await api(`${p}/login-save`, 'POST', { site: f.site.value.trim(), url: f.url.value.trim(), username: f.username.value, password: f.password.value });
+      f.reset(); flash($('#loginErr'), 'Saved.'); refreshDetail();
+    } catch (err) { flash($('#loginErr'), err.message, true); }
+  });
+  $('#bToken').onclick = (e) => act(e.currentTarget, async () => {
+    if (!confirm(`Regenerate the token of ${id}? The old one and its OAuth sessions stop working.`)) return false;
+    showSecret(`New token for ${id}`, (await api(`${p}/token`, 'POST')).token, id); refreshList();
+  });
+  $('#bDelete').onclick = (e) => act(e.currentTarget, async () => {
+    if (!confirm(`Delete ${id}? Container, cookies, saved logins and tokens are destroyed. This cannot be undone.`)) return false;
+    closeView(); await api(`${p}/delete`, 'POST');
+    if (secret?.owner === id) secret = null;
+    selected = null; $('#detail').innerHTML = `<div class="placeholder"><b>Profile deleted</b>${esc(id)} and its data are gone.</div>`; refreshList();
+  }, `Deleted ${id}.`);
+
+  renderToolbar(); renderFacts(); renderSecret();
+  refreshList();
+  refreshDetail();
+  if (byUser && narrow.matches) {
+    $('#detail').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    $('#dTitle').focus({ preventScroll: true });
+  }
+}
+
+function deleteLogin(btn, site) {
+  act(btn, async () => {
+    if (!confirm(`Delete the saved login "${site}"?`)) return false;
+    await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail();
+  }, `Deleted login ${site}.`);
+}
+
+const setBtn = (b, dis, title) => { b.disabled = !!b.dataset.busy || dis; if (title) { if (b.title !== title) b.title = title; } else b.removeAttribute('title'); };
+function renderToolbar() {
+  const c = computers.find((x) => x.id === selected);
+  if (!c || !$('#toolbar')) return;
+  const up = c.state === 'running', live = view?.id === c.id, ctl = live && view.control;
+  setText($('#dTitle'), c.id);
+  const st = $('#dState'); if (st.dataset.state !== stateOf(c)) st.dataset.state = stateOf(c);
+  setText(st.lastElementChild, stateLabel(c) + (c.leasedUntil ? ', leased' : ''));
+  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'The computer is stopped. Use Start + take control.' : live && !ctl ? 'Already watching' : 'Watch without sending input');
+  setText($('#bCtl'), up ? 'Take control' : 'Start + take control');
+  setBtn($('#bCtl'), ctl, ctl ? 'You already have control' : '');
+  $('#bLeave').hidden = !live;
+  setBtn($('#bStop'), !up, !up ? 'Already stopped' : 'Close the browser. The profile is kept.');
+}
+
+// Connect facts and allowlist come from the list poll: rebuilt only when their data changes.
+function renderFacts() {
+  const c = computers.find((x) => x.id === selected);
+  if (!c || !$('#fToken')) return;
+  const mine = secret?.owner === c.id;
+  const k = JSON.stringify([c.hasToken, c.leasedUntil, mine]);
+  if (keys.facts !== k) {
+    keys.facts = k;
+    $('#fToken').innerHTML = c.hasToken
+      ? `<span class="mark ok">Set</span><span class="hint">${mine ? 'Copy it from the box above. It is shown once.' : 'Shown once at creation. Lost it? Regenerate it in the danger zone.'}</span>`
+      : '<span class="mark none">None</span><span class="hint">This profile is only used through leases.</span>';
+    $('#fLease').innerHTML = c.leasedUntil
+      ? `<span class="mark ok">Leased</span><span>by an agent until ${esc(new Date(c.leasedUntil).toLocaleTimeString())}</span><button type="button" class="small" id="bRelease">Release</button>`
+      : '<span class="mark none">Free</span>';
+    if ($('#bRelease')) $('#bRelease').onclick = (e) => act(e.currentTarget, async () => {
+      await api(`/api/computers/${encodeURIComponent(selected)}/release`, 'POST'); refreshList(); refreshDetail();
+    }, 'Lease released.');
+  }
+  const ka = JSON.stringify(c.allow);
+  if (keys.allow !== ka) {
+    keys.allow = ka;
+    $('#chips').innerHTML = (c.allow || []).map((d) => `<span class="chip">${esc(d)}</span>`).join('');
+    setText($('#rAllow'), `${(c.allow || []).length} enforced`);
+  }
+  setText($('#fContainer'), `${c.container}: ${c.status}`);
+}
+
+function patch(name, data, html) {
+  const k = JSON.stringify(data);
+  if (keys[name] === k) return false;
+  keys[name] = k; $('#' + name).innerHTML = html();
+  return true;
+}
+const tickTimes = () => { for (const t of document.querySelectorAll('time[data-ts]')) setText(t, ago(t.dataset.ts)); };
+
+async function refreshDetail() {
+  if (!selected) return;
+  const id = selected;
+  let d; try { d = await api(`/api/computers/${encodeURIComponent(id)}`); } catch (e) { if ($('#logins')) toast(e.message, 'error'); return; }
+  if (id !== selected || !$('#logins')) return;
+  const [pt, pu] = $('#pageinfo').children;
+  setText(pt, d.page ? d.page.title || 'Untitled page' : 'Browser is not running');
+  setText(pu, d.page ? d.page.url : '');
+
+  setText($('#rLogins'), `${d.logins.length} saved`);
+  if (patch('logins', d.logins, () => d.logins.length
+    ? `<div class="tbl"><table><tr><th>Site</th><th>Login page</th><th>Username</th><th><span class="sr">Delete</span></th></tr>${d.logins.map((l) => `
+      <tr><td class="mono nw">${esc(l.site)}</td><td class="mono">${esc(l.url)}</td><td>${esc(l.username)}</td>
+      <td class="act"><button type="button" class="icon-del" data-site="${esc(l.site)}" aria-label="Delete saved login ${esc(l.site)}" title="Delete saved login">${TRASH}</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty-row">None yet. Add one below, or log in by hand with Take control: cookies stay in the profile.</p>'))
+    for (const b of document.querySelectorAll('#logins .icon-del')) b.onclick = () => deleteLogin(b, b.dataset.site);
+
+  setText($('#rDiag'), `${d.audit.length} calls, ${d.cookies.length} cookies, ${d.storage.length} origins`);
+  patch('audit', d.audit, () => d.audit.length
+    ? `<table><tr><th>When</th><th>Tool</th><th>Result</th><th>Time</th></tr>${d.audit.map((l) => `<tr><td class="num"><time data-ts="${esc(l.ts)}" title="${esc(l.ts)}">${ago(l.ts)}</time></td><td class="mono nw">${esc(l.tool)}</td>
+      <td class="${l.ok ? 'ok' : 'err'}">${l.ok ? '✓ ok' : '✗ ' + esc(l.err || 'error')}</td><td class="num">${l.ms != null ? l.ms + ' ms' : ''}</td></tr>`).join('')}</table>`
+    : '<p class="empty-row">No calls yet.</p>');
+  patch('cookies', d.cookies, () => d.cookies.length
+    ? `<table><tr><th>Name</th><th>Domain</th><th>Expires</th><th>Flags</th></tr>${d.cookies.map((k) => `
+      <tr><td class="mono nw">${esc(k.name)}</td><td class="mono">${esc(k.domain)}</td><td class="num">${k.session || k.expires < 0 ? 'session' : new Date(k.expires * 1000).toLocaleDateString()}</td>
+      <td>${[k.httpOnly && 'httpOnly', k.secure && 'secure'].filter(Boolean).join(' ')}</td></tr>`).join('')}</table>
+      <p class="hint" style="margin-top:6px">Names only, from the saved session (refreshed every 30 s while up).</p>`
+    : '<p class="empty-row">No cookies saved.</p>');
+  patch('storage', d.storage, () => d.storage.length
+    ? `<table><tr><th>Origin</th><th>Keys</th></tr>${d.storage.map((o) => `<tr><td class="mono">${esc(o.origin)}</td><td class="num">${o.localStorageKeys}</td></tr>`).join('')}</table>`
+    : '<p class="empty-row">None.</p>');
+  tickTimes();
+}
+
+// ---- Live view (same stream protocol as admin.html) -------------------------
+function setVstate(text, mode) { const v = $('#vstate'); if (!v) return; setText(v, text); if ((v.dataset.mode || '') !== (mode || '')) v.dataset.mode = mode || ''; }
+
+async function takeControl(id) {
+  setVstate('Starting…');
+  try { await api(`/api/computers/${encodeURIComponent(id)}/start`, 'POST'); } catch (e) { setVstate(e.message); throw e; }
+  await refreshList();
+  openView(id, true);
+}
+
+function openView(id, control) {
+  if (view?.id === id) { view.control = control; wireControl(); renderToolbar(); return; }
+  closeView();
+  const ws = new WebSocket(`ws://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
+  view = { id, ws, control, meta: null, frames: 0 };
+  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live browser view">';
+  const img = $('#frame'), v = view;
+  ws.onopen = () => { setVstate(v.control ? 'Control' : 'Watching', v.control ? 'control' : 'watch'); };
+  ws.onclose = () => { if (view === v) { view = null; setVstate('View closed'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderToolbar(); } };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'frame') {
+      v.meta = msg.metadata; v.frames++;
+      img.onload = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'ack', seq: msg.seq }));
+      img.src = 'data:image/jpeg;base64,' + msg.data;
+    } else if (msg.type === 'url' && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
+  };
+  wireControl();
+  renderToolbar();
+}
+
+function closeView() { if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
+
+// Human input -> agent-browser stream protocol (same fields as its own dashboard).
+const mods = (e) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
+const KEY_TEXT = { Enter: '\r', Tab: '\t' };
+function wireControl() {
+  const img = $('#frame'), screen = $('#screen');
+  if (!img || !view) return;
+  const on = view.control;
+  screen.classList.toggle('control', on);
+  setVstate(on ? 'Control' : 'Watching', on ? 'control' : 'watch');
+  const send = (m) => on && view?.ws.readyState === 1 && view.ws.send(JSON.stringify(m));
+  const pos = (e) => { const r = img.getBoundingClientRect(), m = view.meta || { deviceWidth: r.width, deviceHeight: r.height };
+    return { x: Math.round((e.clientX - r.left) * m.deviceWidth / r.width), y: Math.round((e.clientY - r.top) * m.deviceHeight / r.height) }; };
+  const btn = (b) => ['left', 'middle', 'right'][b] || 'none';
+  let lastMove = 0;
+  img.onmousedown = (e) => { if (!on) return; e.preventDefault(); img.focus(); send({ type: 'input_mouse', eventType: 'mousePressed', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) }); };
+  img.onmouseup = (e) => send({ type: 'input_mouse', eventType: 'mouseReleased', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) });
+  img.onmousemove = (e) => { if (Date.now() - lastMove < 40 && !e.buttons) return; lastMove = Date.now(); send({ type: 'input_mouse', eventType: 'mouseMoved', ...pos(e), button: e.buttons ? 'left' : 'none', clickCount: 0, modifiers: mods(e) }); };
+  img.oncontextmenu = (e) => on && e.preventDefault();
+  img.onwheel = (e) => { if (!on) return; e.preventDefault(); send({ type: 'input_mouse', eventType: 'mouseWheel', ...pos(e), button: 'none', clickCount: 0, deltaX: e.deltaX, deltaY: e.deltaY, modifiers: mods(e) }); };
+  const key = (type) => (e) => {
+    if (!on) return; e.preventDefault();
+    const text = type === 'keyDown' ? (KEY_TEXT[e.key] ?? ([...e.key].length === 1 ? e.key : undefined)) : undefined;
+    send({ type: 'input_keyboard', eventType: type, key: e.key, code: e.code, text, windowsVirtualKeyCode: e.keyCode, modifiers: mods(e) });
+  };
+  img.onkeydown = key('keyDown'); img.onkeyup = key('keyUp');
+  if (on) img.focus();
+}
+
+setInterval(() => { if (view) setText($('#vfps'), `${view.frames} fps`); if (view) view.frames = 0; }, 1000);
+setInterval(refreshList, 3000);
+setInterval(refreshDetail, 5000);
+refreshList();
+</script>
+</body>
+</html>

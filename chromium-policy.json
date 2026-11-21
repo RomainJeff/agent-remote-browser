@@ -1,0 +1,5 @@
+{
+  "URLBlocklist": ["file://*", "chrome://*", "chrome-untrusted://*", "devtools://*", "view-source:*", "javascript:*", "data:*", "filesystem:*"],
+  "DnsOverHttpsMode": "off",
+  "QuicAllowed": false
+}

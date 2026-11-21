@@ -1,0 +1,15 @@
+{
+  "name": "agent-computer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POC: one Docker browser computer per Notion Custom Agent, behind a remote MCP gateway",
+  "scripts": {
+    "start": "node gateway.mjs",
+    "check": "node check.mjs",
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  }
+}
