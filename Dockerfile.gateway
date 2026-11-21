@@ -1,11 +1,13 @@
-# Gateway image: MCP server + admin UI. Talks to the Docker Engine API over the mounted socket (no docker CLI).
+# Gateway and runner image. Gateway (default): MCP server + admin UI, drives computers through the runner.
+# Runner (`node src/runner/server.ts`): the only holder of the Docker socket, talks to the Engine API (no docker CLI).
 FROM node:26-bookworm-slim
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 # Named volumes take their owner from the image path on first use: create them for the non-root user.
-RUN mkdir -p /run/arb-egress /data && chown node:node /run/arb-egress /data && chmod 700 /data
+RUN mkdir -p /run/arb-egress /run/arb-runner /data && chown node:node /run/arb-egress /run/arb-runner /data \
+ && chmod 700 /run/arb-runner /data
 USER node
 # Test suite runs at build time (FakeDriver, no daemon needed); test/ is bind-mounted, never shipped.
 RUN --mount=type=bind,source=test,target=/app/test node --test "test/**/*.test.ts"

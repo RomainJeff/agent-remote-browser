@@ -7,24 +7,56 @@
 #   docker compose --profile tunnel up -d --build   # + quick tunnel; set PUBLIC_URL to its URL, then `up -d gateway`
 name: ${ARB_PREFIX:-arb}
 services:
-  # Builds the per-agent "computer" image, then exits. The gateway starts one container per agent from it.
+  # Builds the per-agent "computer" image, then exits. The runner starts one container per agent from it.
   computer-image:
     build: .
     image: ${ARB_PREFIX:-arb}-computer:dev
     entrypoint: ["true"]
     restart: "no"
 
+  # The only service with the Docker socket (= root on the host). No network; answers the gateway on a Unix socket
+  # and only with the fixed computer spec, the allowlisted commands and this stack's labeled containers.
+  runner:
+    build: { context: ., dockerfile: Dockerfile.gateway }   # same image, other entry point
+    command: ["node", "src/runner/server.ts"]
+    init: true
+    restart: unless-stopped
+    depends_on:
+      computer-image: { condition: service_completed_successfully }
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # The Engine API socket is root:<docker group> 0660; the runner runs as `node`. Docker Desktop: 0. Linux: getent group docker.
+    group_add: ["${DOCKER_GID:-0}"]
+    environment:
+      ARB_PREFIX: ${ARB_PREFIX:-arb}
+      SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}  # runsc (gVisor) on Linux; required unless ALLOW_NO_SANDBOX=1
+      ALLOW_NO_SANDBOX: ${ALLOW_NO_SANDBOX:-}  # 1 = Docker default runtime (macOS dev). Empty = refuse to start without runsc
+      ALLOW_POC_MIGRATION: ${ALLOW_POC_MIGRATION:-}  # 1 = migrate-from-poc may copy POC volumes. Only during the migration
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner:/run/arb-runner         # runner.sock (0600, uid 1000): shared with the gateway only
+    healthcheck:
+      test: ["CMD", "node", "src/runner/server.ts", "check"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      start_interval: 1s
+
   gateway:
     build: { context: ., dockerfile: Dockerfile.gateway }
     init: true
     restart: unless-stopped
     depends_on:
-      computer-image: { condition: service_completed_successfully }
+      runner: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     # Same port inside and outside: the admin checks Host against its own port. 18788 = admin UI,
     # localhost only, never put it behind the tunnel.
     ports: ["127.0.0.1:18787:18787", "127.0.0.1:18788:18788"]
-    # The Engine API socket is root:<docker group> 0660; the gateway runs as `node`. Docker Desktop: 0. Linux: getent group docker.
-    group_add: ["${DOCKER_GID:-0}"]
     environment:
       ARB_PREFIX: ${ARB_PREFIX:-arb}
       BIND_ADDR: 0.0.0.0               # inside the container; published on 127.0.0.1 only
@@ -42,16 +74,14 @@ services:
       AUDIT_FILE: /data/audit.jsonl
       KILL_FILE: /data/KILL            # `docker compose exec gateway touch /data/KILL` = every tool call refused
       IDLE_MIN: ${IDLE_MIN:-5}
-      SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}  # runsc (gVisor) on Linux; required unless ALLOW_NO_SANDBOX=1
-      ALLOW_NO_SANDBOX: ${ALLOW_NO_SANDBOX:-}  # 1 = Docker default runtime (macOS dev). Empty = refuse to start without runsc
     # Login key: kept out of the data volume, so a backup of arb.db alone exposes no password.
     # Better Auth secret: signs session cookies, encrypts TOTP secrets.
     secrets: [login_key, better_auth_secret]
+    # No Docker socket: computers are driven through the runner (src/runner/protocol.ts).
     volumes:
-      # ponytail: socket access = root on the host. Upgrade: privileged runner (plan, lot 5).
-      - /var/run/docker.sock:/var/run/docker.sock
       - data:/data
-      - egress:/run/arb-egress
+      - egress:/run/arb-egress         # egress proxy sockets, one subdir per profile, mounted read-only into its computer
+      - runner:/run/arb-runner
 
   tunnel:
     profiles: [tunnel]
@@ -70,5 +100,7 @@ volumes:
   data:
     name: ${ARB_PREFIX:-arb}-data
   egress:
-    # Fixed name: the gateway mounts it into each computer by this name.
+    # Fixed name: the runner mounts it into each computer by this name.
     name: ${ARB_PREFIX:-arb}-egress
+  runner:
+    name: ${ARB_PREFIX:-arb}-runner
