@@ -824,7 +824,7 @@ function openView(id, control) {
   if (view?.id === id) { view.control = control; wireControl(); renderLiveBar(); return; }
   closeView();
   if (!$('#screen')) return;
-  const ws = new WebSocket(`ws://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
   view = { id, ws, control, meta: null, frames: 0 };
   $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live view of the browser">';
   const img = $('#frame'), v = view;
