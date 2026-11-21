@@ -31,6 +31,14 @@ export const parseProfileId = (id: unknown): ProfileId | null => (validId(id) ? 
 export const validDomain = (d: unknown): d is string => typeof d === 'string' && !/(^|\.)(localhost|internal|local|lan|home\.arpa)$/.test(d) && /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d);
 
 /** OAuth redirect URIs: https anywhere, http only to loopback (native clients). No fragment. */
+/** Allowlist from user input: lowercased domains, 1 to 50. Returns null when invalid. */
+export function cleanAllow(allow: unknown) {
+  if (!Array.isArray(allow)) return null;
+  const a = [...new Set(allow.map((d) => String(d).trim().toLowerCase()).filter(Boolean))];
+  return a.length && a.length <= 50 && a.every(validDomain) ? a : null;
+}
+export const sitesOf = (p: { logins?: Record<string, unknown> }) => Object.keys(p.logins || {});
+
 export function redirectUriOk(raw: unknown) {
   if (typeof raw !== 'string') return false;
   let u: URL;

@@ -1,3 +1,0 @@
-#!/bin/sh
-# Fake docker CLI for tests: put test/fixtures/bin first on PATH.
-exec node "$(dirname "$0")/../fake-docker.mjs" "$@"

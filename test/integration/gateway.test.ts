@@ -1,27 +1,34 @@
-// The real gateway in a child process, on free ports, with temp state and a fake `docker` first on PATH
-// (test/fixtures/bin/docker records argv, returns canned agent-browser output). Tests share one gateway
-// and run in order: later tests rely on the profile and tokens created by earlier ones.
+// The real gateway in-process, on free ports, with temp state and an in-memory FakeDriver (records every host
+// call, returns canned agent-browser output). Tests share one gateway and run in order: later tests rely on the
+// profile and tokens created by earlier ones.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { start } from '../../src/server.ts';
+import { loadConfig } from '../../src/config.ts';
+import { FakeDriver } from '../../src/host/fake.ts';
+import { parseProfileId } from '../../src/policy.ts';
 
-const root = new URL('../..', import.meta.url).pathname;
 const dir = mkdtempSync(join(tmpdir(), 'arb-gw-'));
 const f = {
   state: join(dir, 'state.json'), audit: join(dir, 'audit.jsonl'), kill: join(dir, 'KILL'),
-  key: join(dir, 'login.key'), egress: join(dir, 'egress'), docker: join(dir, 'docker.log'),
+  key: join(dir, 'login.key'), egress: join(dir, 'egress'),
 };
-let gateway: ChildProcess, PORT = 0, ADMIN = 0, base = '';
+const fake = new FakeDriver();
+let app: Awaited<ReturnType<typeof start>>, PORT = 0, ADMIN = 0, base = '';
 const tokens = { global: '', shop: '' };
-const sha256 = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
+
+const boot = () => start(loadConfig({
+  PORT: String(PORT), ADMIN_PORT: String(ADMIN), STATE_FILE: f.state, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
+  LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, ALLOW_NO_SANDBOX: '1',
+}), fake);
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as net.AddressInfo; s.close(() => resolve(port)); });
@@ -30,24 +37,11 @@ const freePort = () => new Promise<number>((resolve) => {
 before(async () => {
   [PORT, ADMIN] = [await freePort(), await freePort()];
   base = `http://127.0.0.1:${PORT}`;
-  const env: NodeJS.ProcessEnv = {
-    ...process.env, PATH: join(root, 'test/fixtures/bin') + ':' + process.env.PATH, ARB_PREFIX: 'arb',
-    PORT: String(PORT), ADMIN_PORT: String(ADMIN), STATE_FILE: f.state, AUDIT_FILE: f.audit, KILL_FILE: f.kill,
-    LOGIN_KEY_FILE: f.key, EGRESS_DIR: f.egress, FAKE_DOCKER_LOG: f.docker, ALLOW_NO_SANDBOX: '1',
-  };
-  delete env.PUBLIC_URL; delete env.IMAGE; delete env.SANDBOX_RUNTIME; delete env.NODE_ENV;
-  gateway = spawn(process.execPath, ['gateway.mjs'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(Error('gateway did not start:\n' + out)), 10_000);
-    for (const s of [gateway.stdout!, gateway.stderr!]) s.on('data', (d) => {
-      out += d;
-      if (out.includes('admin UI listening')) { clearTimeout(timer); resolve(); }
-    });
-    gateway.on('exit', (code) => reject(Error(`gateway exited ${code}:\n${out}`)));
-  });
+  // A stopped leftover of an unknown profile: startup must not touch it.
+  fake.computers.set('ghost', { id: 'ghost', running: true });
+  app = await boot();
 });
-after(() => { gateway?.kill(); rmSync(dir, { recursive: true, force: true }); });
+after(async () => { await app?.close(); rmSync(dir, { recursive: true, force: true }); });
 
 /** Raw admin request: full control over Host, Origin and fetch metadata headers. */
 function admin(method: string, path: string, { body, headers = {} }: { body?: unknown, headers?: Record<string, string> } = {}) {
@@ -74,12 +68,16 @@ const call = (token: string, name: string, args: Record<string, unknown> = {}) =
   return { error: !!r.isError, text: r.content[0].text };
 });
 const toolNames = (token: string) => mcp(token, async (c) => (await c.listTools()).tools.map((t) => t.name).sort());
-const dockerCalls = (): string[][] => existsSync(f.docker) ? readFileSync(f.docker, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
-const runs = () => dockerCalls().filter((c) => c[0] === 'run');
-const agentBrowser = (op: string) => dockerCalls().filter((c) => c[0] === 'exec' && c.includes('agent-browser') && c.includes(op));
+const calls = (op: string) => fake.calls.filter((c) => c.op === op);
+const agentBrowser = (op: string) => calls('exec').filter((c) => c.argv![0] === 'agent-browser' && c.argv!.includes(op));
 
-test('startup only looks for its own prefixed containers', () => {
-  assert.deepEqual(dockerCalls()[0], ['ps', '--filter', 'label=arb-computer', '--format', '{{.Names}}']);
+test('startup lists its computers, leaves unknown ones alone; probes answer without auth', async () => {
+  assert.deepEqual(fake.calls, [{ op: 'list' }]);
+  assert.equal(await (await fetch(base + '/healthz')).text(), 'ok');
+  const ready = await fetch(base + '/readyz');
+  assert.equal(ready.status, 200);
+  assert.equal(await ready.text(), 'ready');
+  fake.computers.delete('ghost');
 });
 
 test('admin issues tokens, MCP without a valid bearer gets the OAuth hint', async () => {
@@ -106,7 +104,7 @@ test('admin issues tokens, MCP without a valid bearer gets the OAuth hint', asyn
   }
 });
 
-test('profile token: browser tools only, open outside the allowlist never reaches docker', async () => {
+test('profile token: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
   assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'login', 'open', 'press', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
@@ -114,33 +112,25 @@ test('profile token: browser tools only, open outside the allowlist never reache
     assert.ok(r.error, url);
     assert.match(r.text, /^Domain not allowed/, url);
   }
-  assert.equal(runs().length, 0);
+  assert.equal(calls('ensure').length, 0);
 });
 
-test('open on the allowlist starts one hardened, prefixed computer', async () => {
+test('open on the allowlist starts one computer, behind its own egress proxy', async () => {
   const r = await call(tokens.shop, 'open', { url: 'https://www.example.com/' });
   assert.ok(!r.error, r.text);
   assert.deepEqual(JSON.parse(r.text), { title: 'Fake page', url: 'https://www.example.com/' });
+  const first = fake.computers.get('shop')!;
   await call(tokens.shop, 'open', { url: 'https://example.com/' });
-  const [run] = runs();
-  assert.equal(runs().length, 1, 'second call reuses the running computer');
-  const flag = (k: string) => run[run.indexOf(k) + 1];
-  assert.equal(flag('--name'), 'arb-shop');
-  assert.equal(flag('--label'), 'arb-computer=shop');
-  assert.equal(flag('--network'), 'none');
-  assert.equal(flag('--security-opt'), 'no-new-privileges');
-  assert.ok(run.includes('--cap-drop=ALL'));
-  assert.equal(flag('-v'), 'arb-profile-shop:/home/agent/.agent-browser');
-  assert.match(flag('--mount'), /^type=volume,src=arb-egress,dst=\/egress,volume-subpath=shop,readonly$/);
-  assert.ok(run.includes('arb-computer:dev'));
-  assert.ok(!run.some((a) => /^(ac-|agent-computer)/.test(a)), 'no name from the POC namespace');
+  assert.deepEqual([...fake.computers.keys()], ['shop']);
+  assert.equal(fake.computers.get('shop'), first, 'second call reuses the running computer');
+  assert.ok(calls('ensure').every((c) => c.id === 'shop'));
   assert.equal(statSync(join(f.egress, 'shop', 'proxy.sock')).mode & 0o777, 0o666);
 
   const snap = await call(tokens.shop, 'snapshot');
   assert.match(snap.text, /^<untrusted_page_content origin="https:\/\/example.com">/);
 });
 
-test('saved login: password only crosses docker through stdin', async () => {
+test('saved login: password only reaches the host through stdin', async () => {
   const password = randomBytes(18).toString('base64url');
   assert.equal((await admin('POST', '/api/computers/shop/login-save',
     { body: { site: 'main', url: 'https://example.org/login', username: 'fixture', password } })).status, 400, 'URL off the allowlist');
@@ -152,23 +142,25 @@ test('saved login: password only crosses docker through stdin', async () => {
   assert.equal(JSON.parse(r.text).submitted, true);
   assert.equal((await call(tokens.shop, 'login', { site: 'other' })).error, true);
 
-  const save = agentBrowser('--password-stdin')[0];
-  assert.ok(save.includes('-i'));
-  assert.ok(dockerCalls().some((c) => c[0] === '#stdin-sha256' && c[1] === sha256(password)), 'password went through stdin');
+  const saves = agentBrowser('--password-stdin');
+  assert.equal(saves.length, 1);
+  assert.equal(saves[0].stdin, password, 'password went through stdin');
+  assert.ok(fake.calls.every((c) => c === saves[0] || !JSON.stringify(c).includes(password)), 'nowhere else');
+  assert.ok(!saves[0].argv!.includes(password));
   assert.equal(agentBrowser('delete').length, 1, 'in-container vault entry deleted');
   const details = await admin('GET', '/api/computers/shop');
   assert.deepEqual(details.json.logins, [{ site: 'main', url: 'https://example.com/login', username: 'fixture' }]);
-  for (const file of [f.docker, f.state, f.audit]) assert.ok(!readFileSync(file, 'utf8').includes(password), file);
+  for (const file of [f.state, f.audit]) assert.ok(!readFileSync(file, 'utf8').includes(password), file);
   assert.ok(!JSON.stringify(details.json).includes(password));
 });
 
 test('kill switch refuses every tool until removed', async () => {
   writeFileSync(f.kill, '');
   try {
-    const before = dockerCalls().length;
+    const before = fake.calls.length;
     const r = await call(tokens.shop, 'open', { url: 'https://example.com/' });
-    assert.deepEqual(r, { error: true, text: 'agent-computer is disabled (kill switch)' });
-    assert.equal(dockerCalls().length, before);
+    assert.deepEqual(r, { error: true, text: 'agent-remote-browser is disabled (kill switch)' });
+    assert.equal(fake.calls.length, before);
     const { agent, tool, ok } = JSON.parse(readFileSync(f.audit, 'utf8').trim().split('\n').at(-1)!);
     assert.deepEqual({ agent, tool, ok }, { agent: 'shop', tool: 'open', ok: false });
   } finally { rmSync(f.kill); }
@@ -223,10 +215,12 @@ test('live view WebSocket: cross-origin upgrade dropped before touching the comp
   const n = streams();
   assert.equal(await upgrade({ origin: 'http://evil.test' }), 'dropped');
   assert.equal(await upgrade({ host: `evil.test:${ADMIN}` }), 'dropped');
-  assert.equal(streams(), n, 'no docker exec for refused upgrades');
+  assert.equal(streams(), n, 'no host call for refused upgrades');
+  const relays = calls('stream').length;
   // Same-origin reaches the computer (the fake relay exits at once, so the socket closes without a 101).
   await upgrade({ origin: `http://127.0.0.1:${ADMIN}` });
   assert.equal(streams(), n + 1);
+  assert.equal(calls('stream').length, relays + 1);
 });
 
 test('OAuth: DCR, consent, PKCE, refresh rotation, revocation on token regeneration', async () => {
@@ -286,11 +280,22 @@ test('OAuth: DCR, consent, PKCE, refresh rotation, revocation on token regenerat
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
 });
 
-test('deleting a profile removes only its own prefixed container and volume', async () => {
+test('deleting a profile removes its computer and volume', async () => {
   assert.equal((await admin('POST', '/api/computers/shop/delete', { body: {} })).status, 200);
-  const rm = dockerCalls().filter((c) => c[0] === 'rm' || (c[0] === 'volume' && c[1] === 'rm'));
-  assert.deepEqual(rm.slice(-2), [['rm', '-f', 'arb-shop'], ['volume', 'rm', '-f', 'arb-profile-shop']]);
+  assert.deepEqual(calls('remove'), [{ op: 'remove', id: 'shop', keepVolume: false }]);
   const r = await fetch(base + '/mcp', { method: 'POST', headers: { authorization: `Bearer ${tokens.shop}`, 'content-type': 'application/json' }, body: '{}' });
   assert.equal(r.status, 401, 'token of a deleted profile');
   assert.equal((await admin('GET', '/api/computers/shop')).status, 404);
+});
+
+test('restart reconnects running computers of known profiles only', async () => {
+  const id = parseProfileId('shop2')!;
+  assert.equal((await admin('POST', '/api/profiles', { body: { id, allow: ['example.com'] } })).status, 201);
+  fake.computers.set(id, { id, running: true });
+  fake.computers.set('ghost', { id: 'ghost', running: true });
+  await app.close();
+  fake.calls = [];
+  app = await boot();
+  assert.deepEqual(fake.calls, [{ op: 'list' }, { op: 'ensure', id: 'shop2' }]);
+  assert.equal(fake.computers.get(id)!.running, true, 'graceful close left the computer running');
 });
