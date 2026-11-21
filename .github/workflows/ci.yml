@@ -61,9 +61,10 @@ jobs:
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
             | sudo tee /etc/apt/sources.list.d/gvisor.list
           sudo apt-get update -qq && sudo apt-get install -y -qq runsc restic
-          sudo runsc install            # adds "runsc" to /etc/docker/daemon.json
+          # --host-uds=open: the browser's bridge connects to the gateway's egress socket (/egress/proxy.sock).
+          sudo runsc install -- --host-uds=open   # adds "runsc" to /etc/docker/daemon.json
           sudo systemctl restart docker
-          docker info --format '{{json .Runtimes}}' | grep -q '"runsc"'
+          docker info --format '{{json .Runtimes}}' | grep -q '"--host-uds=open"'
           runsc --version
 
       - name: Synthetic secrets
@@ -140,4 +141,6 @@ jobs:
 
       - name: Logs on failure
         if: failure()
-        run: docker compose logs --no-color --tail 200
+        run: |
+          docker compose logs --no-color --tail 200
+          for c in $(docker ps -aq --filter label=arb-computer); do docker logs --tail 50 "$c"; done
