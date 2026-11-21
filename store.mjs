@@ -18,7 +18,7 @@ export function save() {
   renameSync(FILE + '.tmp', FILE);
 }
 
-const keyFile = process.env.LOGIN_KEY_FILE || '/run/ac-keys/login.key';
+const keyFile = process.env.LOGIN_KEY_FILE || '/run/arb-keys/login.key';
 const entries = Object.entries(state.profiles).flatMap(([id,p]) =>
   Object.entries(p.logins || {}).map(([site,c]) => ({id,site,c})));
 if (!existsSync(keyFile)) {

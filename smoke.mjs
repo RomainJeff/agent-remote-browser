@@ -3,7 +3,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-const url = new URL(process.env.GATEWAY || 'http://localhost:8787/mcp');
+const url = new URL(process.env.GATEWAY || 'http://localhost:18787/mcp');
 const client = new Client({ name: 'smoke', version: '0' });
 await client.connect(new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: `Bearer ${process.env.TOKEN}` } } }));
 

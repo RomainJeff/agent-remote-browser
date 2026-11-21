@@ -18,7 +18,12 @@ const AUDIT = process.env.AUDIT_FILE || here('audit.jsonl');
 const KILL = process.env.KILL_FILE || here('KILL'); // touch it = every tool call refused
 const PORT = +process.env.PORT || 8787;
 const IDLE_MS = (+process.env.IDLE_MIN || 5) * 60_000;
-const IMAGE = process.env.IMAGE || 'agent-computer:dev';
+// Every Docker resource name starts with PREFIX, so two stacks can share one daemon without touching each other.
+const PREFIX = process.env.ARB_PREFIX || 'arb';
+if (!/^[a-z0-9][a-z0-9-]{0,19}$/.test(PREFIX)) throw Error('Invalid ARB_PREFIX');
+const LABEL = `${PREFIX}-computer`, VOLUME = (id) => `${PREFIX}-profile-${slug(id)}`;
+const IMAGE = process.env.IMAGE || `${PREFIX}-computer:dev`;
+const EGRESS_DIR = process.env.EGRESS_DIR || '/run/arb-egress'; // gateway side of the ${PREFIX}-egress volume
 // Chrome profile (IndexedDB, persistent cookies) + --restore state (session cookies, localStorage), both on the volume.
 const PROFILE = '/home/agent/.agent-browser/profile';
 const RUNTIME = process.env.SANDBOX_RUNTIME; // e.g. "runsc" (gVisor) on the Linux VM
@@ -41,11 +46,11 @@ function serial(key, fn) {
 }
 
 const lastUsed = new Map(); // container name -> ms
-const cname = (id) => `ac-${slug(id)}`;
+const cname = (id) => `${PREFIX}-${slug(id)}`;
 
 async function ensureComputer(id) {
   const name = cname(id);
-  if (!proxies.has(id)) proxies.set(id, await startProxy('/run/ac-egress/'+id, () => profile(id)?.allow || []));
+  if (!proxies.has(id)) proxies.set(id, await startProxy(EGRESS_DIR+'/'+id, () => profile(id)?.allow || []));
   const inspect = await docker(['inspect','-f','{{.State.Running}} {{.HostConfig.NetworkMode}}',name]).then(s=>s.trim(),()=>null);
   if (inspect && !inspect.endsWith(' none')) {
     await stopComputer(name);
@@ -53,13 +58,13 @@ async function ensureComputer(id) {
   }
   if (inspect === 'false none') await docker(['start',name]);
   if (!inspect || !inspect.endsWith(' none')) {
-    await docker(['run', '-d', '--name', name, '--label', `agent-computer=${slug(id)}`,
-      '--network','none','--mount',`type=volume,src=agent-computer-egress,dst=/egress,volume-subpath=${id},readonly`,
+    await docker(['run', '-d', '--name', name, '--label', `${LABEL}=${slug(id)}`,
+      '--network','none','--mount',`type=volume,src=${PREFIX}-egress,dst=/egress,volume-subpath=${id},readonly`,
       '--cap-drop=ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '512',
       '--memory', '1g', '--cpus', '1', '--shm-size', '512m',
       ...(RUNTIME ? ['--runtime', RUNTIME] : []),
       // ponytail: volume is plaintext on the host disk. Upgrade: encrypted volume / state save+KMS.
-      '-v', `ac-profile-${slug(id)}:/home/agent/.agent-browser`, IMAGE, 'node','-e',bridge]);
+      '-v', `${VOLUME(id)}:/home/agent/.agent-browser`, IMAGE, 'node','-e',bridge]);
   }
   lastUsed.set(name, Date.now());
   return name;
@@ -303,14 +308,14 @@ setInterval(() => {
   for (const [name, t] of lastUsed) {
     if (watching.get(name) || Date.now() - t < IDLE_MS) continue;
     lastUsed.delete(name);
-    serial(name.slice(3), () => stopComputer(name).then(() => console.log('stopped idle computer')));
+    serial(name.slice(PREFIX.length + 1), () => stopComputer(name).then(() => console.log('stopped idle computer')));
   }
 }, 30_000).unref();
 
 // Reconnect running isolated browsers to their proxy. Close legacy browsers before serving admin.
-const previous = await docker(['ps','--filter','label=agent-computer','--format','{{.Names}}']);
+const previous = await docker(['ps','--filter',`label=${LABEL}`,'--format','{{.Names}}']);
 for (const name of previous.trim().split('\n').filter(Boolean)) {
-  const id = name.slice(3);
+  const id = name.slice(PREFIX.length + 1);
   if (!validId(id) || !profile(id)) continue;
   const network = (await docker(['inspect','-f','{{.HostConfig.NetworkMode}}',name])).trim();
   if (network === 'none') await serial(id,()=>ensureComputer(id));
@@ -330,8 +335,8 @@ const auditLog = () => (existsSync(AUDIT) ? lines(readFileSync(AUDIT, 'utf8')).m
 
 async function listComputers() {
   const [ps, vols] = await Promise.all([
-    docker(['ps', '-a', '--filter', 'label=agent-computer', '--format', '{{json .}}']),
-    docker(['volume', 'ls', '--filter', 'name=ac-profile-', '--format', '{{.Name}}']),
+    docker(['ps', '-a', '--filter', `label=${LABEL}`, '--format', '{{json .}}']),
+    docker(['volume', 'ls', '--filter', `name=${PREFIX}-profile-`, '--format', '{{.Name}}']),
   ]);
   const containers = Object.fromEntries(lines(ps).map((l) => JSON.parse(l)).map((c) => [c.Names, c]));
   const volumes = new Set(lines(vols));
@@ -340,7 +345,7 @@ async function listComputers() {
     const name = cname(id), c = containers[name], last = log.findLast((l) => l.agent === id), l = leaseOf(id);
     return {
       id, container: name, state: c?.State ?? 'none', status: c?.Status ?? 'never started',
-      profile: volumes.has(`ac-profile-${slug(id)}`), allow: p.allow, logins: sitesOf(p), hasToken: !!p.tokenHash,
+      profile: volumes.has(VOLUME(id)), allow: p.allow, logins: sitesOf(p), hasToken: !!p.tokenHash,
       leasedUntil: l ? new Date(l.exp).toISOString() : null,
       lastCall: last ? { ts: last.ts, tool: last.tool, ok: last.ok } : null,
       idleStopInS: lastUsed.has(name) ? Math.max(0, Math.round((IDLE_MS - (Date.now() - lastUsed.get(name))) / 1000)) : null,
@@ -350,7 +355,7 @@ async function listComputers() {
 }
 
 async function computerDetails(id, p) {
-  const name = cname(id), vol = `ac-profile-${slug(id)}`;
+  const name = cname(id), vol = VOLUME(id);
   const running = (await docker(['inspect', '-f', '{{.State.Running}}', name]).catch(() => '')).trim() === 'true';
   const hasProfile = await docker(['volume', 'inspect', vol]).then(() => true, () => false);
   // Stopped computer: read the saved session from its volume with a throwaway, network-less container.
@@ -375,7 +380,7 @@ async function computerDetails(id, p) {
 async function deleteProfile(id) {
   const name = cname(id);
   await docker(['rm', '-f', name]).catch(() => {});
-  await docker(['volume', 'rm', '-f', `ac-profile-${slug(id)}`]).catch(() => {});
+  await docker(['volume', 'rm', '-f', VOLUME(id)]).catch(() => {});
   lastUsed.delete(name);
   proxies.get(id)?.close();
   proxies.delete(id);

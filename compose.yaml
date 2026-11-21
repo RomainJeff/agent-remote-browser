@@ -1,11 +1,13 @@
-# Agent Computer stack.
-#   docker compose up -d --build                    # gateway on http://127.0.0.1:8787/mcp
-#   docker compose --profile tunnel up -d --build   # + public https URL for Notion (see `docker compose logs tunnel`)
+# Agent Remote Browser stack (dev). Every resource name starts with ARB_PREFIX (default "arb"),
+# so it can run next to another stack on the same Docker daemon.
+#   docker compose up -d --build                    # gateway on http://127.0.0.1:18787/mcp, admin on :18788
+#   docker compose --profile tunnel up -d --build   # + public https URL (see `docker compose logs tunnel`)
+name: ${ARB_PREFIX:-arb}
 services:
   # Builds the per-agent "computer" image, then exits. The gateway starts one container per agent from it.
   computer-image:
     build: .
-    image: agent-computer:dev
+    image: ${ARB_PREFIX:-arb}-computer:dev
     entrypoint: ["true"]
     restart: "no"
 
@@ -15,9 +17,13 @@ services:
     restart: unless-stopped
     depends_on:
       computer-image: { condition: service_completed_successfully }
-    # 8788 = admin UI. Localhost only, never put it behind the tunnel.
-    ports: ["127.0.0.1:8787:8787", "127.0.0.1:8788:8788"]
+    # Same port inside and outside: the admin checks Host against its own port. 18788 = admin UI,
+    # localhost only, never put it behind the tunnel.
+    ports: ["127.0.0.1:18787:18787", "127.0.0.1:18788:18788"]
     environment:
+      ARB_PREFIX: ${ARB_PREFIX:-arb}
+      PORT: 18787
+      ADMIN_PORT: 18788
       STATE_FILE: /data/state.json     # profiles, token hashes, saved logins, OAuth clients (0600)
       PUBLIC_URL: ${PUBLIC_URL:-}      # OAuth issuer. Empty = derived from the request Host (quick tunnel)
       AUDIT_FILE: /data/audit.jsonl
@@ -25,20 +31,22 @@ services:
       IDLE_MIN: ${IDLE_MIN:-5}
       SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}
     volumes:
-      # ponytail: socket access = root on the host. Upgrade: docker-socket-proxy limited to containers/exec/volumes.
+      # ponytail: socket access = root on the host. Upgrade: privileged runner (plan, lot 5).
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
-      - ac-keys:/run/ac-keys
-      - ac-egress:/run/ac-egress
+      - keys:/run/arb-keys
+      - egress:/run/arb-egress
 
   tunnel:
     profiles: [tunnel]
     image: cloudflare/cloudflared:2025.11.1
-    command: tunnel --no-autoupdate --url http://gateway:8787
+    command: tunnel --no-autoupdate --url http://gateway:18787
     restart: unless-stopped
     depends_on: [gateway]
 
 volumes:
-  ac-keys:
-  ac-egress:
-    name: agent-computer-egress
+  keys:
+    name: ${ARB_PREFIX:-arb}-keys
+  egress:
+    # Fixed name: the gateway mounts it into each computer by this name.
+    name: ${ARB_PREFIX:-arb}-egress

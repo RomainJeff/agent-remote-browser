@@ -7,8 +7,9 @@ import {randomUUID} from 'node:crypto';
 import {rmSync} from 'node:fs';
 import {startProxy,bridge} from './egress.mjs';
 const run = promisify(execFile);
-const id = 'check-'+randomUUID();
-const dir = '/run/ac-egress/'+id;
+const PREFIX = process.env.ARB_PREFIX || 'arb';
+const id = PREFIX+'-check-'+randomUUID();
+const dir = (process.env.EGRESS_DIR || '/run/arb-egress')+'/'+id;
 const proxy = await startProxy(dir,()=>['example.com']);
 const docker = async (...args) => {
   try { return (await run('docker',args,{timeout:45000})).stdout; }
@@ -16,8 +17,8 @@ const docker = async (...args) => {
 };
 try {
   await docker('run','-d','--rm','--network','none','--cap-drop=ALL','--security-opt','no-new-privileges',
-    '--name',id,'--mount',`type=volume,src=agent-computer-egress,dst=/egress,volume-subpath=${id},readonly`,
-    'agent-computer:dev','node','-e',bridge);
+    '--name',id,'--mount',`type=volume,src=${PREFIX}-egress,dst=/egress,volume-subpath=${id},readonly`,
+    `${PREFIX}-computer:dev`,'node','-e',bridge);
   const ab = (...args)=>docker('exec',id,'agent-browser','--json','--args',
     '--no-sandbox,--proxy-server=http://127.0.0.1:3128,--proxy-bypass-list=<-loopback>,--disable-quic',...args);
   await ab('open','https://example.com');
