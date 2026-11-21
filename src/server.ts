@@ -38,6 +38,13 @@ export function clientIp(req: http.IncomingMessage, trust: boolean) {
  *  browser that rebinds its own domain to 127.0.0.1 sends a dotted name: refused. */
 const SCRAPE_HOST = /^(\[[0-9a-f:.]+\]|[0-9.]+|[a-z0-9-]+)(:\d+)?$/i;
 
+/** Trusted-device cookies (TOTP skipped for 30 days) count on the admin port only: dropped from every request to the
+ *  public listener, so neither its /login nor an ADMIN_PUBLIC admin ever honors one. */
+export function untrust(req: http.IncomingMessage) {
+  const c = req.headers.cookie;
+  if (c) req.headers.cookie = c.split(/;\s*/).filter((kv) => !/^[^=]*trust_device=/.test(kv)).join('; ');
+}
+
 const listen = (server: http.Server, port: number, host: string) =>
   new Promise<void>((resolve, reject) => server.once('error', reject).listen(port, host, () => resolve()));
 
@@ -71,6 +78,7 @@ export async function start(cfg: Config, driver: HostDriver) {
   const opts = { requestTimeout: 30_000, headersTimeout: 10_000 };
   const mcp = http.createServer(opts, async (req, res) => {
     clientIp(req, cfg.trustProxy);
+    untrust(req);
     count('arb_http_requests_total', { listener: 'mcp' });
     try {
       // Probes: unauthenticated, no details.

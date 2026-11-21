@@ -143,7 +143,9 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
         if (path !== '/') {
           const verify = FAILURE[path] === 'totp', s = verify ? await requireAdmin(authOf(pub), req.headers) : null;
-          const r = await callAuth(authOf(pub), baseOf(pub), req, path), kind = FAILURE[path];
+          // Trusted devices are an admin-port convenience: never issued on the public listener (nor read there: server.ts).
+          const body = pub && post ? { ...(await readJson(req)), trustDevice: false } : undefined;
+          const r = await callAuth(authOf(pub), baseOf(pub), req, path, body), kind = FAILURE[path];
           if (kind && (r.status === 401 || r.status === 429)) count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : kind });
           if (verify) await settle(r, s?.session.id);
           return await reply(res, r);

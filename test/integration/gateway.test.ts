@@ -626,6 +626,30 @@ test('step-up: sensitive admin actions need a 2FA code from the last 15 minutes;
   sql((db) => db.exec('DELETE FROM rateLimit'));
 });
 
+test('trusted device: skips TOTP on the admin port for 30 days, never on the public listener', async () => {
+  const signIn = (cookie = '') => admin('POST', '/api/auth/sign-in/email', { body: { email: owner.email, password: owner.password }, headers: { ...adminOrigin(), cookie } });
+  const half = await signIn();
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', { body: { code: totp(owner.uri), trustDevice: true }, headers: { ...adminOrigin(), cookie: jar(half.cookies) } });
+  const trust = ok.cookies.find((c) => /^better-auth\.trust_device=/.test(c))!;
+  assert.match(trust, /Max-Age=2592000/i);
+  assert.doesNotMatch(trust, /Domain=/i, 'host-only: the admin host, never the public one');
+  const trusted = jar([trust]);
+  // Admin port: password only, straight to a session, but no step-up.
+  const direct = await signIn(trusted);
+  assert.equal(direct.status, 200);
+  assert.notEqual(direct.json.twoFactorRedirect, true);
+  session = jar(direct.cookies);
+  assert.equal((await admin('GET', '/api/computers')).status, 200);
+  assert.equal((await admin('GET', '/api/session')).json.stepUpRemainingS, 0);
+  assert.equal((await admin('POST', '/api/computers/shop3/delete', { body: {} })).json.stepUp, true);
+  // Sign-in rotates the trust cookie; the fresh one is still dropped on the public listener.
+  const rotated = jar([direct.cookies.find((c) => /^better-auth\.trust_device=/.test(c))!]);
+  const login = await fetch(base + '/login', { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: base, cookie: rotated },
+    body: new URLSearchParams({ email: owner.email, password: owner.password, oauth_query: '' }) });
+  assert.match(await login.text(), /Two-factor code/);
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+});
+
 test('https PUBLIC_URL: the admin port (http, localhost) gets plain cookies and a working session', async () => {
   await restart({ PUBLIC_URL: 'https://arb.example.test' });
   session = '';
