@@ -6,7 +6,7 @@ export interface Envelope { iv: string; tag: string; data: string }
 export interface LoginRef { url: string; username: string }
 
 /** Reads the 32-byte key, creating it (0600, never overwriting) only when no envelope needs an older one.
- *  A Docker secret is read-only: there the operator creates the file (see README). */
+ *  A Docker secret is read-only: there the operator creates the file (see docs/reference.md, "Login key"). */
 export function loadLoginKey(file: string, hasEnvelopes: boolean): Buffer {
   if (!existsSync(file)) {
     if (hasEnvelopes) throw Error(`Restore the existing login key at ${file}`);

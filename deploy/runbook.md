@@ -157,7 +157,7 @@ docker compose logs -f gateway runner
 docker compose exec gateway tail -f /data/audit.jsonl      # who did what (agent, tool, ok, duration), kept in the data volume
 ```
 
-**Metrics**: `curl -s 127.0.0.1:18788/metrics` (Prometheus text: requests, tool calls by tool and outcome, auth failures, egress denials, runner up, computers running, active leases; README, Metrics). Admin listener only, so a Prometheus on the same host scrapes `127.0.0.1:18788`; a remote one goes through the same SSH forward as the admin UI. Worth an alert: `arb_runner_up == 0`, a jump in `arb_auth_failures_total` or `arb_egress_denied_total`.
+**Metrics**: `curl -s 127.0.0.1:18788/metrics` (Prometheus text: requests, tool calls by tool and outcome, auth failures, egress denials, runner up, computers running, active leases; docs/reference.md, Metrics). Admin listener only, so a Prometheus on the same host scrapes `127.0.0.1:18788`; a remote one goes through the same SSH forward as the admin UI. Worth an alert: `arb_runner_up == 0`, a jump in `arb_auth_failures_total` or `arb_egress_denied_total`.
 
 **Kill switch**: every tool call is refused while the file exists; browsers stay up.
 
