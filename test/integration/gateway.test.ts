@@ -472,10 +472,10 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   assert.equal((await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q }, '', 'http://evil.test')).status, 403);
   const step1 = await postForm('/login', { email: owner.email, password: owner.password, oauth_query: q });
   assert.equal(step1.status, 200);
-  assert.match(await step1.text(), /Two-factor code[\s\S]*name="backupCode"/, 'no-JS backup code form');
+  assert.match(await step1.text(), /Code de double authentification[\s\S]*name="backupCode"/, 'no-JS backup code form');
   const badBackup = await postForm('/login', { backupCode: 'aaaaa-bbbbb', oauth_query: q }, jar(step1.headers.getSetCookie()));
   assert.equal(badBackup.status, 401);
-  assert.match(await badBackup.text(), /Invalid or expired code/);
+  assert.match(await badBackup.text(), /Code invalide ou expiré/);
   const step2 = await postForm('/login', { code: totp(owner.uri), oauth_query: q }, jar(step1.headers.getSetCookie()));
   assert.equal(step2.status, 302);
   const cookie = jar(step2.headers.getSetCookie(), jar(step1.headers.getSetCookie()));
@@ -497,17 +497,17 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
     assert.match(html, /test client/);
     assert.match(html, /value="profile:other"/);
     assert.ok(html.includes(client_id));
-    assert.match(html, /client non vérifié/);
-    assert.match(html, /Registered \d+ min ago/);
-    assert.match(html, /Loopback redirect/);
-    assert.match(html, /Global: manage and lease every profile \(not recommended for an unverified client\)/);
+    assert.match(html, /Client non vérifié/);
+    assert.match(html, /Enregistré (à l’instant|il y a \d+ min)/);
+    assert.match(html, /Loopback : l&#39;autorisation|Loopback : l'autorisation/);
+    assert.match(html, /Global : gère et loue tous les profils<small>Déconseillé pour un client non vérifié/);
     assert.equal((await postForm('/consent', { scope: 'profile:nope', accept: 'true', oauth_query: cq }, cookie)).status, 400);
     assert.equal((await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie, 'http://evil.test')).status, 403);
     let r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie);
     if (scope === 'global') {
       assert.equal(r.status, 200);
       const warn = await r.text();
-      assert.match(warn, /Unverified client with Global access/);
+      assert.match(warn, /Client non vérifié avec accès Global/);
       assert.match(warn, /name="confirm" value="global"/);
       r = await postForm('/consent', { scope, confirm: 'global', accept: 'true', oauth_query: cq }, cookie);
     }
@@ -526,15 +526,15 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   // Everything the client controls is escaped.
   const evil = (await (await register({ redirect_uris: ['https://x.test/cb'], token_endpoint_auth_method: 'none', client_name: '<img src=x onerror=alert(1)>' })).json()).client_id;
   const evilPage = await (await get('/consent?' + new URLSearchParams({ client_id: evil, redirect_uri: 'https://x"><script>.test/cb' }), cookie)).text();
-  assert.equal(evilPage.match(/<h1>.*<\/h1>/)?.[0], "<h1>Connect &#60;img src=x onerror=alert(1)&#62;</h1>");
+  assert.equal(evilPage.match(/<h1>.*<\/h1>/)?.[0], "<h1>Connecter &#60;img src=x onerror=alert(1)&#62;</h1>");
   assert.ok(!evilPage.includes('<script>') && !/Loopback/.test(evilPage));
   // A CIMD client (metadata fetched from its https client_id) shows as verified, no warning page.
   const cimdId = 'https://client.example.test/meta.json';
   sql((db) => db.prepare(`INSERT INTO oauthClient (id, clientId, clientDiscoveryId, name, createdAt, redirectUris) VALUES ('c1', ?, 'cimd', 'Docs app', ?, '[]')`)
     .run(cimdId, new Date(Date.now() - 3 * 86400_000).toISOString()));
   const cimdPage = await (await get('/consent?' + new URLSearchParams({ client_id: cimdId, redirect_uri: 'https://client.example.test/cb' }), cookie)).text();
-  assert.match(cimdPage, /Verified by its metadata URL \(CIMD\)[\s\S]*Registered 3 days ago/);
-  assert.ok(!/non vérifié|not recommended/.test(cimdPage));
+  assert.match(cimdPage, /Vérifié par son URL de métadonnées \(CIMD\)[\s\S]*Enregistré il y a 3 jours/);
+  assert.ok(!/non vérifié|Déconseillé/.test(cimdPage));
   sql((db) => db.prepare('DELETE FROM oauthClient WHERE id = ?').run('c1'));
 
   // PKCE failure: refused.
@@ -733,7 +733,7 @@ test('trusted device: skips TOTP on the admin port for 30 days, never on the pub
   const rotated = jar([direct.cookies.find((c) => /^better-auth\.trust_device=/.test(c))!]);
   const login = await fetch(base + '/login', { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: base, cookie: rotated },
     body: new URLSearchParams({ email: owner.email, password: owner.password, oauth_query: '' }) });
-  assert.match(await login.text(), /Two-factor code/);
+  assert.match(await login.text(), /Code de double authentification/);
   sql((db) => db.exec('DELETE FROM rateLimit'));
 });
 
