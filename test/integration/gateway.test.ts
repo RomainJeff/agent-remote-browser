@@ -262,7 +262,34 @@ test('saved login: password only reaches the host through stdin', async () => {
   assert.ok(!saves[0].argv!.includes(password));
   assert.equal(agentBrowser('delete').length, 1, 'in-container vault entry deleted');
   const details = await admin('GET', '/api/computers/shop');
-  assert.deepEqual(details.json.logins, [{ site: 'main', url: 'https://example.com/login', username: 'fixture' }]);
+  assert.deepEqual(details.json.logins, [{ site: 'main', url: 'https://example.com/login', username: 'fixture', lastTestedAt: null, lastResult: null }]);
+
+  // Admin "test": same fill path as the agent's tool, result stored, password never echoed.
+  const test = (site: string) => admin('POST', '/api/computers/shop/login-test', { body: { site } });
+  const result = async () => (await admin('GET', '/api/computers/shop')).json.logins[0];
+  assert.equal((await test('other')).status, 404);
+  const { lease } = JSON.parse((await call(tokens.global, 'lease_profile', { profile: 'shop' })).text);
+  assert.ok(lease);
+  assert.equal((await test('main')).status, 409, 'refused while an agent holds the lease');
+  assert.equal((await admin('POST', '/api/computers/shop/release', { body: {} })).status, 200);
+  const ok = await test('main');
+  assert.deepEqual([ok.status, ok.json], [200, { ok: true, url: 'https://example.com/' }]);
+  assert.equal(agentBrowser('--password-stdin').at(-1)!.stdin, password, 'filled like the agent tool');
+  assert.equal(agentBrowser('delete').length, 2, 'vault entry deleted after the test too');
+  const tested = await result();
+  assert.equal(tested.lastResult, 'ok');
+  assert.ok(Math.abs(Date.parse(tested.lastTestedAt) - Date.now()) < 5000);
+  fake.failOn = 'auth login';
+  try {
+    const fail = await test('main');
+    assert.deepEqual([fail.status, fail.json], [200, { ok: false, url: 'https://example.com/' }]);
+  } finally { fake.failOn = ''; }
+  assert.equal((await result()).lastResult, 'fail');
+  assert.equal(agentBrowser('delete').length, 3, 'vault entry deleted on failure');
+  assert.equal((await admin('POST', '/api/computers/shop/login-save',
+    { body: { site: 'main', url: 'https://example.com/login', username: 'fixture', password } })).status, 200);
+  assert.deepEqual([(await result()).lastTestedAt, (await result()).lastResult], [null, null], 're-save clears the result');
+
   assert.ok(!dump().includes(password) && !rawDb().includes(password), 'database');
   assert.ok(!readFileSync(f.audit, 'utf8').includes(password), 'audit');
   assert.ok(!JSON.stringify(details.json).includes(password));

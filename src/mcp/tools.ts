@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { urlAllowed, slug, validId, cleanAllow, sitesOf, type Principal, type ProfileId } from '../policy.ts';
 import type { Profile } from '../store/store.ts';
+import type { LoginRef } from '../store/logins-crypto.ts';
 import { log } from '../audit.ts';
 import { count } from '../metrics.ts';
 import type { Ctx } from '../server.ts';
@@ -21,6 +22,23 @@ const LEASE = z.string().describe('Lease id from lease_profile');
 const at = (r: string) => (r.startsWith('@') ? r : '@' + r);
 
 class PolicyError extends Error {}
+
+/** Fills a saved login in the profile's browser: the MCP `login` tool and the admin's "test" use this one path.
+ *  The password goes through stdin into the in-container vault for this call only (never argv, logs or the result),
+ *  and the browser may only reach the login origin meanwhile. Returns the final URL. Caller holds pc.serial(id). */
+export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: string, c: LoginRef, password: string) {
+  const vault = `gw-${slug(site)}`;
+  await pc.ensure(id);
+  pc.restrict(id, new URL(c.url).origin);
+  try {
+    await pc.ab(id, ['auth', 'save', vault, '--url', c.url, '--username', c.username, '--password-stdin'], { stdin: password });
+    await pc.ab(id, ['auth', 'login', vault]);
+  } finally {
+    await pc.ab(id, ['auth', 'delete', vault]).catch(() => {});
+    pc.restrict(id);
+  }
+  return (await pc.ab(id, ['get', 'url'])).url as string;
+}
 
 export function buildServer(principal: Principal, { cfg, store, audit, leases, computers: pc }: Ctx) {
   const server = new McpServer({ name: 'agent-remote-browser', version: '0.2.0' });
@@ -109,18 +127,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, c
       const c = Object.hasOwn(p.logins || {}, site) ? p.logins[site] : null;
       if (!c) return fail(`Unknown site. Available: ${sitesOf(p).join(', ') || 'none'}`);
       if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return fail('Login URL is outside the allowlist');
-      const vault = `gw-${slug(site)}`;
-      // Password goes through stdin (never argv/logs), lives in the in-container vault only for this call.
-      await pc.ensure(id);
-      pc.restrict(id, new URL(c.url).origin);
-      try {
-        await pc.ab(id, ['auth', 'save', vault, '--url', c.url, '--username', c.username, '--password-stdin'], { stdin: decryptLogin(id, site, c) });
-        await pc.ab(id, ['auth', 'login', vault]);
-      } finally {
-        await pc.ab(id, ['auth', 'delete', vault]).catch(() => {});
-        pc.restrict(id);
-      }
-      const { url } = await pc.ab(id, ['get', 'url']);
+      const url = await fillLogin(pc, id, site, c, decryptLogin(id, site, c));
       return txt({ submitted: true, url, hint: 'Check with snapshot that you are logged in.' });
     });
 

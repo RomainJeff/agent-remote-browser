@@ -14,9 +14,10 @@ import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
 import { SESSION } from '../runner/protocol.ts';
+import { fillLogin } from '../mcp/tools.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|config|login-save|login-delete|release|extend|delete';
+const ACTIONS = 'start|stop|open|config|login-save|login-test|login-delete|release|extend|delete';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -118,7 +119,8 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     return {
       id, running, page,
       // Values never leave the gateway: names and metadata only. Same for login passwords.
-      logins: Object.entries(p.logins || {}).map(([site, c]) => ({ site, url: c.url, username: c.username })),
+      logins: Object.entries(p.logins || {}).map(([site, c]) => ({ site, url: c.url, username: c.username,
+        lastTestedAt: c.lastTestedAt ? new Date(c.lastTestedAt).toISOString() : null, lastResult: c.lastResult ?? null })),
       cookies: session.cookies.map(({ value, ...c }) => c),
       storage: (session.origins || []).map((o) => ({ origin: o.origin, localStorageKeys: (o.localStorage || []).length })),
       audit: audit.read().filter((l) => l.agent === id).slice(-20).reverse().map(({ ts, tool, ok, ms, via }) => ({ ts, tool, ok, ms, via })),
@@ -247,6 +249,20 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!pw || pw.length > 500) return send(res, 400, { error: 'Password required' });
         store.saveLogin(id, site, { url, username }, pw);
         return send(res, 200, { saved: site });
+      }
+      if (act === 'login-test') {
+        // Same fill path as the agent's `login` tool. Never while an agent holds the profile.
+        const c = Object.hasOwn(p.logins, body.site) ? p.logins[body.site] : null;
+        if (!c) return send(res, 404, { error: 'unknown site' });
+        if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return send(res, 400, { error: 'Login URL is outside the allowlist' });
+        if (leases.of(id)) return send(res, 409, { error: 'Leased by an agent: release it or wait' });
+        // ponytail: "ok" = the fill went through (form found, submitted); whether the site accepted it shows in the URL.
+        const r = await pc.serial(id, async () => {
+          try { return { ok: true, url: await fillLogin(pc, id, body.site, c, decryptLogin(id, body.site, c)) }; }
+          catch { return { ok: false, url: await pc.ab(id, ['get', 'url']).then((u) => u.url as string, () => null) }; }
+        });
+        store.setLoginTest(id, body.site, r.ok);
+        return send(res, 200, r);
       }
       if (act === 'login-delete') {
         if (!Object.hasOwn(p.logins, body.site)) return send(res, 404, { error: 'unknown site' });

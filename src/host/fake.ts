@@ -24,6 +24,8 @@ function agentBrowser(args: string[]) {
 export class FakeDriver implements HostDriver {
   calls: Call[] = [];
   computers = new Map<string, Computer>();
+  /** agent-browser commands starting with this (e.g. 'auth login') answer `success: false`. */
+  failOn = '';
 
   async ensure(id: ProfileId) {
     this.calls.push({ op: 'ensure', id });
@@ -38,6 +40,7 @@ export class FakeDriver implements HostDriver {
     if (argv[0] !== 'agent-browser') return { code: 0, stdout: argv[0] === 'base64' ? 'iVBORw0K' : '', stderr: '' };
     const rest = argv.slice(1);
     while (rest[0]?.startsWith('--')) rest.splice(0, rest[0] === '--json' ? 1 : 2); // --json, --profile X, --restore X, --args X
+    if (this.failOn && rest.join(' ').startsWith(this.failOn)) return { code: 1, stdout: JSON.stringify({ success: false, error: 'fake failure' }), stderr: '' };
     return { code: 0, stdout: agentBrowser(rest), stderr: '' };
   }
 

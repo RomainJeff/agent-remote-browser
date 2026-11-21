@@ -625,6 +625,13 @@ function deleteLogin(btn, site) {
   }, `Deleted login ${site}.`);
 }
 
+function testLogin(btn, site) {
+  act(btn, async () => {
+    const r = await api(`/api/computers/${encodeURIComponent(selected)}/login-test`, 'POST', { site }); refreshDetail();
+    toast(`${site}: ${r.ok ? 'form filled' : 'fill failed'}, now on ${r.url || 'unknown page'}`, r.ok ? undefined : 'error');
+  });
+}
+
 const setBtn = (b, dis, title) => { b.disabled = !!b.dataset.busy || dis; if (title) { if (b.title !== title) b.title = title; } else b.removeAttribute('title'); };
 function renderToolbar() {
   const c = computers.find((x) => x.id === selected);
@@ -685,11 +692,13 @@ async function refreshDetail() {
 
   setText($('#rLogins'), `${d.logins.length} saved`);
   if (patch('logins', d.logins, () => d.logins.length
-    ? `<div class="tbl"><table><tr><th>Site</th><th>Login page</th><th>Username</th><th><span class="sr">Delete</span></th></tr>${d.logins.map((l) => `
+    ? `<div class="tbl"><table><tr><th>Site</th><th>Login page</th><th>Username</th><th>Last test</th><th><span class="sr">Actions</span></th></tr>${d.logins.map((l) => `
       <tr><td class="mono nw">${esc(l.site)}</td><td class="mono">${esc(l.url)}</td><td>${esc(l.username)}</td>
-      <td class="act"><button type="button" class="icon-del" data-site="${esc(l.site)}" aria-label="Delete saved login ${esc(l.site)}" title="Delete saved login">${TRASH}</button></td></tr>`).join('')}</table></div>`
+      <td class="nw">${l.lastTestedAt ? `${esc(l.lastResult)}, <time data-ts="${esc(l.lastTestedAt)}">${ago(l.lastTestedAt)}</time>` : 'never'}</td>
+      <td class="act"><button type="button" class="login-test" data-site="${esc(l.site)}">Test</button><button type="button" class="icon-del" data-site="${esc(l.site)}" aria-label="Delete saved login ${esc(l.site)}" title="Delete saved login">${TRASH}</button></td></tr>`).join('')}</table></div>`
     : '<p class="empty-row">None yet. Add one below, or log in by hand with Take control: cookies stay in the profile.</p>'))
     for (const b of document.querySelectorAll('#logins .icon-del')) b.onclick = () => deleteLogin(b, b.dataset.site);
+    for (const b of document.querySelectorAll('#logins .login-test')) b.onclick = () => testLogin(b, b.dataset.site);
 
   setText($('#rDiag'), `${d.audit.length} calls, ${d.cookies.length} cookies, ${d.storage.length} origins`);
   patch('audit', d.audit, () => d.audit.length

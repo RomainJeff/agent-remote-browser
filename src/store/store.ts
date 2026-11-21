@@ -5,7 +5,7 @@ import type { ProfileId } from '../policy.ts';
 import { tx } from './db.ts';
 import { loadLoginKey, keyId, encryptLogin, decryptLogin, type Envelope, type LoginRef } from './logins-crypto.ts';
 
-export interface Login extends LoginRef { password: Envelope }
+export interface Login extends LoginRef { password: Envelope; lastTestedAt?: number | null; lastResult?: string | null }
 export interface Profile { id: ProfileId; allow: string[]; logins: Record<string, Login>; createdAt: number }
 
 type Row = Record<string, any>;
@@ -23,13 +23,14 @@ export function openStore(db: DatabaseSync, keyFile: string) {
 
   const toProfile = (r: Row): Profile => ({
     id: r.id, allow: JSON.parse(r.allow_json), createdAt: r.created_at,
-    logins: Object.fromEntries(all('SELECT site, url, username, envelope FROM logins WHERE profile = ? ORDER BY site', r.id)
-      .map((l) => [l.site, { url: l.url, username: l.username, password: JSON.parse(l.envelope) }])),
+    logins: Object.fromEntries(all('SELECT site, url, username, envelope, last_tested_at, last_result FROM logins WHERE profile = ? ORDER BY site', r.id)
+      .map((l) => [l.site, { url: l.url, username: l.username, password: JSON.parse(l.envelope), lastTestedAt: l.last_tested_at, lastResult: l.last_result }])),
   });
   const profile = (id: string) => { const r = one('SELECT * FROM profiles WHERE id = ?', id); return r ? toProfile(r) : null; };
-  const putLogin = (k: Buffer, id: string, site: string, c: LoginRef, password: string) =>
+  const putLogin = (k: Buffer, id: string, site: string, c: LoginRef, password: string, clearTest = false) =>
     run(`INSERT INTO logins (profile, site, url, username, envelope, key_id) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT (profile, site) DO UPDATE SET url = excluded.url, username = excluded.username, envelope = excluded.envelope, key_id = excluded.key_id`,
+      ON CONFLICT (profile, site) DO UPDATE SET url = excluded.url, username = excluded.username, envelope = excluded.envelope, key_id = excluded.key_id
+      ${clearTest ? ', last_tested_at = NULL, last_result = NULL' : ''}`,
       id, site, c.url, c.username, JSON.stringify(encryptLogin(k, id, site, c, password)), keyId(k));
 
   return {
@@ -49,7 +50,10 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       run('DELETE FROM profiles WHERE id = ?', id);
     }),
 
-    saveLogin: (id: ProfileId, site: string, c: LoginRef, password: string) => putLogin(key, id, site, c, password),
+    /** A new URL, username or password makes the last test result meaningless: cleared. */
+    saveLogin: (id: ProfileId, site: string, c: LoginRef, password: string) => putLogin(key, id, site, c, password, true),
+    setLoginTest: (id: ProfileId, site: string, ok: boolean) =>
+      run('UPDATE logins SET last_tested_at = ?, last_result = ? WHERE profile = ? AND site = ?', Date.now(), ok ? 'ok' : 'fail', id, site),
     deleteLogin: (id: ProfileId, site: string) => run('DELETE FROM logins WHERE profile = ? AND site = ?', id, site),
     decryptLogin: (id: string, site: string, c: Login) => decryptLogin(key, id, site, c),
 
