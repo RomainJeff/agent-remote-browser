@@ -15,8 +15,6 @@ export const AB_FLAGS = ['--json', '--profile', PROFILE, '--restore', 'agent',
   '--args', '--no-sandbox,--proxy-server=http://127.0.0.1:3128,--proxy-bypass-list=<-loopback>,--disable-quic'];
 /** --restore state file, read by the admin UI (saved every 30 s by agent-browser). */
 export const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json';
-/** Volume of a profile in the POC (agent-computer): the only source migrate-from-poc may copy from. */
-export const pocVolume = (id: ProfileId) => `ac-profile-${id}`;
 /** Admin copy during takeover: selected text of the focused field, else of the page. Never a password field's.
  *  ponytail: selections inside iframes are not seen; walk frames if that matters. */
 export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selectionStart?e.value.slice(e.selectionStart,e.selectionEnd):getSelection().toString())(document.activeElement)";
@@ -76,7 +74,6 @@ export const Request = z.discriminatedUnion('op', [
   op('stop', { id }),
   op('remove', { id, keepVolume: z.boolean() }),
   op('list', {}),
-  op('copyVolume', { id }),
 ]);
 export type Request = z.input<typeof Request>;
 

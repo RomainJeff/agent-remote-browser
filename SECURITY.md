@@ -18,7 +18,6 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 - **Gateway compromise** gives the browsers and their data: drive any profile, read its pages and session file, use and decrypt its saved logins (`arb.db` and the login key are both in reach), control egress. It can also stop or delete any computer and profile volume of the stack, and hold all `MAX_COMPUTERS` slots to deny browsers to other agents. Beyond that, the runner's validation holds.
 - **Runner compromise = host compromise.** It holds the Docker socket.
 - **Runner auth is the socket's file mode.** Anything running as uid 1000 on the `arb-runner` volume, or as root on the host, counts as the gateway.
-- **POC migration.** Leave `ALLOW_POC_MIGRATION` unset outside the migration run, or the runner copies `ac-profile-*` volumes on request.
 
 ## Admin and agent auth
 

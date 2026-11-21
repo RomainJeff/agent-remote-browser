@@ -9,13 +9,13 @@ Two compose files, same stack:
 - `compose.yaml`: no tunnel. MCP published on `${BIND_ADDR:-127.0.0.1}:18787`, admin on `127.0.0.1:18788` whatever `BIND_ADDR` is. TLS is yours (reverse proxy, runbook section 3).
 - `compose.tunnel.yaml`: an override of `compose.yaml` (`COMPOSE_FILE=compose.yaml:compose.tunnel.yaml` in `.env`), with `ports: !reset []` on the gateway (nothing published) and a `cloudflared` named tunnel (`tunnel run`, token in the `cloudflared_token` Docker secret, never a quick tunnel). The gateway runs with `NODE_ENV=production` (`PUBLIC_URL` required) and `TRUST_PROXY=cloudflare`.
 
-`TRUST_PROXY=cloudflare` is the only setting under which `Cf-Connecting-IP` (the rate-limit key) is read from the request; otherwise the gateway overwrites it with the TCP peer address. The admin UI is never on the tunnel unless `ADMIN_PUBLIC=1`, which requires Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`): the gateway refuses to boot without it. The runner starts at most `MAX_COMPUTERS` browsers at once (default 4); past that the agent gets `Too many computers running`. Every image is pinned by digest (`node` and `alpine` in the source, `cloudflared` in `compose.tunnel.yaml`); `npm run check:compose` validates both setups and these exposure rules.
+`TRUST_PROXY=cloudflare` is the only setting under which `Cf-Connecting-IP` (the rate-limit key) is read from the request; otherwise the gateway overwrites it with the TCP peer address. The admin UI is never on the tunnel unless `ADMIN_PUBLIC=1`, which requires Cloudflare Access (`ACCESS_AUD`, `ACCESS_TEAM`): the gateway refuses to boot without it. The runner starts at most `MAX_COMPUTERS` browsers at once (default 4); past that the agent gets `Too many computers running`. Every image is pinned by digest (`node` in the `Dockerfile`s, `alpine` in `deploy/backup.sh`, `cloudflared` in `compose.tunnel.yaml`); `npm run check:compose` validates both setups and these exposure rules.
 
 ## CI and releases
 
-- `.github/workflows/ci.yml`, on every push and PR: typecheck + tests on Node 24 and 26, `check:compose`; both images built and scanned by Trivy (fails on a CRITICAL vulnerability that has a fix); and the e2e job: gVisor installed from its signed apt repository and registered with Docker, the stack up with `SANDBOX_RUNTIME=runsc` (no `ALLOW_NO_SANDBOX`), the smoke, `migrate-from-poc --apply` from a synthetic POC state and an `ac-profile-legacy` volume created in the job, then `deploy/backup.sh` into a local restic repository and the runbook's restore drill, real restore and profile-volume restore. Every credential is generated in the job; only `GITHUB_TOKEN` is used.
+- `.github/workflows/ci.yml`, on every push and PR: typecheck + tests on Node 24 and 26, `check:compose`; both images built and scanned by Trivy (fails on a CRITICAL vulnerability that has a fix); and the e2e job: gVisor installed from its signed apt repository and registered with Docker, the stack up with `SANDBOX_RUNTIME=runsc` (no `ALLOW_NO_SANDBOX`), the smoke, a second profile seeded with a saved login and a marker on its volume, then `deploy/backup.sh` into a local restic repository and the runbook's restore drill, real restore and profile-volume restore. Every credential is generated in the job; only `GITHUB_TOKEN` is used.
 - `.github/workflows/release.yml`, on a `v*` tag: Trivy gate on the amd64 build, then `linux/amd64` + `linux/arm64` images pushed to `ghcr.io/<owner>/agent-remote-browser-{gateway,computer}:<tag>` (and `:sha-<commit>`), with an SBOM and a provenance attestation. Run them with `ARB_IMAGE_REPO=ghcr.io/<owner>/agent-remote-browser ARB_IMAGE_TAG=<tag>` (runbook, Upgrade); without these variables compose builds locally as before.
-- `renovate.json`: npm, Dockerfile and compose digests, GitHub Actions (pinned by commit SHA), the `agent-browser` version and the copy image in `src/host/docker.ts`. Minor, patch and digest updates come as one weekly PR; Better Auth and `agent-browser` get their own. Needs the Renovate GitHub app on the repository.
+- `renovate.json`: npm, Dockerfile and compose digests, GitHub Actions (pinned by commit SHA), the `agent-browser` version and the backup helper image in `deploy/backup.sh`. Minor, patch and digest updates come as one weekly PR; Better Auth and `agent-browser` get their own. Needs the Renovate GitHub app on the repository.
 - Actions are pinned by commit SHA; workflows get `contents: read` (release adds `packages: write`). Trivy is a checksum-verified release binary (`.github/trivy.sh`), not `trivy-action`.
 
 ## Metrics
@@ -42,11 +42,11 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
 - `src/auth/`: Better Auth setup (`better-auth.ts`), public login/consent/OAuth routes (`routes.ts`), token and admin checks (`guards.ts`), Cloudflare Access JWT (`access-jwt.ts`).
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
-- `src/cli.ts`: operator commands (`admin create`, `admin reset-2fa`, `rotate-login-key`, `migrate-from-poc`, `backup-db`).
+- `src/cli.ts`: operator commands (`admin create`, `admin reset-2fa`, `rotate-login-key`, `backup-db`).
 - `src/metrics.ts`: Prometheus counters and exposition.
 - `src/egress/`, `src/policy.ts`, `src/audit.ts`: egress proxy, allowlist rules, audit file and JSON logs.
 - `deploy/`: operator runbook, `backup.sh` (restic), `check-compose.ts` (`npm run check:compose`).
-- `test/unit`, `test/integration` (`npm test`), `test/e2e` (smoke and the CI's POC fixture), `.github/` (CI, release, Trivy).
+- `test/unit`, `test/integration` (`npm test`), `test/e2e` (smoke), `.github/` (CI, release, Trivy).
 
 Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
 
@@ -55,7 +55,7 @@ Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments o
 Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-only root filesystem, all capabilities dropped:
 
 - **gateway**: MCP, admin UI, OAuth, egress proxies, `arb.db`. No Docker socket. On Linux, `secrets/login_key` must be readable by uid 1000.
-- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It starts at most `MAX_COMPUTERS` computers at once (default 4; ensures are serialized so the count holds). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`, `copyVolume`), never an image, mount, container name or free command line. Containers are created from the computer image (`IMAGE`, set by compose to `${ARB_PREFIX}-computer:dev` or the released one) with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
+- **runner**: the only service with `/var/run/docker.sock` (through `DOCKER_GID`, `group_add`), `network_mode: none`. Listens on `/run/arb-runner/runner.sock` (0600, in a 0700 directory on the `arb-runner` volume, mounted by these two services only). It starts at most `MAX_COMPUTERS` computers at once (default 4; ensures are serialized so the count holds). It accepts a profile id plus one op (`ensure`, `exec`, `stream`, `stop`, `remove`, `list`), never an image, mount, container name or free command line. Containers are created from the computer image (`IMAGE`, set by compose to `${ARB_PREFIX}-computer:dev` or the released one) with fixed settings (runtime, no network, no caps, read-only rootfs, `arb-egress` mounted read-only at the profile's subpath, profile volume). `exec` only runs the `agent-browser` calls the gateway makes (fixed flags) and three helpers (`base64`/`rm -f` of a screenshot, `cat` of the session file), under `timeout -k 5`. `stop`/`remove`/`list` only touch containers carrying the stack's label. A refused request gets `invalid request` and a `runner refused a request` warning in the runner's logs.
 - Healthcheck: `node src/runner/server.ts check` (one `list` round trip). The gateway starts once the runner is healthy.
 
 ## State
@@ -128,7 +128,7 @@ Sign-in goes through Better Auth (`/api/auth/sign-in/email`, then `/api/auth/two
 - the key does not match the `key_id` of the saved logins: refuses to start, naming the ids;
 - no saved login and no key: creates one (0600) only if the path is writable, otherwise refuses with instructions. A Docker secret is read-only: create it yourself (command above).
 
-Back up the key and `arb.db` separately: `arb.db` with `deploy/backup.sh` (restic, consistent `backup-db` snapshot), the key in a password manager (runbook, section 10).
+Back up the key and `arb.db` separately: `arb.db` with `deploy/backup.sh` (restic, consistent `backup-db` snapshot), the key in a password manager (runbook, section 9).
 
 ### Operator commands
 
@@ -142,14 +142,3 @@ docker compose start gateway
 ```
 
 `rotate-login-key` writes a new key to `<key>.new`, re-encrypts every login in one transaction, then renames `<key>` to `<key>.old` and `<key>.new` to `<key>`. On failure nothing changes. Delete `<key>.old` once no backup of `arb.db` needs it. A crash between the commit and the renames leaves the live key in `<key>.new`: the startup error names the key id it expects.
-
-`migrate-from-poc <state.json> <poc-login.key> [--apply]` (runbook section 8 also covers copying the volumes by hand, flag off) imports the POC's profiles, allowlists and saved logins (decrypted with the POC key, re-encrypted with the current one, each verified) in one transaction. Profile ids already in `arb.db` are left untouched. POC tokens and OAuth data are not imported: create API keys in the admin UI or let agents reconnect through OAuth. Dry run by default (rolls back, prints the `docker volume create` / `docker run ... alpine:3.22@sha256:... cp -a` commands that copy each `ac-profile-<id>` volume to `arb-profile-<id>`). `--apply` commits and asks the runner to copy each volume (never overwrites an existing target). The runner picks the source itself (`ac-profile-<id>`) and refuses `copyVolume` unless started with `ALLOW_POC_MIGRATION=1`: without the flag, a compromised gateway could pull any POC profile's cookies into this stack. Mount the POC files read-only into a one-off container:
-
-```sh
-P="-v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro"
-docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key   # dry run
-ALLOW_POC_MIGRATION=1 docker compose up -d runner      # recreates the runner with copyVolume enabled
-docker compose stop gateway
-docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key --apply
-docker compose up -d                                   # flag unset: runner recreated without it, gateway back
-```

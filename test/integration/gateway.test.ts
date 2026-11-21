@@ -66,7 +66,7 @@ before(async () => {
     lines.push(l);
     if (l.startsWith('otpauth://')) owner.uri = l;
     if (/^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l)) owner.backup.push(l);
-  }, undefined, async () => answers.shift()!()), 0);
+  }, async () => answers.shift()!()), 0);
   assert.equal(lines.filter((l) => l.includes(owner.password)).length, 0, 'password never printed');
   assert.equal(owner.backup.length, 10, 'backup codes printed once at enrollment');
   // A stopped leftover of an unknown profile: startup must not touch it.

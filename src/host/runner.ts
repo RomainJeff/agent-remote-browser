@@ -41,6 +41,4 @@ export class RunnerDriver implements HostDriver {
   stop(id: ProfileId): Promise<void> { return this.#do({ op: 'stop', id }); }
   remove(id: ProfileId, { keepVolume }: { keepVolume: boolean }): Promise<void> { return this.#do({ op: 'remove', id, keepVolume }); }
   list(): Promise<Computer[]> { return this.#do({ op: 'list' }); }
-  /** migrate-from-poc: the runner copies the POC volume of `id` (ac-profile-<id>) into this stack's, never the reverse. */
-  copyVolume(id: ProfileId): Promise<string> { return this.#do({ op: 'copyVolume', id }, 600_000); }
 }

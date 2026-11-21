@@ -23,7 +23,7 @@ test('requests carry a profile id and nothing else: no image, mount, container n
   assert.equal(ok({ op: 'run', id: 'shop' }), false, 'unknown op');
   assert.equal(ok({ op: 'list', id: 'shop' }), false);
   assert.equal(ok({ op: 'remove', id: 'shop' }), false, 'keepVolume is explicit');
-  assert.equal(ok({ op: 'copyVolume', id: 'shop', from: 'arb-data' }), false, 'the runner picks the source');
+  assert.equal(ok({ op: 'copyVolume', id: 'shop' }), false, 'no volume copy');
 });
 
 test('profile ids: the policy regex, so no path, no uppercase, no leading dash, at most 40', () => {
@@ -63,7 +63,7 @@ const dir = mkdtempSync(join(tmpdir(), 'arb-run-'));
 const path = join(dir, 'runner.sock');
 const fake = new FakeDriver();
 let server: net.Server;
-before(async () => { server = await serveRunner(fake, path, { migration: true }); });
+before(async () => { server = await serveRunner(fake, path); });
 after(() => { server.close(); rmSync(dir, { recursive: true, force: true }); });
 
 /** Raw request line(s) as a compromised gateway could send them; resolves with everything the runner wrote back. */
@@ -83,25 +83,15 @@ test('socket: owner-only, invalid requests reach no driver call', async () => {
   assert.deepEqual(fake.calls, []);
 });
 
-test('RunnerDriver round trip; copyVolume source forced to the POC volume of the same id', async () => {
+test('RunnerDriver round trip', async () => {
   const r = new RunnerDriver(path), id = parseProfileId('shop')!;
   fake.calls = [];
   assert.equal((await r.ensure(id, { egressDir: '/ignored' })).id, 'shop');
   assert.deepEqual(await r.exec(id, ['base64', '-w0', '/tmp/s.png'], { timeoutMs: 5000 }), { code: 0, stdout: 'iVBORw0K', stderr: '' });
   assert.deepEqual(await r.list(), [{ id: 'shop', running: true, startedAt: fake.computers.get('shop')!.startedAt }]);
-  assert.equal(await r.copyVolume(id), 'copied');
   await assert.rejects(r.exec(id, ['cat', '/etc/shadow'], { timeoutMs: 5000 }), /invalid request/);
   await r.remove(id, { keepVolume: false });
-  assert.deepEqual(fake.calls.map((c) => c.op), ['list', 'ensure', 'exec', 'list', 'copyVolume', 'remove'], 'ensure counts first');
-  assert.deepEqual(fake.calls[4], { op: 'copyVolume', id: 'shop', from: 'ac-profile-shop' });
-});
-
-test('copyVolume is refused unless the runner was started for the migration', async () => {
-  const p2 = join(dir, 'runner2.sock'), s2 = await serveRunner(fake, p2);
-  fake.calls = [];
-  await assert.rejects(new RunnerDriver(p2).copyVolume(parseProfileId('shop')!), /ALLOW_POC_MIGRATION/);
-  assert.deepEqual(fake.calls, []);
-  s2.close();
+  assert.deepEqual(fake.calls.map((c) => c.op), ['list', 'ensure', 'exec', 'list', 'remove'], 'ensure counts first');
 });
 
 test('MAX_COMPUTERS: concurrent starts cannot pass the cap; running ones and starts after a stop still go through', async () => {

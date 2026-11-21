@@ -35,10 +35,10 @@
       "datasourceTemplate": "npm"
     },
     {
-      "description": "Helper image used for volume copies (runner) and backups (deploy/backup.sh)",
+      "description": "Helper image used for profile backups (deploy/backup.sh)",
       "customType": "regex",
-      "managerFilePatterns": ["/^src/host/docker\\.ts$/"],
-      "matchStrings": ["COPY_IMAGE = '(?<depName>[^:']+):(?<currentValue>[^@']+)@(?<currentDigest>sha256:[0-9a-f]{64})'"],
+      "managerFilePatterns": ["/^deploy/backup\\.sh$/"],
+      "matchStrings": ["COPY_IMAGE='(?<depName>[^:']+):(?<currentValue>[^@']+)@(?<currentDigest>sha256:[0-9a-f]{64})'"],
       "datasourceTemplate": "docker"
     }
   ]

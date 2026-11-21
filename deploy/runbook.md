@@ -75,7 +75,7 @@ sudo chmod 400 secrets/login_key secrets/better_auth_secret
 
 Pick **the tunnel** when the host should accept no inbound connection, or has no public IP. Pick **compose.yaml** for local use, a private network, or when you already run a TLS reverse proxy.
 
-Every image is pinned by digest (`node`, `alpine` in the source; `cloudflared` in `compose.tunnel.yaml`). `npm run check:compose` (needs Node 24+) validates both setups and their exposure rules.
+Every image is pinned by digest (`node` in the `Dockerfile`s, `alpine` in `deploy/backup.sh`, `cloudflared` in `compose.tunnel.yaml`). `npm run check:compose` (needs Node 24+) validates both setups and their exposure rules.
 
 `compose.tunnel.yaml` is an override of `compose.yaml`: put `COMPOSE_FILE=compose.yaml:compose.tunnel.yaml` in `.env`, and every `docker compose` command of this runbook (and `deploy/backup.sh`) uses both files.
 
@@ -172,13 +172,13 @@ To stop everything instead: `docker compose stop`, then stop the browsers (they 
 
 ```sh
 git fetch && git checkout <release commit or tag>
-deploy/backup.sh                                  # restic snapshot of arb.db first (section 10)
+deploy/backup.sh                                  # restic snapshot of arb.db first (section 9)
 docker compose up -d --build                      # migrations run at gateway start, forward only
 ```
 
 With released images (GHCR, built by `release.yml` on a `v*` tag), set `ARB_IMAGE_REPO=ghcr.io/romainjeff/agent-remote-browser` and `ARB_IMAGE_TAG=<tag>` in `.env`, and replace the last line with `docker compose pull && docker compose up -d --no-build`. The checkout still matters: it brings the compose files that match the images. The package is private unless made public in its GitHub settings: `docker login ghcr.io` first, with a token that has `read:packages`.
 
-Browser containers need no manual step: their spec label hashes the computer image ID, so the gateway recreates running ones at start and the others at their next use (profile volumes are kept). Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`, bumped by Renovate PRs), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` copy taken before the upgrade (section 10, Restore).
+Browser containers need no manual step: their spec label hashes the computer image ID, so the gateway recreates running ones at start and the others at their next use (profile volumes are kept). Image digests change only through a commit (pinned in the `Dockerfile`s and `compose.tunnel.yaml`, bumped by Renovate PRs), so an upgrade is reviewable and a rollback is `git checkout <previous commit>` plus the same commands. A rollback across a database migration also needs the `arb.db` copy taken before the upgrade (section 9, Restore).
 
 **Rotate the login key** (gateway stopped; the secret mount is read-only, so the CLI writes the host file through a bind mount of `secrets/`, which uid 1000 must be able to write for the duration):
 
@@ -198,33 +198,9 @@ The previous key is kept as `secrets/login_key.old`: delete it once no `arb.db` 
 
 **Saved login looks broken**: "Test" on the login row fills the form like the agent would and shows the page it ended on (still on the login page = wrong password or a changed form). Refused while an agent holds the profile: release the lease first, or wait.
 
-**Backups**: section 10.
+**Backups**: section 9.
 
-## 8. Migrating from the POC
-
-`migrate-from-poc` imports the POC's profiles, allowlists and saved logins, re-encrypted with the current key, in one transaction; then the profile volumes (`ac-profile-<id>` to `arb-profile-<id>`) are copied. POC tokens are not imported: agents reconnect through OAuth or get an API key. Mount the POC's `state.json` and `login.key` read-only into a one-off container, never copy them into this repository:
-
-```sh
-P="-v /path/to/poc/state.json:/poc/state.json:ro -v /path/to/poc/login.key:/poc/login.key:ro"
-docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key   # dry run
-```
-
-The dry run prints the counts, the ids, and the host commands that would copy each volume. Then pick one way to copy the volumes:
-
-- **`ALLOW_POC_MIGRATION=1`, the runner copies** (it picks the source `ac-profile-<id>` itself and never overwrites a target):
-
-  ```sh
-  ALLOW_POC_MIGRATION=1 docker compose up -d runner      # runner recreated with copyVolume enabled
-  docker compose stop gateway
-  docker compose run --rm --no-deps $P gateway node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key --apply
-  docker compose up -d                                   # flag unset again: runner recreated without it
-  ```
-
-- **Flag left off, you copy**: run `--apply` with the gateway stopped (the profiles and logins are imported; each volume copy is reported as failed, refused by the runner, and the command exits 1), then run the `docker volume create` / `docker run ... cp -a` lines printed by the dry run yourself on the host, and `docker compose start gateway`.
-
-The second way never gives the gateway a path to the POC's cookies, even for the duration of the migration. Leave the POC stack running until the agents work on the new one.
-
-## 9. Uninstall
+## 8. Uninstall
 
 ```sh
 docker compose down                                                # services, networks
@@ -237,7 +213,7 @@ sudo rm -rf secrets
 
 `docker compose down -v` alone leaves the browser containers and the volumes they use. Every name and label starts with `ARB_PREFIX`: adjust it if you changed the prefix, and never widen these filters (other stacks may share the daemon). Removing `arb-data` and `secrets/` is irreversible: keep a backup if the saved logins may be needed again.
 
-## 10. Backups and restore
+## 9. Backups and restore
 
 Two things to keep, never in the same place: the data (`arb.db`, optionally the profile volumes) and the keys (`secrets/login_key`, `secrets/better_auth_secret`). `arb.db` holds the saved passwords encrypted with the login key: one leak of both = every password.
 

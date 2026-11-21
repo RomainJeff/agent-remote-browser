@@ -10,14 +10,11 @@ import { DockerDriver } from '../host/docker.ts';
 import { RunnerDriver } from '../host/runner.ts';
 import type { HostDriver } from '../host/driver.ts';
 import type { ProfileId } from '../policy.ts';
-import { Request, MAX_REQUEST, pocVolume, readLine } from './protocol.ts';
-
-export type Runner = HostDriver & { copyVolume(from: string, id: ProfileId): Promise<string> };
+import { Request, MAX_REQUEST, readLine } from './protocol.ts';
 
 /** One request per connection. Invalid requests get a generic error: the reason stays in the runner.
- *  `migration`: accept copyVolume, which copies a POC profile (cookies included) into this stack.
  *  `maxComputers`: ensure refuses to start one more past this many running. */
-export function serveRunner(driver: Runner, path: string, { migration = false, maxComputers = Infinity } = {}) {
+export function serveRunner(driver: HostDriver, path: string, { maxComputers = Infinity } = {}) {
   rmSync(path, { force: true }); // stale socket of a previous run
   // Ensures run one at a time, so two concurrent starts cannot both pass the cap.
   // ponytail: global queue, a slow start delays the others; per-id is enough if starts get slow.
@@ -60,9 +57,7 @@ export function serveRunner(driver: Runner, path: string, { migration = false, m
         : req.op === 'exec' ? driver.exec(req.id, req.argv, { stdin: req.stdin, timeoutMs: req.timeoutMs })
         : req.op === 'stop' ? driver.stop(req.id)
         : req.op === 'remove' ? driver.remove(req.id, { keepVolume: req.keepVolume })
-        : req.op === 'list' ? driver.list()
-        : migration ? driver.copyVolume(pocVolume(req.id), req.id)
-        : Promise.reject(Error('copyVolume disabled: set ALLOW_POC_MIGRATION=1 on the runner for the migration')));
+        : driver.list());
       reply({ ok: true, result });
       done(true);
     } catch (e) {
@@ -84,7 +79,7 @@ if (import.meta.main) {
     process.exit(await new RunnerDriver(cfg.socket).list().then(() => 0, () => 1));
   }
   const server = await serveRunner(new DockerDriver({ socket: cfg.dockerSocket, prefix: cfg.prefix, image: cfg.image, runtime: cfg.runtime }), cfg.socket,
-    { migration: cfg.migration, maxComputers: cfg.maxComputers });
-  log(cfg.migration ? 'warn' : 'info', cfg.migration ? 'runner listening, copyVolume ENABLED (ALLOW_POC_MIGRATION)' : 'runner listening');
+    { maxComputers: cfg.maxComputers });
+  log('info', 'runner listening');
   for (const sig of ['SIGTERM', 'SIGINT'] as const) process.once(sig, () => server.close(() => process.exit(0)));
 }

@@ -69,8 +69,6 @@ const runnerSchema = z.object({
   SANDBOX_RUNTIME: z.string().optional(),
   /** 1 = accept the Docker default runtime (dev on macOS, CI). */
   ALLOW_NO_SANDBOX: flag,
-  /** 1 = accept copyVolume (migrate-from-poc --apply). Set for the migration only: it lets the gateway read POC profiles. */
-  ALLOW_POC_MIGRATION: flag,
   /** Running computers at most; ensure of one more is refused. Each holds ~1 GB RAM (docker.ts limits). */
   MAX_COMPUTERS: z.coerce.number().int().min(1).default(4),
   RUNNER_SOCKET: runnerSocket,
@@ -100,5 +98,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env) {
   const c = parse(runnerSchema, env);
   return { prefix: c.ARB_PREFIX, image: c.IMAGE ?? `${c.ARB_PREFIX}-computer:dev`, dockerSocket: c.DOCKER_SOCKET,
-    runtime: c.SANDBOX_RUNTIME, socket: c.RUNNER_SOCKET, migration: !!c.ALLOW_POC_MIGRATION, maxComputers: c.MAX_COMPUTERS };
+    runtime: c.SANDBOX_RUNTIME, socket: c.RUNNER_SOCKET, maxComputers: c.MAX_COMPUTERS };
 }

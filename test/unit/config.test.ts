@@ -4,14 +4,13 @@ import { loadConfig, loadRunnerConfig } from '../../src/config.ts';
 
 const dev = { ALLOW_NO_SANDBOX: '1' };
 
-test('defaults: loopback bind, POC ports, runner socket; runner: prefixed image', () => {
+test('defaults: loopback bind, ports 8787/8788, runner socket; runner: prefixed image', () => {
   const c = loadConfig(dev);
   assert.equal(c.bindAddr, '127.0.0.1');
   assert.deepEqual([c.port, c.adminPort, c.idleMs, c.prefix, c.runnerSocket], [8787, 8788, 300_000, 'arb', '/run/arb-runner/runner.sock']);
   assert.equal(loadConfig({ ...dev, PUBLIC_URL: 'https://arb.example.com/' }).publicUrl, 'https://arb.example.com');
   const r = loadRunnerConfig(dev);
-  assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket, r.migration], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock', false]);
-  assert.equal(loadRunnerConfig({ ...dev, ALLOW_POC_MIGRATION: '1' }).migration, true);
+  assert.deepEqual([r.prefix, r.image, r.dockerSocket, r.socket], ['arb', 'arb-computer:dev', '/var/run/docker.sock', '/run/arb-runner/runner.sock']);
   assert.deepEqual([r.maxComputers, loadRunnerConfig({ ...dev, MAX_COMPUTERS: '10' }).maxComputers], [4, 10]);
   assert.throws(() => loadRunnerConfig({ ...dev, MAX_COMPUTERS: '0' }), /- MAX_COMPUTERS:/);
   assert.equal(c.trustProxy, false);

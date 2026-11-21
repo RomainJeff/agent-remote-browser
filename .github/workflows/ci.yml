@@ -39,8 +39,8 @@ jobs:
           docker build -t arb-computer:ci .
       - run: .github/trivy.sh arb-gateway:ci arb-computer:ci
 
-  # The stack as deployed: browsers under gVisor (runsc), no ALLOW_NO_SANDBOX. Then the POC migration, a backup and
-  # the restore procedures of deploy/runbook.md (section 10), run as written.
+  # The stack as deployed: browsers under gVisor (runsc), no ALLOW_NO_SANDBOX. Then a backup and
+  # the restore procedures of deploy/runbook.md (section 9), run as written.
   e2e:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
@@ -85,22 +85,17 @@ jobs:
         run: npm run smoke
         env: { EXPECT_RUNTIME: runsc }
 
-      - name: Migrate from a synthetic POC (ac-profile-legacy, created here only)
+      - name: Seed a second profile (one saved login, a cookie marker on its volume)
         run: |
-          img=$(sed -n "s/^export const COPY_IMAGE = '\(.*\)';$/\1/p" src/host/docker.ts)
-          node test/e2e/poc-fixture.ts "$RUNNER_TEMP/poc"
-          docker volume create ac-profile-legacy
-          docker run --rm -v ac-profile-legacy:/v "$img" sh -c 'echo legacy-cookies > /v/marker'
-          ALLOW_POC_MIGRATION=1 docker compose up -d runner
-          docker compose stop gateway
-          docker compose run --rm --no-deps -v "$RUNNER_TEMP/poc:/poc:ro" gateway \
-            node src/cli.ts migrate-from-poc /poc/state.json /poc/login.key --apply | tee "$RUNNER_TEMP/migrate.out"
-          grep -q 'Imported 1 profile(s), 1 login(s)' "$RUNNER_TEMP/migrate.out"
-          grep -q 'ac-profile-legacy -> arb-profile-legacy: copied' "$RUNNER_TEMP/migrate.out"
-          test "$(docker run --rm --network none -v arb-profile-legacy:/v:ro "$img" cat /v/marker)" = legacy-cookies
-          docker compose up -d          # flag unset again: runner recreated without copyVolume
-          for _ in $(seq 30); do curl -fs localhost:18787/readyz && break; sleep 2; done
-          docker compose exec -T runner sh -c 'test -z "$ALLOW_POC_MIGRATION"'
+          openssl rand -hex 12 | docker compose exec -T gateway node --input-type=module -e "
+            import { readFileSync } from 'node:fs'; import { join } from 'node:path';
+            import { loadConfig } from './src/config.ts'; import { openDb } from './src/store/db.ts'; import { openStore } from './src/store/store.ts';
+            const cfg = loadConfig(), db = openDb(join(cfg.dataDir, 'arb.db')), s = openStore(db, cfg.loginKeyFile);
+            s.createProfile('legacy', ['example.org']);
+            s.saveLogin('legacy', 'main', { url: 'https://example.org/', username: 'u' }, readFileSync(0, 'utf8').trim());
+            db.close();"
+          docker volume create --label arb-computer=legacy arb-profile-legacy
+          docker run --rm --network none -v arb-profile-legacy:/v alpine:3.22 sh -c 'echo legacy-cookies > /v/marker'
 
       - name: Backup with restic, then the runbook's drill and restores
         env:

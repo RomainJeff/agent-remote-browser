@@ -37,7 +37,6 @@ services:
       IMAGE: ${ARB_IMAGE_REPO:-${ARB_PREFIX:-arb}}-computer:${ARB_IMAGE_TAG:-dev}   # what the computers run
       SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-}  # runsc (gVisor) on Linux; required unless ALLOW_NO_SANDBOX=1
       ALLOW_NO_SANDBOX: ${ALLOW_NO_SANDBOX:-}  # 1 = Docker default runtime (macOS dev). Empty = refuse to start without runsc
-      ALLOW_POC_MIGRATION: ${ALLOW_POC_MIGRATION:-}  # 1 = migrate-from-poc may copy POC volumes. Only during the migration
       MAX_COMPUTERS: ${MAX_COMPUTERS:-}  # running computers at most (default 4, ~1 GB RAM each)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

@@ -16,7 +16,7 @@ let log: { method: string; url: string; body?: any }[] = [];
 const containers = new Map<string, { Labels: Record<string, string> | null; running: boolean }>(
   [['arb-gateway-1', { Labels: { 'com.docker.compose.service': 'gateway' }, running: true }]]);
 const volumes = new Map<string, Record<string, string> | null>([['ac-profile-shop', null], ['arb-profile-gateway-1', null]]);
-let copyExit = 0, imageId = 'sha256:aaa';
+let imageId = 'sha256:aaa';
 
 const frame = (stream: number, s: string) => {
   const p = Buffer.from(s), h = Buffer.alloc(8);
@@ -49,7 +49,6 @@ const server = http.createServer((req, res) => {
     if (vol && method === 'GET') return volumes.has(vol) ? reply(200, { Name: vol, Labels: volumes.get(vol) }) : reply(404, { message: 'no such volume' });
     if (vol && method === 'DELETE') { volumes.delete(vol); return reply(204); }
     if (url === '/v1.47/volumes/create') volumes.set(JSON.parse(raw).Name, JSON.parse(raw).Labels ?? null);
-    if (url === '/v1.47/containers/arb-migrate-shop/wait') return reply(200, { StatusCode: copyExit });
     if (method === 'DELETE') return reply(204);
     reply(201, {});
   });
@@ -166,44 +165,4 @@ test('list maps the prefix label; remove deletes container and volume', async ()
     ['GET /v1.47/containers/arb-shop/json', 'DELETE /v1.47/containers/arb-shop?force=true',
       'GET /v1.47/volumes/arb-profile-shop', 'DELETE /v1.47/volumes/arb-profile-shop?force=true']);
   assert.equal(volumes.has('arb-profile-shop'), false);
-});
-
-test('copyVolume: read-only source, no network, throwaway container removed; never overwrites', async () => {
-  log = [];
-  volumes.delete('arb-profile-shop');
-  assert.equal(await driver.copyVolume('ac-profile-shop', id), 'copied');
-  assert.deepEqual(log.map((l) => `${l.method} ${l.url}`), [
-    'GET /v1.47/volumes/ac-profile-shop',
-    'GET /v1.47/volumes/arb-profile-shop',
-    'POST /v1.47/images/create?fromImage=alpine&tag=sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f',
-    'POST /v1.47/volumes/create',
-    'POST /v1.47/containers/create?name=arb-migrate-shop',
-    'POST /v1.47/containers/arb-migrate-shop/start',
-    'POST /v1.47/containers/arb-migrate-shop/wait',
-    'DELETE /v1.47/containers/arb-migrate-shop?force=true',
-  ]);
-  assert.deepEqual(log[3].body, { Name: 'arb-profile-shop', Labels: { 'arb-computer': 'shop' } });
-  const spec = log[4].body;
-  assert.deepEqual(spec.Cmd, ['cp', '-a', '/from/.', '/to/']);
-  assert.equal(spec.Labels, undefined, 'not a computer: list() never sees it');
-  assert.equal(spec.HostConfig.NetworkMode, 'none');
-  assert.deepEqual(spec.HostConfig.Mounts, [
-    { Type: 'volume', Source: 'ac-profile-shop', Target: '/from', ReadOnly: true },
-    { Type: 'volume', Source: 'arb-profile-shop', Target: '/to' }]);
-
-  log = [];
-  assert.equal(await driver.copyVolume('ac-profile-shop', id), 'target exists');
-  assert.equal(await driver.copyVolume('ac-profile-none', id), 'no source');
-  assert.ok(log.every((l) => l.method === 'GET'), 'nothing created');
-});
-
-test('copyVolume: failed copy removes the container and the half-written target', async () => {
-  volumes.delete('arb-profile-shop');
-  copyExit = 1;
-  log = [];
-  await assert.rejects(driver.copyVolume('ac-profile-shop', id), /exited with 1/);
-  assert.deepEqual(log.slice(-2).map((l) => `${l.method} ${l.url}`),
-    ['DELETE /v1.47/containers/arb-migrate-shop?force=true', 'DELETE /v1.47/volumes/arb-profile-shop']);
-  assert.equal(volumes.has('arb-profile-shop'), false);
-  copyExit = 0;
 });

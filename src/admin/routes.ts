@@ -114,7 +114,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
 
   async function computerDetails(id: ProfileId, p: Profile) {
     const running = (await driver.list()).some((c) => c.id === id && c.running);
-    // ponytail: a stopped computer shows no cookies (the POC read its volume with a throwaway container).
+    // ponytail: a stopped computer shows no cookies; read its volume with a throwaway container if that matters.
     const raw = running ? (await driver.exec(id, ['cat', SESSION], { timeoutMs: 10_000 }).catch(() => null))?.stdout : '';
     let session: { cookies: Record<string, unknown>[]; origins?: { origin: string; localStorage?: unknown[] }[] } = { cookies: [], origins: [] };
     try { session = JSON.parse(raw || ''); } catch {}

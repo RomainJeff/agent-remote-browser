@@ -1,4 +1,4 @@
-// Operator CLI: rotate-login-key, migrate-from-poc and admin, on a synthetic POC state and keys generated here.
+// Operator CLI: rotate-login-key, backup-db and admin, on keys generated here.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, renameSync, statSync } from 'node:fs';
@@ -8,8 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { main } from '../../src/cli.ts';
 import { openDb } from '../../src/store/db.ts';
 import { openStore } from '../../src/store/store.ts';
-import { encryptLogin } from '../../src/store/logins-crypto.ts';
-import { hash, parseProfileId } from '../../src/policy.ts';
+import { parseProfileId } from '../../src/policy.ts';
 import { totp } from '../totp.ts';
 
 const scratch = mkdtempSync(join(tmpdir(), 'arb-cli-'));
@@ -20,7 +19,7 @@ function fresh() {
   mkdirSync(dir);
   const env = { DATA_DIR: join(dir, 'data'), LOGIN_KEY_FILE: join(dir, 'login.key'), ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: randomBytes(32).toString('hex') };
   const lines: string[] = [];
-  const run = (args: string[], docker?: Parameters<typeof main>[3], ask?: Parameters<typeof main>[4]) => main(args, env, (l) => lines.push(l), docker, ask);
+  const run = (args: string[], ask?: Parameters<typeof main>[3]) => main(args, env, (l) => lines.push(l), ask);
   const withStore = <T>(fn: (s: ReturnType<typeof openStore>) => T) => {
     const db = openDb(join(env.DATA_DIR, 'arb.db'));
     try { return fn(openStore(db, env.LOGIN_KEY_FILE)); } finally { db.close(); }
@@ -89,80 +88,6 @@ test('backup-db: consistent copy while the database is open and written, 0600, n
   assert.equal(readFileSync(file, 'utf8'), 'x');
 });
 
-/** A POC state.json as the POC writes it: one encrypted login, one legacy plaintext login, tokens, OAuth data. */
-function pocFixture(dir: string) {
-  const key = randomBytes(32), pw = { a: randomBytes(12).toString('hex'), b: randomBytes(12).toString('hex') };
-  const tokens = ['acp_' + randomBytes(32).toString('base64url'), 'acg_' + randomBytes(32).toString('base64url')];
-  const state = {
-    profiles: {
-      shop: { allow: ['example.com'], tokenHash: hash(tokens[0]), createdAt: 1_700_000_000_000,
-        logins: { main: { ...login, password: encryptLogin(key, 'shop', 'main', login, pw.a) } } },
-      news: { allow: ['example.org'], tokenHash: null, createdAt: 1_700_000_000_001,
-        logins: { legacy: { url: 'https://example.org/', username: 'u', password: pw.b } } },
-    },
-    globalTokenHash: hash(tokens[1]),
-    clients: { acc_x: { redirect_uris: ['https://example.com/cb'], client_name: 'x', createdAt: 1 } },
-    tokens: { [hash('aca_x')]: { kind: 'access', principal: { global: true }, client: 'acc_x', exp: Date.now() + 60_000 } },
-  };
-  writeFileSync(join(dir, 'state.json'), JSON.stringify(state));
-  writeFileSync(join(dir, 'poc.key'), key);
-  return { state: join(dir, 'state.json'), key: join(dir, 'poc.key'), secrets: [key, pw.a, pw.b, ...tokens], pw };
-}
-const fakeDocker = () => {
-  const copies: string[] = [];
-  return { copies, copyVolume: async (id: string) => { copies.push(id); return 'copied'; } };
-};
-
-test('migrate-from-poc dry run: verifies everything, writes nothing, prints the docker commands', async () => {
-  const t = fresh(), poc = pocFixture(t.dir), docker = fakeDocker();
-  assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key], docker), 0);
-  assert.deepEqual(docker.copies, []);
-  assert.match(t.lines[0], /^Would import 2 profile\(s\), 2 login\(s\)/);
-  assert.ok(t.lines.includes('docker run --rm --network none -v ac-profile-shop:/from:ro -v arb-profile-shop:/to alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f cp -a /from/. /to/'));
-  assert.ok(t.lines.includes('docker volume create --label arb-computer=news arb-profile-news'));
-  assert.equal(t.withStore((s) => s.profiles().length), 0);
-  assertNoSecret(t.lines, poc.secrets);
-});
-
-test('migrate-from-poc --apply: profiles, allowlists, re-encrypted logins; no token or OAuth data; volumes copied', async () => {
-  const t = fresh(), poc = pocFixture(t.dir), docker = fakeDocker();
-  assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key, '--apply'], docker), 0);
-  assert.deepEqual(docker.copies, ['shop', 'news']);
-  assert.ok(t.lines.includes('ac-profile-shop -> arb-profile-shop: copied'));
-  t.withStore((s) => {
-    assert.deepEqual(s.profiles().map((p) => [p.id, p.allow, p.createdAt]),
-      [['shop', ['example.com'], 1_700_000_000_000], ['news', ['example.org'], 1_700_000_000_001]]);
-    assert.equal(s.decryptLogin('shop', 'main', s.profile('shop')!.logins.main), poc.pw.a);
-    assert.equal(s.decryptLogin('news', 'legacy', s.profile('news')!.logins.legacy), poc.pw.b);
-  });
-  const db = openDb(join(t.env.DATA_DIR, 'arb.db'));
-  for (const table of ['oauthClient', 'oauthAccessToken', 'apikey', 'user']) assert.equal((db.prepare(`SELECT count(*) n FROM ${table}`).get() as any).n, 0, table);
-  db.close();
-  assertNoSecret(t.lines, poc.secrets);
-  assertNoSecret(t.lines, [readFileSync(t.env.LOGIN_KEY_FILE)]);
-
-  // Re-run: existing profiles left alone, the copier reports what it finds.
-  t.lines.length = 0;
-  assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key, '--apply'], docker), 0);
-  assert.match(t.lines[0], /^Imported 0 profile\(s\)/);
-  assert.ok(t.lines.includes('Already in arb.db, left untouched: shop, news'));
-});
-
-test('migrate-from-poc with the wrong POC key: refused, nothing imported', async () => {
-  const t = fresh(), poc = pocFixture(t.dir), docker = fakeDocker();
-  writeFileSync(poc.key, randomBytes(32));
-  await assert.rejects(t.run(['migrate-from-poc', poc.state, poc.key, '--apply'], docker));
-  assert.deepEqual(docker.copies, []);
-  assert.equal(t.withStore((s) => s.profiles().length), 0);
-});
-
-test('migrate-from-poc: a volume copy failure is reported, exit code 1', async () => {
-  const t = fresh(), poc = pocFixture(t.dir);
-  const docker = { copyVolume: async () => { throw Error('Docker API POST /containers/x/start: 500'); } };
-  assert.equal(await t.run(['migrate-from-poc', poc.state, poc.key, '--apply'], docker), 1);
-  assert.ok(t.lines.includes('ac-profile-shop -> arb-profile-shop: failed (Docker API POST /containers/x/start: 500)'));
-});
-
 /** Answers the CLI prompts like a person with an authenticator app: password, then the code for the printed URI. */
 const asker = (t: ReturnType<typeof fresh>, password: string, code?: (uri: string) => string) => async (prompt: string) =>
   prompt.startsWith('Password') ? password : (code ?? totp)(t.lines.find((l) => l.startsWith('otpauth://'))!);
@@ -174,7 +99,7 @@ const count = (t: ReturnType<typeof fresh>, sql: string) => {
 
 test('admin create: only the TOTP URI and backup codes are printed; one admin per gateway; no session left', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url');
-  assert.equal(await t.run(['admin', 'create', 'Admin@Example.test'], undefined, asker(t, password)), 0);
+  assert.equal(await t.run(['admin', 'create', 'Admin@Example.test'], asker(t, password)), 0);
   const uri = t.lines.find((l) => l.startsWith('otpauth://totp/'))!;
   assert.match(uri, /secret=[A-Z2-7]+/);
   assertNoSecret(t.lines, [password, t.env.BETTER_AUTH_SECRET]);
@@ -187,15 +112,15 @@ test('admin create: only the TOTP URI and backup codes are printed; one admin pe
   assert.equal(codes.length, 10);
   assert.equal(count(t, `SELECT count(*) n FROM twoFactor WHERE backupCodes LIKE '%${codes[0]}%'`), 0, 'backup codes encrypted at rest');
 
-  await assert.rejects(t.run(['admin', 'create', 'admin@example.test'], undefined, asker(t, password)), /exists: use admin reset-2fa/);
-  await assert.rejects(t.run(['admin', 'create', 'other@example.test'], undefined, asker(t, password)), /one admin per gateway/);
-  await assert.rejects(t.run(['admin', 'create', 'not-an-email'], undefined, asker(t, password)), /Invalid email/);
+  await assert.rejects(t.run(['admin', 'create', 'admin@example.test'], asker(t, password)), /exists: use admin reset-2fa/);
+  await assert.rejects(t.run(['admin', 'create', 'other@example.test'], asker(t, password)), /one admin per gateway/);
+  await assert.rejects(t.run(['admin', 'create', 'not-an-email'], asker(t, password)), /Invalid email/);
 });
 
 test('admin create: short password or wrong code refused', async () => {
   const t = fresh();
-  await assert.rejects(t.run(['admin', 'create', 'a@example.test'], undefined, asker(t, 'short')), /12 to 128/);
-  await assert.rejects(t.run(['admin', 'create', 'a@example.test'], undefined,
+  await assert.rejects(t.run(['admin', 'create', 'a@example.test'], asker(t, 'short')), /12 to 128/);
+  await assert.rejects(t.run(['admin', 'create', 'a@example.test'],
     asker(t, randomBytes(12).toString('base64url'), (u) => String((Number(totp(u)) + 1) % 1e6).padStart(6, '0'))), /Code rejected/);
   assert.equal(backups(t.lines).length, 0, 'no backup codes before the code checks out');
   assert.equal(count(t, 'SELECT count(*) n FROM user WHERE twoFactorEnabled = 1'), 0, 'not an admin until the code checks out');
@@ -203,11 +128,11 @@ test('admin create: short password or wrong code refused', async () => {
 
 test('admin reset-2fa: new password and TOTP secret, sessions dropped', async () => {
   const t = fresh(), first = randomBytes(12).toString('base64url'), second = randomBytes(12).toString('base64url');
-  await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.test'], undefined, asker(t, first)), /No admin/);
-  assert.equal(await t.run(['admin', 'create', 'a@example.test'], undefined, asker(t, first)), 0);
+  await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.test'], asker(t, first)), /No admin/);
+  assert.equal(await t.run(['admin', 'create', 'a@example.test'], asker(t, first)), 0);
   const before = t.lines.find((l) => l.startsWith('otpauth://')), oldCodes = backups(t.lines);
   t.lines.length = 0;
-  assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.test'], undefined, asker(t, second)), 0);
+  assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.test'], asker(t, second)), 0);
   const after = t.lines.find((l) => l.startsWith('otpauth://'));
   assert.ok(after && after !== before, 'new TOTP secret');
   assert.equal(backups(t.lines).filter((c) => oldCodes.includes(c)).length, 0, 'new backup codes');

@@ -7,11 +7,13 @@
 # Optional: COMPOSE_FILE (compose.yaml:compose.tunnel.yaml), ARB_PREFIX, BACKUP_PROFILES=1, KEEP_DAILY (default 30).
 # NOT backed up here, on purpose: secrets/login_key and secrets/better_auth_secret. A backup holding both arb.db
 # and the login key would hold every saved password. Keep them, and the restic password, somewhere else
-# (password manager, offline copy): deploy/runbook.md, section 10.
+# (password manager, offline copy): deploy/runbook.md, section 9.
 set -eu
 : "${RESTIC_REPOSITORY:?set RESTIC_REPOSITORY}" "${RESTIC_PASSWORD_FILE:?set RESTIC_PASSWORD_FILE}"
 P=${ARB_PREFIX:-arb}
 STAGE=${BACKUP_STAGE:-/var/tmp/$P-backup}
+# Throwaway image that tars each profile volume. Pinned by digest, like every image of the stack (Renovate updates it).
+COPY_IMAGE='alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f'
 umask 077
 rm -rf "$STAGE" && mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT
@@ -22,10 +24,9 @@ docker compose exec -T gateway sh -c 'f=/tmp/arb-backup.db; rm -f $f; node src/c
 
 if [ "${BACKUP_PROFILES:-}" = 1 ]; then
   # ponytail: a running browser may be mid-write; Chrome recovers its cookie DB. Stop computers first for an exact copy.
-  img=$(sed -n "s/^export const COPY_IMAGE = '\(.*\)';$/\1/p" src/host/docker.ts)
   mkdir "$STAGE/profiles"
   for v in $(docker volume ls -q --filter "label=$P-computer"); do
-    docker run --rm --network none --cap-drop ALL --user 10001:10001 -v "$v:/v:ro" "$img" tar -C /v -cf - . > "$STAGE/profiles/$v.tar"
+    docker run --rm --network none --cap-drop ALL --user 10001:10001 -v "$v:/v:ro" "$COPY_IMAGE" tar -C /v -cf - . > "$STAGE/profiles/$v.tar"
   done
 fi
 
