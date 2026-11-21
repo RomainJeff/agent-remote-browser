@@ -16,8 +16,9 @@ export async function requireAdmin(auth: Auth, headers: IncomingHttpHeaders) {
   return s?.user.twoFactorEnabled ? s : null;
 }
 
-/** Bearer `arb_at_…` (OAuth) or `arb_k_…` (API key, also via x-api-key) -> the scope the admin granted. */
-export async function principal(db: DatabaseSync, auth: Auth, token: unknown): Promise<Principal | null> {
+/** Bearer `arb_at_…` (OAuth) or `arb_k_…` (API key, also via x-api-key) -> the scope the admin granted.
+ *  `ip`: the client IP as the listener settled it (clientIp in server.ts), kept as the key's last IP. */
+export async function principal(db: DatabaseSync, auth: Auth, token: unknown, ip?: string): Promise<Principal | null> {
   if (typeof token !== 'string') return null;
   let scope: unknown;
   if (token.startsWith(PREFIX.access)) {
@@ -27,6 +28,7 @@ export async function principal(db: DatabaseSync, auth: Auth, token: unknown): P
   } else if (token.startsWith(PREFIX.apiKey)) {
     const r = await auth.api.verifyApiKey({ body: { key: token } }).catch(() => null);
     scope = r?.valid ? (r.key?.metadata as { scope?: unknown } | null)?.scope : null;
+    if (r?.valid && r.key) db.prepare('UPDATE apikey SET lastIp = ? WHERE id = ?').run(ip ?? null, r.key.id);
   }
   if (scope === 'global') return { global: true };
   const id = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;

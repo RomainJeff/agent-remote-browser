@@ -417,8 +417,8 @@ async function refreshClients() {
   if (!$('#keyList')) return;
   setText($('#rKeys'), `${d.keys.length} active`); setText($('#rOauth'), `${d.oauth.length} registered`);
   $('#keyList').innerHTML = d.keys.length
-    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th>Expires</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
-      <tr><td>${esc(k.name)}</td><td class="mono nw">${esc(k.start)}…</td><td class="mono">${esc(scopeLabel(k.scope))}</td><td class="num">${k.lastRequest ? ago(k.lastRequest) : 'never'}</td>
+    ? `<div class="tbl"><table><tr><th>Name</th><th>Key</th><th>Scope</th><th>Last used</th><th>Last IP</th><th>Expires</th><th><span class="sr">Revoke</span></th></tr>${d.keys.map((k) => `
+      <tr><td>${esc(k.name)}</td><td class="mono nw">${esc(k.start)}…</td><td class="mono">${esc(scopeLabel(k.scope))}</td><td class="num">${k.lastRequest ? ago(k.lastRequest) : 'never'}</td><td class="mono">${esc(k.lastIp ?? '')}</td>
       <td class="num">${k.noExpiry ? 'never: rotate it' : esc(k.expiresAt.slice(0, 10))}</td>
       <td class="act">${revokeBtn('keys', k.id, k.name)}</td></tr>`).join('')}</table></div>`
     : '<p class="empty-row">No API keys.</p>';

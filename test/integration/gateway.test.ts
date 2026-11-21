@@ -557,16 +557,22 @@ test('MAX_COMPUTERS: the runner refusal reaches the agent, no computer starts', 
   } finally { runner.close(); runner = await serveRunner(fake, runnerSock); }
 });
 
-test('client IP: Cf-Connecting-IP is ignored unless TRUST_PROXY=cloudflare', async () => {
+test('client IP (rate limits, API key last IP): Cf-Connecting-IP is ignored unless TRUST_PROXY=cloudflare', async () => {
   const register = (ip: string) => fetch(base + '/api/auth/oauth2/register', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
     body: JSON.stringify({ redirect_uris: ['http://127.0.0.1:9/cb'], token_endpoint_auth_method: 'none' }) });
   // Direct clients: a fresh fake IP per call does not escape the 5 per minute per IP rule (keyed on the socket).
   const direct = [];
   for (let i = 0; i < 6; i++) direct.push((await register(`203.0.113.${i + 1}`)).status);
   assert.ok(direct.includes(429), direct.join());
+  // An API key's last IP: the same normalized address.
+  const lastIp = async () => (await admin('GET', '/api/clients')).json.keys.find((k: any) => k.name === 'orchestrator').lastIp;
+  await mcpStatus({ authorization: `Bearer ${tokens.global}`, 'cf-connecting-ip': '203.0.113.9' });
+  assert.match(await lastIp(), /^(::ffff:)?127\.0\.0\.1$/);
   // Behind the tunnel (the listener is reachable through cloudflared only), Cloudflare's header is the client.
   await restart({ TRUST_PROXY: 'cloudflare' });
   for (let i = 0; i < 6; i++) assert.equal((await register(`203.0.113.${i + 101}`)).status, 201, `client ${i + 1}`);
+  await mcpStatus({ authorization: `Bearer ${tokens.global}`, 'cf-connecting-ip': '203.0.113.9' });
+  assert.equal(await lastIp(), '203.0.113.9');
 });
 
 test('https PUBLIC_URL: the admin port (http, localhost) gets plain cookies and a working session', async () => {

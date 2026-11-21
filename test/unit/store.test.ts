@@ -1,7 +1,7 @@
 // SQLite store: migrations, repositories, login key rules, persisted leases. Synthetic data only.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, existsSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -23,18 +23,20 @@ const tables = (db: ReturnType<typeof openDb>) =>
 
 const BA = ['account', 'apikey', 'oauthAccessToken', 'oauthClient', 'oauthClientAssertion', 'oauthClientResource', 'oauthConsent',
   'oauthRefreshToken', 'oauthResource', 'rateLimit', 'session', 'twoFactor', 'user', 'verification'];
+/** NNN of the last migration file. */
+const LATEST = Number(readdirSync(new URL('../../src/store/migrations/', import.meta.url)).sort().at(-1)!.slice(0, 3));
 const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() as any).user_version;
 
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
   assert.deepEqual(tables(db), [...BA, 'leases', 'logins', 'profiles'].sort());
-  assert.equal(version(db), 2);
+  assert.equal(version(db), LATEST);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
   migrate(db);
   db.close();
   const again = openDb(f.db);
-  assert.equal(version(again), 2);
+  assert.equal(version(again), LATEST);
   assert.equal(tables(again).length, BA.length + 3);
   again.close();
 });
@@ -52,7 +54,7 @@ test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens
   lot3.close();
 
   const db = openDb(f.db);
-  assert.equal(version(db), 2);
+  assert.equal(version(db), LATEST);
   assert.deepEqual(tables(db), [...BA, 'leases', 'logins', 'profiles'].sort());
   assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
   for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);

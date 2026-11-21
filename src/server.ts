@@ -85,7 +85,7 @@ export async function start(cfg: Config, driver: HostDriver) {
         return send(res, 404, { error: 'not found' });
       }
       const key = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.headers['x-api-key'];
-      const who = await principal(db, auth, key);
+      const who = await principal(db, auth, key, req.headers['cf-connecting-ip'] as string);
       if (!who) {
         if (key) count('arb_auth_failures_total', { kind: 'token' }); // no credential at all = OAuth discovery, not a failure
         return send(res, 401, { error: 'unauthorized' }, challenge);

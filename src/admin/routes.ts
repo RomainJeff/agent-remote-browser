@@ -57,7 +57,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   }
 
   // Keys created before expiry became mandatory (Lot 7b) keep working; noExpiry flags them for rotation.
-  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest, expiresAt
+  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest, lastIp, expiresAt
     FROM apikey ORDER BY createdAt DESC`).all() as { expiresAt: string | null }[]).map((k) => ({ ...k, noExpiry: k.expiresAt === null }));
   const listClients = () => (db.prepare(`SELECT c.clientId id, c.name, c.createdAt,
     (SELECT group_concat(DISTINCT referenceId) FROM oauthConsent WHERE clientId = c.clientId) scopes,
