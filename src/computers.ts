@@ -9,6 +9,9 @@ import { log } from './audit.ts';
 import { AB_FLAGS } from './runner/protocol.ts';
 
 export type Computers = ReturnType<typeof createComputers>;
+/** agent-browser's own refusal (element not found, wait timed out...): its text may quote the page. */
+export class BrowserError extends Error {}
+type ExecOpts = { stdin?: string; timeoutMs?: number };
 
 export function createComputers(driver: HostDriver, store: Store, { egressDir, idleMs, busy = () => false }:
   { egressDir: string; idleMs: number; busy?: (id: string) => boolean }) {
@@ -31,11 +34,11 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
   }
 
   /** One agent-browser command on an already running computer, without touching its idle timer. Returns `data` or throws. */
-  async function exec(id: ProfileId, args: string[], { stdin }: { stdin?: string } = {}): Promise<Record<string, any>> {
-    const r = await driver.exec(id, ['agent-browser', ...AB_FLAGS, ...args], { stdin, timeoutMs: 90_000 });
+  async function exec(id: ProfileId, args: string[], { stdin, timeoutMs = 90_000 }: ExecOpts = {}): Promise<Record<string, any>> {
+    const r = await driver.exec(id, ['agent-browser', ...AB_FLAGS, ...args], { stdin, timeoutMs });
     if (r.code !== 0 && !r.stdout) throw Error((r.stderr || `exit ${r.code}`).slice(0, 500));
     const out = JSON.parse(r.stdout);
-    if (out.error || out.success === false) throw Error(String(out.error));
+    if (out.error || out.success === false) throw new BrowserError(String(out.error));
     delete out.data?.lifecycle;
     return out.data ?? {};
   }
@@ -50,7 +53,7 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
   return {
     serial, ensure, exec, stop,
     /** Same as exec, starting the computer if needed. */
-    ab: async (id: ProfileId, args: string[], opts?: { stdin?: string }) => { await ensure(id); return exec(id, args, opts); },
+    ab: async (id: ProfileId, args: string[], opts?: ExecOpts) => { await ensure(id); return exec(id, args, opts); },
 
     async screenshot(id: ProfileId) {
       const { path } = await this.ab(id, ['screenshot']);
