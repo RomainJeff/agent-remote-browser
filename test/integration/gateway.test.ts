@@ -21,6 +21,7 @@ import { RunnerDriver } from '../../src/host/runner.ts';
 import { serveRunner } from '../../src/runner/server.ts';
 import { parseProfileId } from '../../src/policy.ts';
 import { AB_FLAGS } from '../../src/runner/protocol.ts';
+import { limits } from '../../src/mcp/steps.ts';
 import { purgeClients } from '../../src/auth/guards.ts';
 import { totp } from '../totp.ts';
 
@@ -220,7 +221,7 @@ test('admin creates profiles and scoped API keys; MCP without a valid bearer get
 
 test('profile key: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
-  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'press', 'request_human', 'screenshot', 'snapshot']);
+  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'press', 'request_human', 'run_steps', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
     const r = await call(tokens.shop, 'open', { url });
     assert.ok(r.error, url);
@@ -357,6 +358,77 @@ test('takeover clipboard: paste inserts text, leading dashes never read as flags
   assert.deepEqual([copy.status, copy.json], [200, { text: '' }]);
 });
 
+test('run_steps: one call for a known path; first failure stops it with failed_at and the page; budget; allowlist; audit', async () => {
+  const sent = () => calls('exec').map((c) => c.argv!.slice(AB_FLAGS.length + 1));
+  const audited = () => { const { tool, ok, steps, failed_at } = JSON.parse(readFileSync(f.audit, 'utf8').trim().split('\n').at(-1)!); return { tool, ok, steps, failed_at }; };
+  const run = async (steps: unknown[]) => { const r = await call(tokens.shop, 'run_steps', { steps }); return { ...r, head: JSON.parse(r.text.split('\n')[0]) }; };
+  const envelopes = (t: string) => t.match(/<untrusted_page_content /g)?.length ?? 0;
+  const secret = 'fill-value-' + randomBytes(6).toString('hex');
+
+  // Outputs: the last one, plus those marked keep, each tagged with its step.
+  fake.calls = [];
+  const r = await run([{ open: 'https://example.com/' }, { get_text: { selector: '#a' }, keep: true }, { fill: { label: 'Email' }, value: secret },
+    { click: { role: 'button', name: 'Go', exact: true } }, { wait: { load: 'networkidle' } }, { get_text: {} }, { snapshot: { max_chars: 8 } }]);
+  assert.ok(!r.error, r.text);
+  assert.equal(r.head.ok, true);
+  assert.equal(envelopes(r.text), 2, 'step 5 is neither kept nor last');
+  assert.match(r.text, /\nhello\n<\/untrusted_page_content>\n[^\n]+\n\{"step":1\}\n/);
+  assert.match(r.text, /\n- button\n<\/untrusted_page_content>\n[^\n]+\n\{"step":6,"truncated":true,"total_chars":22\}$/);
+  assert.deepEqual(sent(), [['open', 'https://example.com/'], ['get', 'text', '#a'], ['find', 'label', 'Email', 'fill', secret],
+    ['find', 'role', 'button', 'click', '--name', 'Go', '--exact'], ['wait', '--load', 'networkidle'], ['get', 'text', 'body'], ['snapshot', '-i', '-c']]);
+  assert.deepEqual(audited(), { tool: 'run_steps', ok: true, steps: 7, failed_at: undefined });
+
+  // First failure: later steps never run; agent-browser's message and a snapshot go in the envelope.
+  fake.calls = [];
+  fake.failOn = 'find';
+  try {
+    const x = await run([{ open: 'https://example.com/' }, { wait: { ms: 100 } }, { click: { text: 'Sign in' } }, { get_text: {} }]);
+    assert.ok(x.error);
+    assert.deepEqual({ ...x.head, ms: 0 }, { ok: false, failed_at: 2, error: 'step failed', ms: 0 });
+    assert.match(x.text, /<untrusted_page_content origin="https:\/\/example.com">\nError: fake failure\n\n- button "OK" \[ref=e1\]\n<\/untrusted_page_content>\n[^\n]+\n\{"step":2\}$/);
+    assert.deepEqual(sent().slice(2), [['find', 'text', 'Sign in', 'click'], ['snapshot', '-i', '-c']]);
+  } finally { fake.failOn = ''; }
+  assert.deepEqual(audited(), { tool: 'run_steps', ok: false, steps: 4, failed_at: 2 });
+
+  // open outside the allowlist: refused before the host, like the open tool.
+  fake.calls = [];
+  const off = await run([{ snapshot: {} }, { open: 'https://example.org/' }]);
+  assert.deepEqual([off.head.failed_at, off.head.error], [1, 'Domain not allowed. Allowed: example.com']);
+  assert.equal(agentBrowser('open').length, 0);
+
+  // login if_needed: skipped without a password field; otherwise the saved login (password through stdin only).
+  fake.calls = [];
+  fake.passwordFields = 0;
+  try { assert.equal((await run([{ login: 'main', if_needed: true }, { snapshot: {} }])).head.ok, true); } finally { fake.passwordFields = 1; }
+  assert.deepEqual(sent(), [['get', 'count', 'input[type=password]'], ['snapshot', '-i', '-c']]);
+  assert.equal((await run([{ login: 'main', if_needed: true }])).head.ok, true);
+  assert.equal((await run([{ login: 'main' }])).head.ok, true);
+  assert.equal(agentBrowser('--password-stdin').length, 2);
+  assert.match((await run([{ login: 'nope' }])).head.error, /^Unknown site/);
+
+  // Budget: a step that hangs is cut when the budget runs out; a step with under 1 s left is not started.
+  limits.budgetMs = 1500;
+  fake.slow = 'wait';
+  try {
+    const t0 = Date.now();
+    const b = await run([{ wait: { text: 'never' } }, { snapshot: {} }]);
+    assert.deepEqual([b.error, b.head.failed_at, b.head.error], [true, 0, 'budget']);
+    assert.ok(Date.now() - t0 < 4000, 'cut at the budget');
+    assert.doesNotMatch(b.text, /Error:/);
+    limits.budgetMs = 900;
+    fake.calls = [];
+    assert.deepEqual((await run([{ back: true }])).head.error, 'budget');
+    assert.deepEqual(sent(), [['snapshot', '-i', '-c']], 'only the failure snapshot');
+  } finally { limits.budgetMs = 18_000; fake.slow = ''; }
+
+  // Schema: no --fn wait, no unknown step, 20 steps at most; nothing reaches the host.
+  fake.calls = [];
+  for (const steps of [[{ wait: { fn: 'window.x' } }], [{ screenshot: true }], Array(21).fill({ back: true }), []])
+    assert.match((await call(tokens.shop, 'run_steps', { steps })).text, /validation/i, JSON.stringify(steps).slice(0, 40));
+  assert.equal(calls('exec').length, 0);
+  assert.ok(!readFileSync(f.audit, 'utf8').includes(secret), 'fill values never in the audit');
+});
+
 test('kill switch refuses every tool until removed', async () => {
   writeFileSync(f.kill, '');
   try {
@@ -373,7 +445,7 @@ test('kill switch refuses every tool until removed', async () => {
 test('a lease locks the profile key; the global key drives the profile through the lease', async () => {
   assert.deepEqual(await toolNames(tokens.global),
     ['back', 'click', 'create_profile', 'fill', 'get_text', 'handoff_status', 'lease_profile', 'list_profiles', 'login', 'open', 'press', 'release_profile',
-      'request_human', 'screenshot', 'snapshot']);
+      'request_human', 'run_steps', 'screenshot', 'snapshot']);
   assert.match((await call(tokens.global, 'open', { lease: 'arb_l_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
   assert.match((await call(tokens.global, 'lease_profile', { domain: 'example.org' })).text, /No free profile/);
 

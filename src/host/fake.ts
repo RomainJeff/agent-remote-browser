@@ -8,12 +8,13 @@ export interface Call { op: 'ensure' | 'exec' | 'stream' | 'stop' | 'remove' | '
 const origin = 'https://example.com';
 
 /** Canned output of `agent-browser --json ... <op> <args>`, after its leading flags. */
-function agentBrowser(args: string[]) {
+function agentBrowser(args: string[], passwordFields: number) {
   const [op, sub] = args;
   const data = op === 'open' ? { title: 'Fake page', url: args[1] }
     : op === 'get' && sub === 'url' ? { url: origin + '/' }
     : op === 'get' && sub === 'title' ? { title: 'Fake page' }
     : op === 'get' && sub === 'text' ? { origin, text: 'hello' }
+    : op === 'get' && sub === 'count' ? { count: passwordFields }
     : op === 'snapshot' ? { origin, snapshot: '- button "OK" [ref=e1]' }
     : op === 'screenshot' ? { path: '/tmp/shot.png' }
     : op === 'stream' ? { port: 9223 }
@@ -26,6 +27,10 @@ export class FakeDriver implements HostDriver {
   computers = new Map<string, Computer>();
   /** agent-browser commands starting with this (e.g. 'auth login') answer `success: false`. */
   failOn = '';
+  /** agent-browser commands starting with this hang until their timeout (exit 124, like coreutils timeout). */
+  slow = '';
+  /** `get count input[type=password]` answer. */
+  passwordFields = 1;
 
   async ensure(id: ProfileId) {
     this.calls.push({ op: 'ensure', id });
@@ -35,13 +40,14 @@ export class FakeDriver implements HostDriver {
     return c;
   }
 
-  async exec(id: ProfileId, argv: string[], { stdin }: { stdin?: string; timeoutMs: number }): Promise<ExecResult> {
+  async exec(id: ProfileId, argv: string[], { stdin, timeoutMs }: { stdin?: string; timeoutMs: number }): Promise<ExecResult> {
     this.calls.push({ op: 'exec', id, argv, ...(stdin != null && { stdin }) });
     if (argv[0] !== 'agent-browser') return { code: 0, stdout: argv[0] === 'base64' ? 'iVBORw0K' : '', stderr: '' };
     const rest = argv.slice(1);
     while (rest[0]?.startsWith('--')) rest.splice(0, rest[0] === '--json' ? 1 : 2); // --json, --profile X, --restore X, --args X
+    if (this.slow && rest.join(' ').startsWith(this.slow)) return new Promise((r) => setTimeout(r, timeoutMs, { code: 124, stdout: '', stderr: '' }));
     if (this.failOn && rest.join(' ').startsWith(this.failOn)) return { code: 1, stdout: JSON.stringify({ success: false, error: 'fake failure' }), stderr: '' };
-    return { code: 0, stdout: agentBrowser(rest), stderr: '' };
+    return { code: 0, stdout: agentBrowser(rest, this.passwordFields), stderr: '' };
   }
 
   /** The relay ends at once: the live view socket closes without a 101. */

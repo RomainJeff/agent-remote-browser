@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clip, grep } from '../../src/mcp/tools.ts';
+import { clip, grep } from '../../src/mcp/steps.ts';
 
 const page = ['Header', 'Plan: Pro', 'Executions used: 120', 'of 2500', 'Footer', 'a', 'b', 'c', 'EXECUTIONS reset monthly', 'end'].join('\n');
 
