@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, migrate } from '../../src/store/db.ts';
-import { openStore } from '../../src/store/store.ts';
+import { openStore, describe } from '../../src/store/store.ts';
 import { keyId } from '../../src/store/logins-crypto.ts';
 import { createLeases } from '../../src/mcp/leases.ts';
 import { hash, parseProfileId } from '../../src/policy.ts';
@@ -29,7 +29,7 @@ const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() a
 
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profiles', 'step_up'].sort());
   assert.equal(version(db), LATEST);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
@@ -37,7 +37,7 @@ test('migrations: empty db gets every table, WAL, foreign keys; re-running is a 
   db.close();
   const again = openDb(f.db);
   assert.equal(version(again), LATEST);
-  assert.equal(tables(again).length, BA.length + 5);
+  assert.equal(tables(again).length, BA.length + 6);
   again.close();
 });
 
@@ -55,10 +55,39 @@ test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens
 
   const db = openDb(f.db);
   assert.equal(version(db), LATEST);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profiles', 'step_up'].sort());
   assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
   for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  db.close();
+});
+
+test('playbooks: CRUD per profile, limits, gone with the profile', () => {
+  const f = fresh(), db = openDb(f.db), s = openStore(db, f.key);
+  s.createProfile(pid('shop'), []);
+  s.createProfile(pid('other'), []);
+  assert.equal(s.savePlaybook(pid('shop'), 'check-quota', '# Check quota\nsteps'), 'created');
+  assert.equal(s.savePlaybook(pid('shop'), 'check-quota', '## Check the quota\nv2'), 'updated');
+  s.savePlaybook(pid('shop'), 'a-first', '\n\n  First line  \nrest');
+  s.savePlaybook(pid('other'), 'mine', 'x');
+  assert.deepEqual(s.playbooks('shop').map((p) => p.name), ['a-first', 'check-quota']);
+  assert.equal(s.playbook('shop', 'check-quota')!.body, '## Check the quota\nv2');
+  assert.equal(s.playbook('shop', 'mine'), undefined, 'per profile');
+  assert.equal(describe(s.playbook('shop', 'check-quota')!.body), 'Check the quota');
+  assert.equal(describe(s.playbook('shop', 'a-first')!.body), 'First line');
+
+  assert.throws(() => s.savePlaybook(pid('shop'), 'Bad Name', 'x'), /Name/);
+  assert.throws(() => s.savePlaybook(pid('shop'), 'x'.repeat(41), 'x'), /Name/);
+  assert.throws(() => s.savePlaybook(pid('shop'), 'blank', '  \n '), /required/);
+  s.savePlaybook(pid('shop'), 'big', 'é'.repeat(10 * 1024));                          // 20 KB in bytes: fits
+  assert.throws(() => s.savePlaybook(pid('shop'), 'big', 'é'.repeat(10 * 1024) + 'x'), /20 KB/);
+  assert.throws(() => db.prepare("INSERT INTO playbooks VALUES ('shop', 'raw', ?, 1)").run('x'.repeat(20481)), /CHECK/);
+
+  assert.equal(s.deletePlaybook(pid('shop'), 'a-first'), true);
+  assert.equal(s.deletePlaybook(pid('shop'), 'a-first'), false);
+  s.deleteProfile(pid('shop'));
+  assert.deepEqual(s.playbooks('shop'), []);
+  assert.deepEqual(s.playbooks('other').map((p) => p.name), ['mine']);
   db.close();
 });
 

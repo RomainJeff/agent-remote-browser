@@ -1,7 +1,7 @@
 // App state in SQLite, behind small typed functions: profiles and saved logins.
 // Leases: mcp/leases.ts. Identity, OAuth and API keys: Better Auth (auth/), same database.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import type { ProfileId } from '../policy.ts';
+import { validId, type ProfileId } from '../policy.ts';
 import { tx } from './db.ts';
 import { loadLoginKey, keyId, encryptLogin, decryptLogin, type Envelope, type LoginRef } from './logins-crypto.ts';
 
@@ -9,6 +9,19 @@ export interface Login extends LoginRef { password: Envelope; lastTestedAt?: num
 export interface Profile { id: ProfileId; allow: string[]; logins: Record<string, Login>; createdAt: number }
 
 type Row = Record<string, any>;
+export interface Playbook { name: string; body: string; updated: number }
+
+export const PLAYBOOK_MAX = 20 * 1024;
+/** Why this playbook cannot be saved, or null. */
+export function badPlaybook(name: unknown, body: unknown): string | null {
+  if (!validId(name)) return 'Name: lowercase letters, digits and dashes, 1 to 40 characters';
+  if (typeof body !== 'string' || !body.trim()) return 'Body is required';
+  if (Buffer.byteLength(body) > PLAYBOOK_MAX) return `Body is over ${PLAYBOOK_MAX / 1024} KB`;
+  return null;
+}
+/** First non-empty line, without its Markdown heading marks. */
+export const describe = (body: string) => (body.split('\n').find((l) => l.trim()) ?? '').replace(/^\s*#+\s*/, '').trim().slice(0, 200);
+
 export type Store = ReturnType<typeof openStore>;
 
 /** Loads the login key for this database. Throws (fail fast) when saved logins need a missing or different key. */
@@ -39,7 +52,7 @@ export function openStore(db: DatabaseSync, keyFile: string) {
     createProfile: (id: ProfileId, allow: string[], createdAt = Date.now()) =>
       run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), createdAt),
     setAllow: (id: ProfileId, allow: string[]) => run('UPDATE profiles SET allow_json = ? WHERE id = ?', JSON.stringify(allow), id),
-    /** Logins and leases go with it (ON DELETE CASCADE), and so do the OAuth grants and API keys scoped to it:
+    /** Logins, leases, handoffs and playbooks go with it (ON DELETE CASCADE), and so do the OAuth grants and API keys scoped to it:
      *  a later profile with the same id must not inherit them. */
     deleteProfile: (id: ProfileId) => tx(db, () => {
       const ref = 'profile:' + id;
@@ -71,5 +84,19 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       return n;
     },
     keyId: () => kid,
+
+    playbooks: (id: string) => all('SELECT name, body, updated FROM playbooks WHERE profile = ? ORDER BY name', id) as Playbook[],
+    playbook: (id: string, name: string) => one('SELECT name, body, updated FROM playbooks WHERE profile = ? AND name = ?', id, name) as Playbook | undefined,
+    /** Throws on a bad name or body. */
+    savePlaybook(id: ProfileId, name: string, body: string): 'created' | 'updated' {
+      const bad = badPlaybook(name, body);
+      if (bad) throw Error(bad);
+      // ponytail: no tx, synchronous calls on one connection cannot interleave
+      const had = !!one('SELECT 1 FROM playbooks WHERE profile = ? AND name = ?', id, name);
+      run(`INSERT INTO playbooks (profile, name, body, updated) VALUES (?, ?, ?, ?)
+        ON CONFLICT (profile, name) DO UPDATE SET body = excluded.body, updated = excluded.updated`, id, name, body, Date.now());
+      return had ? 'updated' : 'created';
+    },
+    deletePlaybook: (id: ProfileId, name: string) => Number(run('DELETE FROM playbooks WHERE profile = ? AND name = ?', id, name).changes) > 0,
   };
 }
