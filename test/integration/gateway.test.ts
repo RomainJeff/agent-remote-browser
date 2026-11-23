@@ -221,7 +221,7 @@ test('admin creates profiles and scoped API keys; MCP without a valid bearer get
 
 test('profile key: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
-  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'playbook', 'press', 'request_human', 'run_steps', 'screenshot', 'snapshot']);
+  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'playbook', 'press', 'request_human', 'run_playbook', 'run_steps', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
     const r = await call(tokens.shop, 'open', { url });
     assert.ok(r.error, url);
@@ -457,6 +457,28 @@ test('playbooks: admin writes them (step-up, audited without name or body), the 
   assert.match(await desc(), /Playbooks: a-other, check-quota\.$/);
   assert.equal(auditLines().at(-1).tool, 'playbook', 'agent reads are audited like any tool');
 
+  // run_playbook: the recipe in one call, {placeholders} filled from params; on failure the playbook follows.
+  const runPb = (a: Record<string, unknown>) => call(tokens.shop, 'run_playbook', a);
+  assert.match((await mcp(tokens.shop, (c) => c.listTools())).tools.find((t) => t.name === 'run_playbook')!.description!,
+    /Playbooks: a-other \(Other one\); check-quota \(Check the quota\)\.$/);
+  fake.calls = [];
+  const ran = await runPb({ name: 'check-quota', params: { workspace: 'w1' } });
+  assert.ok(!ran.error, ran.text);
+  assert.equal(JSON.parse(ran.text.split('\n')[0]).ok, true);
+  assert.deepEqual(agentBrowser('open').map((c) => c.argv!.at(-1)), ['https://example.com/w1']);
+  fake.failOn = 'open';
+  try {
+    const bad = await runPb({ name: 'check-quota', params: { workspace: 'w1' } });
+    assert.ok(bad.error);
+    assert.match(bad.text, /"failed_at":0/);
+    assert.ok(bad.text.endsWith(`Playbook check-quota:\n${body}`), bad.text.slice(-80));
+  } finally { fake.failOn = ''; }
+  fake.calls = [];
+  assert.deepEqual(await runPb({ name: 'check-quota' }), { error: true, text: 'Missing params: workspace' });
+  assert.match((await runPb({ name: 'a-other' })).text, /no run_steps recipe/);
+  assert.deepEqual(await runPb({ name: 'nope' }), { error: true, text: 'Unknown playbook. Available: a-other, check-quota' });
+  assert.equal(calls('exec').length, 0, 'refused before the host');
+
   const listed = (await admin('GET', '/api/computers/shop')).json.playbooks;
   assert.deepEqual(listed.map((b: any) => [b.name, b.description, b.body]), [['a-other', 'Other one', 'Other one'], ['check-quota', 'Check the quota', body]]);
   assert.ok(Math.abs(Date.parse(listed[1].updated) - Date.now()) < 5000);
@@ -484,7 +506,7 @@ test('kill switch refuses every tool until removed', async () => {
 test('a lease locks the profile key; the global key drives the profile through the lease', async () => {
   assert.deepEqual(await toolNames(tokens.global),
     ['back', 'click', 'create_profile', 'fill', 'get_text', 'handoff_status', 'lease_profile', 'list_profiles', 'login', 'open', 'playbook', 'press', 'release_profile',
-      'request_human', 'run_steps', 'screenshot', 'snapshot']);
+      'request_human', 'run_playbook', 'run_steps', 'screenshot', 'snapshot']);
   assert.match((await call(tokens.global, 'open', { lease: 'arb_l_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
   assert.match((await call(tokens.global, 'lease_profile', { domain: 'example.org' })).text, /No free profile/);
 

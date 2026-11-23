@@ -11,7 +11,7 @@ import { count } from '../metrics.ts';
 import type { Ctx } from '../server.ts';
 import type { Handoff } from './handoffs.ts';
 import { BrowserError } from '../computers.ts';
-import { REF, GET_TEXT, SNAPSHOT, Steps, BUDGET, limits, at, clip, readOut, stepArgv, type Step } from './steps.ts';
+import { REF, GET_TEXT, SNAPSHOT, Steps, BUDGET, limits, at, clip, readOut, stepArgv, recipe, type Step } from './steps.ts';
 
 const untrusted = (origin: unknown, text: string) =>
   `<untrusted_page_content origin="${origin}">\n${text}\n</untrusted_page_content>\n` +
@@ -167,7 +167,10 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     'each tagged with its step index (0-based). On failure: failed_at (step index), error, and a snapshot of the page.',
   // ponytail: advertised as plain objects, checked against the full Steps union here. The union as JSON Schema
   // weighed 7 KB, re-read by the model every turn (lot 10 bench: +3k input tokens per turn); the description has the grammar.
-  { steps: z.array(z.object({}).passthrough()).min(1).max(20) }, async ({ steps: raw }, id, p) => {
+  { steps: z.array(z.object({}).passthrough()).min(1).max(20) }, ({ steps }, id, p) => runSteps(steps, id, p));
+
+  // run_steps and run_playbook: raw steps checked against the full Steps union, then run within the budget.
+  async function runSteps(raw: unknown, id: ProfileId, p: Profile): Promise<Result> {
     const parsed = Steps.safeParse(raw);
     if (!parsed.success) return fail('Invalid steps: ' + parsed.error.issues.slice(0, 3).map((e) => `${e.path.join('.') || 'steps'}: ${e.message}`).join('; '));
     const steps: Step[] = parsed.data;
@@ -208,7 +211,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     const last = outs.at(-1);
     return { audit: { steps: steps.length }, content: [{ type: 'text', text: [JSON.stringify({ ok: true, ms: Date.now() - t0 }),
       ...outs.filter((o) => o.keep || o === last).map((o) => enveloped(o.origin, o.text, { step: o.step, ...o.meta }))].join('\n') }] };
-  });
+  }
 
   // Handoff: the agent asks a human to act in this browser, and waits.
   const link = (h: Handoff) => `${cfg.adminPublic ? cfg.publicUrl : `http://localhost:${cfg.adminPort}`}/#/handoff/${h.id}`;
@@ -255,6 +258,20 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     const b = store.playbook(id, name);
     return b ? txt(b.body) : fail(`Unknown playbook. Available: ${index(id).map((x) => x.name).join(', ') || 'none'}`);
   }, 'direct');
+
+  // ponytail: one call instead of playbook + run_steps (lot 10 bench: a turn costs ~6.5k input tokens, ~3.6k of it the client's).
+  const described = own ? index(own.id).map((b) => `${b.name} (${b.description})`).join('; ') || 'none' : 'those returned by lease_profile';
+  tool('run_playbook', 'Run the run_steps recipe of a playbook in one call, its {placeholders} filled from params. Same reply as ' +
+    `run_steps; on failure the playbook follows (what to do next). Playbooks: ${described}.`,
+  { name: z.string().max(40), params: z.record(z.string(), z.string().max(500)).optional() }, async ({ name, params = {} }, id, p) => {
+    const b = store.playbook(id, name);
+    if (!b) return fail(`Unknown playbook. Available: ${index(id).map((x) => x.name).join(', ') || 'none'}`);
+    const steps = recipe(b.body, params);
+    if (typeof steps === 'string') return fail(steps);
+    const r = await runSteps(steps, id, p);
+    // ponytail: appended to the one text item; some clients only show the first.
+    return !r.isError ? r : { ...r, content: [{ type: 'text', text: `${(r.content[0] as { text: string }).text}\n\nPlaybook ${name}:\n${b.body}` }] };
+  });
 
   if (!g) return server;
 
