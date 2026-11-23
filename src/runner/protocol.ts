@@ -27,12 +27,17 @@ const vault = z.string().regex(/^gw-[a-z0-9-]{1,40}$/);
 const url = z.url({ protocol: /^https?$/ }).max(4096);
 /** A value that cannot be read as a flag ("-" alone is a key name). */
 const value = (max: number) => z.string().min(1).max(max).refine((s) => s === '-' || !s.startsWith('-'));
+/** A ref or CSS selector (get text), a CSS selector (snapshot -s): never a flag. */
+const sel = value(500).refine((s) => s !== '-');
 
 /** agent-browser subcommands the tools and the admin UI use, after AB_FLAGS. */
 const agentBrowser = z.union([
   z.tuple([lit('open'), url]),
   z.tuple([lit('snapshot'), lit('-i')]),
-  z.tuple([lit('get'), lit('text'), z.union([ref, lit('body')])]),
+  z.tuple([lit('snapshot'), lit('-i'), lit('-c')]),
+  z.tuple([lit('snapshot'), lit('-i'), lit('-s'), sel]),
+  z.tuple([lit('snapshot'), lit('-i'), lit('-c'), lit('-s'), sel]),
+  z.tuple([lit('get'), lit('text'), sel]),
   z.tuple([lit('get'), z.enum(['url', 'title'])]),
   z.tuple([lit('click'), ref]),
   z.tuple([lit('fill'), ref, lit('--'), z.string().max(5000)]),

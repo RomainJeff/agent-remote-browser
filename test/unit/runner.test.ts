@@ -33,7 +33,8 @@ test('profile ids: the policy regex, so no path, no uppercase, no leading dash, 
 });
 
 test('exec: only the agent-browser shapes the gateway uses, with its fixed flags', () => {
-  for (const a of [ab('open', 'https://example.com/a?b=1'), ab('snapshot', '-i'), ab('get', 'text', '@e12'), ab('get', 'text', 'body'),
+  for (const a of [ab('open', 'https://example.com/a?b=1'), ab('snapshot', '-i'), ab('snapshot', '-i', '-c'),
+    ab('snapshot', '-i', '-s', '#main'), ab('snapshot', '-i', '-c', '-s', 'main .usage > p'), ab('get', 'text', '@e12'), ab('get', 'text', '#usage'), ab('get', 'text', 'body'),
     ab('get', 'url'), ab('click', '@e1'), ab('fill', '@e1', '--', '-starts with a dash'), ab('press', 'Enter'), ab('press', '-'),
     ab('back'), ab('screenshot'), ab('close'), ab('stream', 'status'),
     ab('keyboard', 'inserttext', 'two\nlines'), ab('keyboard', 'inserttext', '-'), ab('eval', SELECTION),
@@ -51,7 +52,8 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ab('auth', 'login', 'someone-else'), ab('auth', 'login', 'gw-x', '--url', 'https://evil.test'), ab('auth', 'delete', 'gw-x', '--no-navigate'),
     ['cat', '/etc/shadow'], ['cat', '/home/agent/.agent-browser/../../../etc/shadow'], ['base64', '-w0', '/etc/x.png'],
     ['base64', '-w0', '/tmp/../etc/x.png'], ['rm', '-rf', '/tmp/x.png'], ['rm', '-f', '/tmp/x.png', '/tmp/y.png'],
-    ab('get', 'text', 'body\0'), ab('fill', '@e1', '--', 'x'.repeat(5001)), []])
+    ab('get', 'text', 'body\0'), ab('get', 'text', '--json'), ab('get', 'text', '-'), ab('snapshot', '-i', '-s', '--delta'),
+    ab('snapshot', '--delta'), ab('snapshot', '-i', '-s'), ab('snapshot', '-i', '-s', 'x'.repeat(501)), ab('snapshot', '-i', '-d', '3'), ab('fill', '@e1', '--', 'x'.repeat(5001)), []])
     assert.equal(ok(exec(a)), false, a.join(' '));
   assert.equal(ok(exec(ab('close'), { timeoutMs: 999 })), false);
   assert.equal(ok(exec(ab('close'), { timeoutMs: 120_001 })), false);

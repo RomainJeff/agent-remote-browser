@@ -17,10 +17,33 @@ const untrusted = (origin: unknown, text: string) =>
 
 type Result = { isError?: boolean; content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[] };
 const txt = (t: unknown): Result => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t) }] });
+/** Page output in its untrusted envelope; the gateway's own signals (truncated, matches) as a JSON line after it. */
+const page = (origin: unknown, text: string, meta: object = {}) =>
+  txt(untrusted(origin, text) + (Object.keys(meta).length ? '\n' + JSON.stringify(meta) : ''));
 const fail = (msg: string): Result => ({ isError: true, content: [{ type: 'text', text: msg }] });
 const REF = z.string().regex(/^@?e\d+$/, 'use a ref from snapshot, e.g. @e3').describe('Element ref from snapshot, e.g. @e3');
 const LEASE = z.string().describe('Lease id from lease_profile');
 const at = (r: string) => (r.startsWith('@') ? r : '@' + r);
+const SEL = z.string().min(1).max(500).refine((s) => !s.startsWith('-'), 'a selector cannot start with "-"');
+const MAX = (d: number) => z.number().int().min(1).max(50_000).default(d).describe('Characters returned at most');
+
+/** At most `max` characters of `text`; says so when it cut, so the client can narrow its query. */
+export const clip = (text: string, max: number): { text: string; truncated?: true; total_chars?: number } =>
+  text.length > max ? { text: text.slice(0, max), truncated: true, total_chars: text.length } : { text };
+
+/** Lines containing `needle` (case-insensitive) with `context` lines around each. Windows that overlap or touch merge;
+ *  blocks are separated by a "…" line. No match: `matches: 0` and empty text. */
+export function grep(text: string, needle: string, context: number) {
+  const lines = text.split('\n'), n = needle.toLowerCase(), blocks: [number, number][] = [];
+  let matches = 0;
+  lines.forEach((l, i) => {
+    if (!l.toLowerCase().includes(n)) return;
+    matches++;
+    const a = Math.max(0, i - context), b = Math.min(lines.length - 1, i + context), last = blocks.at(-1);
+    if (last && a <= last[1] + 1) last[1] = b; else blocks.push([a, b]);
+  });
+  return { matches, text: blocks.map(([a, b]) => lines.slice(a, b + 1).join('\n')).join('\n…\n') };
+}
 
 class PolicyError extends Error {}
 export class WrongOrigin extends Error {}
@@ -96,8 +119,11 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
       log(ok ? 'info' : 'warn', 'tool call', { profile: agent, tool: name, ms, ok });
     }
   };
+  // ponytail: one refine for every tool; only get_text has both ref and selector.
   const tool = (name: string, description: string, shape: z.ZodRawShape, run: Run, mode: Mode = 'browser') =>
-    server.registerTool(name, { description, inputSchema: g ? { lease: LEASE, ...shape } : shape }, wrap(name, run, mode) as any);
+    server.registerTool(name, { description, inputSchema: z.object(g ? { lease: LEASE, ...shape } : shape)
+      .refine((a) => a.ref === undefined || a.selector === undefined, { message: 'Pass ref or selector, not both', path: ['selector'] }) },
+    wrap(name, run, mode) as any);
   const gtool = (name: string, description: string, shape: z.ZodRawShape, run: (a: any) => Promise<Result>) =>
     server.registerTool(name, { description, inputSchema: shape }, wrap(name, run as Run, 'global') as any);
 
@@ -110,14 +136,31 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     return txt({ title: d.title, url: d.url });
   });
 
-  tool('snapshot', 'Accessibility snapshot of interactive elements with refs (@e1, @e2...) to use in click/fill.', {}, async (_a, id) => {
-    const d = await pc.ab(id, ['snapshot', '-i']);
-    return txt(untrusted(d.origin, d.snapshot || '(no interactive elements)'));
+  tool('snapshot', 'Accessibility snapshot of interactive elements with refs (@e1, @e2...) to use in click/fill. ' +
+    'Scope it to one part of the page to save tokens.', {
+    // agent-browser 0.43 `snapshot -s` runs querySelector: a ref is an invalid selector there.
+    scope: SEL.refine((s) => !/^@?e\d+$/.test(s), 'scope takes a CSS selector, not a ref').optional()
+      .describe('Only the subtree matching this CSS selector, e.g. main or #usage'),
+    compact: z.boolean().default(true).describe('Drop empty structural elements'),
+    max_chars: MAX(8000),
+  }, async ({ scope, compact, max_chars }, id) => {
+    const d = await pc.ab(id, ['snapshot', '-i', ...(compact ? ['-c'] : []), ...(scope ? ['-s', scope] : [])]);
+    const { text, ...meta } = clip(d.snapshot || '(no interactive elements)', max_chars);
+    return page(d.origin, text, meta);
   });
 
-  tool('get_text', 'Visible text of the page, or of one element.', { ref: REF.optional() }, async ({ ref }, id) => {
-    const d = await pc.ab(id, ['get', 'text', ref ? at(ref) : 'body']);
-    return txt(untrusted(d.origin, String(d.text ?? '').slice(0, 50_000)));
+  tool('get_text', 'Visible text of the page, of one element (ref) or of a CSS selector. ' +
+    'Use contains to get only the matching lines. Cut at max_chars: the reply says truncated and total_chars.', {
+    ref: REF.optional(),
+    selector: SEL.optional().describe('CSS selector, instead of ref'),
+    contains: z.string().min(1).max(200).optional().describe('Only lines containing this (case-insensitive), with context lines around'),
+    context: z.number().int().min(0).max(10).default(2).describe('Lines kept before and after each match'),
+    max_chars: MAX(4000),
+  }, async ({ ref, selector, contains, context, max_chars }, id) => {
+    const d = await pc.ab(id, ['get', 'text', ref ? at(ref) : selector ?? 'body']);
+    const all = String(d.text ?? ''), m = contains === undefined ? null : grep(all, contains, context);
+    const { text, ...meta } = clip(m ? m.text : all, max_chars);
+    return page(d.origin, text, { ...(m && { matches: m.matches }), ...meta });
   });
 
   tool('click', 'Click an element by ref.', { ref: REF }, async ({ ref }, id) => txt(await pc.ab(id, ['click', at(ref)])));

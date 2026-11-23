@@ -78,8 +78,8 @@ The life of one tool call, say `click`:
 | Tool | What it does |
 | --- | --- |
 | `open` | Go to a URL (allowed domains only) |
-| `snapshot` | Accessibility tree of the page, with element refs to act on |
-| `get_text` | Visible text of the page or of one element |
+| `snapshot` | Accessibility tree of the page, with element refs to act on (compact, scoped to a CSS selector, capped at 8,000 characters by default) |
+| `get_text` | Visible text of the page, an element or a CSS selector; only the lines matching `contains` if given; capped at 4,000 characters by default |
 | `click`, `fill` | Click or fill an element from the snapshot (never a password: see `login`) |
 | `press` | Press a key (Enter, Tab, Escape…) |
 | `back` | Previous page |

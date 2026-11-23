@@ -65,6 +65,16 @@ Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, on
 
 Database driver: `node:sqlite` (built into Node, no native dependency, no build stage). Evidence for Lot 4 (2026-11-21): `better-auth@1.7.27` (latest) depends on `@better-auth/kysely-adapter@1.7.27`, which ships a `NodeSqliteDialect` and picks it automatically when handed a `DatabaseSync`; `node:sqlite` runs without an experimental warning on Node 24.22.1 (SQLite 3.53.4) and Node 26.13.1 (SQLite 3.54.1). `better-sqlite3` would add a native build for nothing.
 
+## Page output
+
+`snapshot` and `get_text` return page content inside `<untrusted_page_content>`. The gateway's own signals come after it, as one JSON line, only when they apply: `{"matches": N}` when `contains` was given, `{"truncated": true, "total_chars": N}` when the text was cut at `max_chars` (N = length before the cut).
+
+- `get_text {ref? | selector?, contains?, context?, max_chars?}`: `ref` or a CSS `selector` (`get text <css>`), not both (validation error); neither = `body`. `contains` keeps the lines that contain it (case-insensitive) with `context` lines around (0 to 10, default 2); windows that overlap or touch merge, blocks are separated by a `…` line; no match gives `matches: 0` and an empty body, not an error. Then the result is cut at `max_chars` (default 4,000, max 50,000).
+- `snapshot {scope?, compact?, max_chars?}`: `snapshot -i`, plus `-c` unless `compact: false`, plus `-s <scope>` (a CSS selector: agent-browser 0.43 does not take a ref there). Cut at `max_chars` (default 8,000, max 50,000).
+- **Breaking (Lot 10a)**: `get_text` used to return up to 50,000 characters; it now returns 4,000 unless `max_chars` says otherwise. The `truncated` line makes the cut visible. Diff snapshots (`--delta`) are not exposed: their baseline lives in the profile's browser session, not in the client's.
+
+The filter and the cut are pure functions in `src/mcp/tools.ts` (`grep`, `clip`).
+
 ## Human handoff
 
 An agent stuck on something only a person can do (captcha, 2FA code, consent screen, broken login) calls `request_human {reason, minutes}` (1 to 120, default 30). It gets back `{handoff, state, deadline, url, next}`: the `url` is the admin page link (`#/handoff/<id>`, on `PUBLIC_URL` with `ADMIN_PUBLIC=1`, else `http://localhost:18788`), which the agent relays to its user. It carries no secret: opening it still needs an admin session. The reason is stripped of control characters, capped at 500, and stored as untrusted text: escaped in the UI, never in logs, audit entries or metric labels. The browser must be running; one open handoff per profile.

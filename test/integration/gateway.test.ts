@@ -20,6 +20,7 @@ import { FakeDriver } from '../../src/host/fake.ts';
 import { RunnerDriver } from '../../src/host/runner.ts';
 import { serveRunner } from '../../src/runner/server.ts';
 import { parseProfileId } from '../../src/policy.ts';
+import { AB_FLAGS } from '../../src/runner/protocol.ts';
 import { purgeClients } from '../../src/auth/guards.ts';
 import { totp } from '../totp.ts';
 
@@ -241,6 +242,40 @@ test('open on the allowlist starts one computer, behind its own egress proxy', a
 
   const snap = await call(tokens.shop, 'snapshot');
   assert.match(snap.text, /^<untrusted_page_content origin="https:\/\/example.com">/);
+});
+
+test('get_text and snapshot: selector, scope and compact reach agent-browser; contains and max_chars cut in the gateway', async () => {
+  const sent = () => calls('exec').map((c) => c.argv!.slice(AB_FLAGS.length + 1));
+  fake.calls = [];
+  const env = /^<untrusted_page_content origin="https:\/\/example.com">\n(.*)\n<\/untrusted_page_content>\n[^\n]*(?:\n(.*))?$/s;
+  const parse = (t: string) => { const m = t.match(env)!; return { text: m[1], meta: m[2] && JSON.parse(m[2]) }; };
+  const schema = await mcp(tokens.shop, async (c) => (await c.listTools()).tools.find((t) => t.name === 'get_text')!.inputSchema);
+  assert.deepEqual(Object.keys(schema.properties!).sort(), ['contains', 'context', 'max_chars', 'ref', 'selector']);
+
+  assert.deepEqual(parse((await call(tokens.shop, 'get_text')).text), { text: 'hello', meta: undefined });
+  assert.deepEqual(parse((await call(tokens.shop, 'get_text', { selector: '#usage', max_chars: 2 })).text),
+    { text: 'he', meta: { truncated: true, total_chars: 5 } });
+  assert.deepEqual(parse((await call(tokens.shop, 'get_text', { ref: 'e4', contains: 'HELL', context: 0 })).text), { text: 'hello', meta: { matches: 1 } });
+  assert.deepEqual(parse((await call(tokens.shop, 'get_text', { contains: 'nowhere' })).text), { text: '', meta: { matches: 0 } });
+  await call(tokens.shop, 'snapshot');
+  assert.deepEqual(parse((await call(tokens.shop, 'snapshot', { scope: '#usage', compact: false, max_chars: 8 })).text),
+    { text: '- button', meta: { truncated: true, total_chars: 22 } });
+  await call(tokens.shop, 'snapshot', { scope: 'main form' });
+  assert.deepEqual(sent(), [
+    ['get', 'text', 'body'], ['get', 'text', '#usage'], ['get', 'text', '@e4'], ['get', 'text', 'body'],
+    ['snapshot', '-i', '-c'], ['snapshot', '-i', '-s', '#usage'], ['snapshot', '-i', '-c', '-s', 'main form'],
+  ]);
+
+  fake.calls = [];
+  for (const args of [{ ref: '@e1', selector: 'body' }, { selector: '--json' }, { max_chars: 50_001 }, { context: 11 }]) {
+    const r = await call(tokens.shop, 'get_text', args);
+    assert.ok(r.error, JSON.stringify(args));
+    assert.match(r.text, /validation/i);
+  }
+  assert.match((await call(tokens.shop, 'get_text', { ref: '@e1', selector: 'body' })).text, /ref or selector, not both/);
+  assert.ok((await call(tokens.shop, 'snapshot', { scope: '-s' })).error);
+  assert.match((await call(tokens.shop, 'snapshot', { scope: '@e3' })).text, /CSS selector, not a ref/);
+  assert.equal(calls('exec').length, 0, 'invalid arguments never reach the host');
 });
 
 test('saved login: password only reaches the host through stdin', async () => {
