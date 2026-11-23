@@ -85,6 +85,7 @@ The life of one tool call, say `click`:
 | `back` | Previous page |
 | `screenshot` | PNG of the viewport |
 | `login` | Sign in to a site with a saved login, typed by the server |
+| `run_steps` | Up to 20 steps (open, login, click, fill, press, back, wait, get_text, snapshot) in one call, 18 s in all; stops at the first failure with the step index and a snapshot of the page |
 | `request_human`, `handoff_status` | Hand the browser to a human (captcha, 2FA, consent) and wait for the outcome |
 | `list_profiles`, `create_profile` | `global` scope only: see and create profiles |
 | `lease_profile`, `release_profile` | `global` scope only: borrow a profile and give it back |

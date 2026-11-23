@@ -73,7 +73,33 @@ Database driver: `node:sqlite` (built into Node, no native dependency, no build 
 - `snapshot {scope?, compact?, max_chars?}`: `snapshot -i`, plus `-c` unless `compact: false`, plus `-s <scope>` (a CSS selector: agent-browser 0.43 does not take a ref there). Cut at `max_chars` (default 8,000, max 50,000).
 - **Breaking (Lot 10a)**: `get_text` used to return up to 50,000 characters; it now returns 4,000 unless `max_chars` says otherwise. The `truncated` line makes the cut visible. Diff snapshots (`--delta`) are not exposed: their baseline lives in the profile's browser session, not in the client's.
 
-The filter and the cut are pure functions in `src/mcp/tools.ts` (`grep`, `clip`).
+The filter and the cut are pure functions in `src/mcp/steps.ts` (`grep`, `clip`, `readOut`), shared with `run_steps`.
+
+## run_steps
+
+A known path in one call: `run_steps {steps: [...]}`, 1 to 20 steps, run in order by the gateway (not `agent-browser batch`), inside the same `wrap` as every tool (kill switch, lease, handoff pause, one audit line). Each step has one key:
+
+| Step | agent-browser |
+| --- | --- |
+| `{open: url}` | `open <url>`, checked against the profile allowlist first (refused: `Domain not allowed...`) |
+| `{login: site, if_needed?}` | the `login` tool's path (`fillLogin`, password on stdin); `if_needed`: `get count input[type=password]` first, skipped when 0 |
+| `{click: L}`, `{fill: L, value}` | ref: `click @eN`, `fill @eN -- <value>`; else `find <kind> <v> click \| fill <value> [--name n] [--exact]` |
+| `{press: key}`, `{back: true}` | `press <key>`, `back` |
+| `{wait: {ms}}` | `wait <ms>`, 1 to 5,000 |
+| `{wait: {text \| selector \| url \| load}}` | `wait --text t`, `wait <css>`, `wait --url <glob>`, `wait --load load\|domcontentloaded\|networkidle`, each with `--timeout <budget left - 0.5 s>` |
+| `{get_text: {...}, keep?}`, `{snapshot: {...}, keep?}` | same params and mapping as the tools (`stepArgv` in `src/mcp/steps.ts`) |
+
+Locator `L`: `{ref}` (stale after a navigation) `| {text} | {label} | {role, name?} | {placeholder} | {testid} | {css}` (`find first <css>`), with `exact: true` for a case-sensitive whole match (`--exact`; on `role` only with `name`, ignored on `testid`, `css`, `ref`). Never `wait --fn`, no screenshot, no `request_human`: those stay separate tools.
+
+Measured on agent-browser 0.43.0 (2026-11-23, throwaway `arb-computer:dev` container): `text` matches a substring; `placeholder` did not match a substring; `role ... --name Go --exact` does not match `go`; `wait --text` is a case-sensitive substring; `wait --url` takes a glob that must match the whole URL (`**/page*`); `find ... fill` has no `--` separator, so a locator fill value cannot start with `-` (zod refuses it; use a ref). A client killed mid-wait leaves the daemon waiting (default 25 s) and queues the next command: hence the `--timeout` on waits.
+
+Reply: one text block. First line, JSON: `{"ok": true, "ms"}` or `{"ok": false, "failed_at": i, "error", "ms"}` (`i` is the 0-based step index). On success, then the kept outputs (`keep: true`) and the last output, each in its `<untrusted_page_content>` envelope followed by `{"step": i, ...signals}`. On failure (`isError`), no outputs: one envelope with agent-browser's error (it can quote the page, e.g. `Names seen: "Go"`, so it is never outside the envelope) and `snapshot -i -c` cut at 2,000 characters. `error` is `step failed`, `budget`, or the gateway's own refusal (`Domain not allowed...`, `Unknown site...`, `Login URL is outside the allowlist`).
+
+Budget: 18 s for the whole call (`limits.budgetMs` in `steps.ts`, mutable for tests only). A step does not start with under 1 s left. Each exec gets the budget left as its runner timeout (at least 1 s; `computers.exec`/`ab` take an optional `timeoutMs`, default 90 s), and coreutils `timeout` cuts it at the next whole second. A failure with under 1 s left is reported as `budget`. Not bounded by the budget: a `login` step (`fillLogin` unchanged, its own 90 s timeouts; the next step checks the budget again) and the failure snapshot (5 s on top).
+
+Audit: the usual line plus `steps` (count) and, on failure, `failed_at`. Never a URL, locator, fill value or page text.
+
+Deviations from the Lot 10 plan: the fill step's text is `value` (not `text`, which is a locator kind); errors carry the step index, 0-based; agent-browser's error text goes in the envelope, the `error` field is a fixed word; no outputs on failure, only the page snapshot.
 
 ## Human handoff
 
