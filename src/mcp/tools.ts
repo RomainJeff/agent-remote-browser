@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { urlAllowed, slug, validId, cleanAllow, sitesOf, hash, type Principal, type ProfileId } from '../policy.ts';
-import type { Profile } from '../store/store.ts';
+import { describe, type Profile } from '../store/store.ts';
 import type { LoginRef } from '../store/logins-crypto.ts';
 import { log } from '../audit.ts';
 import { count } from '../metrics.ts';
@@ -74,9 +74,10 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
   };
 
   // Every tool: kill switch -> resolve profile -> per-profile queue -> audit line + log line.
-  // Handoff tools resolve the profile but skip the pause and the queue: a 25 s long-poll there would block the admin.
+  // 'direct' tools (handoffs, playbook) resolve the profile and lease but skip the pause and the queue: they never touch the
+  // browser, and a 25 s long-poll there would block the admin (a playbook read would wait behind an 18 s run_steps).
   type Run = (a: any, id: ProfileId, p: Profile) => Promise<Result>;
-  type Mode = 'browser' | 'handoff' | 'global';
+  type Mode = 'browser' | 'direct' | 'global';
   const wrap = (name: string, run: Run, mode: Mode) => async (a: any): Promise<Result> => {
     const t0 = Date.now();
     let ok = true, id: ProfileId | undefined, extra = {};
@@ -218,7 +219,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
       return txt({ handoff: h.id, state: h.state, deadline: new Date(h.deadline).toISOString(), url: link(h),
         next: 'Send this url to your user and tell them what you need. Browser tools are paused. ' +
           'Call handoff_status with wait_s=25 until state is done, failed, expired or cancelled.' });
-    }, 'handoff');
+    }, 'direct');
 
   tool('handoff_status', 'State of your last request_human. Waits up to wait_s seconds for it to end.',
     { wait_s: z.number().int().min(0).max(25).default(20) },
@@ -234,7 +235,18 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
       const open = OPEN_STATES.includes(h.state);
       return txt({ handoff: h.id, state: h.state, ...(h.note && { note: h.note }), ...(open && { url: link(h) }),
         next: open ? 'Still waiting for the human. Call handoff_status again.' : 'Browser tools work again. Take a snapshot: the page may have changed.' });
-    }, 'handoff');
+    }, 'direct');
+
+  // Playbooks: admin-written notes (trusted, step-up to write), returned as-is, not in the untrusted envelope.
+  const index = (id: string) => store.playbooks(id).map(({ name, body }) => ({ name, description: describe(body) }));
+  const names = own ? index(own.id).map((b) => b.name).join(', ') || 'none' : 'those returned by lease_profile';
+  tool('playbook', `Instructions written by your admin for this browser: how to do a known task on a site, often a run_steps ` +
+    `recipe whose {placeholders} you fill. Without name: the list (name, description). With name: the playbook. Playbooks: ${names}.`,
+  { name: z.string().max(40).optional() }, async ({ name }, id) => {
+    if (name === undefined) return txt(index(id));
+    const b = store.playbook(id, name);
+    return b ? txt(b.body) : fail(`Unknown playbook. Available: ${index(id).map((x) => x.name).join(', ') || 'none'}`);
+  }, 'direct');
 
   if (!g) return server;
 
@@ -264,7 +276,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
         .find((i) => profile(i) && !leases.of(i) && !handoffs.open(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i)!.allow)));
       if (!id) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
       const { token: lease, exp } = leases.take(id, minutes), p = profile(id)!;
-      return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), expiresAt: new Date(exp).toISOString(),
+      return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), playbooks: index(id), expiresAt: new Date(exp).toISOString(),
         note: 'Expiry slides with each call. Call release_profile when done.' });
     });
 

@@ -221,7 +221,7 @@ test('admin creates profiles and scoped API keys; MCP without a valid bearer get
 
 test('profile key: browser tools only, open outside the allowlist never reaches the host', async () => {
   const names = await toolNames(tokens.shop);
-  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'press', 'request_human', 'run_steps', 'screenshot', 'snapshot']);
+  assert.deepEqual(names, ['back', 'click', 'fill', 'get_text', 'handoff_status', 'login', 'open', 'playbook', 'press', 'request_human', 'run_steps', 'screenshot', 'snapshot']);
   for (const url of ['https://example.org/', 'http://169.254.169.254/', 'https://example.com:8443/', 'file:///etc/passwd']) {
     const r = await call(tokens.shop, 'open', { url });
     assert.ok(r.error, url);
@@ -432,6 +432,42 @@ test('run_steps: one call for a known path; first failure stops it with failed_a
   assert.ok(!readFileSync(f.audit, 'utf8').includes(secret), 'fill values never in the audit');
 });
 
+test('playbooks: admin writes them (step-up, audited without name or body), the agent lists and reads them as-is', async () => {
+  const marker = 'synthetic-' + randomBytes(6).toString('hex');
+  const body = `# Check the quota\n\n\`\`\`json\n{"steps": [{"open": "https://example.com/{workspace}"}]}\n\`\`\`\n${marker}`;
+  const save = (name: unknown, b: unknown) => admin('POST', '/api/computers/shop/playbook-save', { body: { name, body: b } });
+  const del = (name: unknown) => admin('POST', '/api/computers/shop/playbook-delete', { body: { name } });
+  const desc = async () => (await mcp(tokens.shop, (c) => c.listTools())).tools.find((t) => t.name === 'playbook')!.description!;
+  const auditLines = () => readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /playbook/.test(l.tool));
+
+  assert.deepEqual(JSON.parse((await call(tokens.shop, 'playbook')).text), []);
+  assert.match(await desc(), /Playbooks: none\.$/);
+  for (const [name, b] of [['Bad Name', body], ['x'.repeat(41), body], ['big', 'x'.repeat(20 * 1024 + 1)], ['blank', ' \n'], ['nobody', undefined]])
+    assert.equal((await save(name, b)).status, 400, String(name).slice(0, 10));
+  const created = await save('check-quota', body + '\nv1');
+  assert.deepEqual([created.status, created.json], [200, { saved: 'check-quota', created: true }]);
+  assert.deepEqual((await save('check-quota', body)).json, { saved: 'check-quota', created: false });
+  assert.equal((await save('a-other', 'Other one')).status, 200);
+
+  // Agent side: list, read (no untrusted envelope: admin-written), unknown name lists the others; names in the description.
+  assert.deepEqual(JSON.parse((await call(tokens.shop, 'playbook')).text),
+    [{ name: 'a-other', description: 'Other one' }, { name: 'check-quota', description: 'Check the quota' }]);
+  assert.deepEqual(await call(tokens.shop, 'playbook', { name: 'check-quota' }), { error: false, text: body });
+  assert.deepEqual(await call(tokens.shop, 'playbook', { name: 'nope' }), { error: true, text: 'Unknown playbook. Available: a-other, check-quota' });
+  assert.match(await desc(), /Playbooks: a-other, check-quota\.$/);
+  assert.equal(auditLines().at(-1).tool, 'playbook', 'agent reads are audited like any tool');
+
+  const listed = (await admin('GET', '/api/computers/shop')).json.playbooks;
+  assert.deepEqual(listed.map((b: any) => [b.name, b.description, b.body]), [['a-other', 'Other one', 'Other one'], ['check-quota', 'Check the quota', body]]);
+  assert.ok(Math.abs(Date.parse(listed[1].updated) - Date.now()) < 5000);
+  assert.equal((await del('nope')).status, 404);
+  assert.deepEqual((await del('a-other')).json, { deleted: 'a-other' });
+  assert.deepEqual(auditLines().filter((l) => l.tool.startsWith('admin:')).map(({ agent, tool, ok }) => ({ agent, tool, ok })),
+    ['create', 'update', 'create', 'delete'].map((t) => ({ agent: 'shop', tool: `admin:playbook_${t}`, ok: true })), 'one line per change, refused ones not logged');
+  const log = readFileSync(f.audit, 'utf8');
+  assert.ok(!log.includes(marker) && !log.includes('check-quota'), 'neither body nor name in the audit');
+});
+
 test('kill switch refuses every tool until removed', async () => {
   writeFileSync(f.kill, '');
   try {
@@ -447,7 +483,7 @@ test('kill switch refuses every tool until removed', async () => {
 
 test('a lease locks the profile key; the global key drives the profile through the lease', async () => {
   assert.deepEqual(await toolNames(tokens.global),
-    ['back', 'click', 'create_profile', 'fill', 'get_text', 'handoff_status', 'lease_profile', 'list_profiles', 'login', 'open', 'press', 'release_profile',
+    ['back', 'click', 'create_profile', 'fill', 'get_text', 'handoff_status', 'lease_profile', 'list_profiles', 'login', 'open', 'playbook', 'press', 'release_profile',
       'request_human', 'run_steps', 'screenshot', 'snapshot']);
   assert.match((await call(tokens.global, 'open', { lease: 'arb_l_bogus', url: 'https://example.com/' })).text, /Unknown or expired lease/);
   assert.match((await call(tokens.global, 'lease_profile', { domain: 'example.org' })).text, /No free profile/);
@@ -456,6 +492,10 @@ test('a lease locks the profile key; the global key drives the profile through t
   assert.ok(!leased.error, leased.text);
   const { lease, profile } = JSON.parse(leased.text);
   assert.equal(profile, 'shop');
+  assert.deepEqual(JSON.parse(leased.text).playbooks, [{ name: 'check-quota', description: 'Check the quota' }]);
+  assert.match((await call(tokens.global, 'playbook', { lease, name: 'check-quota' })).text, /^# Check the quota/);
+  assert.match((await call(tokens.global, 'playbook', { lease: 'arb_l_bogus' })).text, /Unknown or expired lease/);
+  assert.match((await mcp(tokens.global, (c) => c.listTools())).tools.find((t) => t.name === 'playbook')!.description!, /Playbooks: those returned by lease_profile\.$/);
   assert.match((await call(tokens.shop, 'open', { url: 'https://example.com/' })).text, /^This browser is leased until /);
   assert.match((await call(tokens.global, 'lease_profile', { profile: 'shop' })).text, /already leased/);
   const viaLease = await call(tokens.global, 'open', { lease, url: 'https://example.com/a' });
@@ -757,6 +797,7 @@ test('handoff: request_human pauses the agent until the admin ends it; paste and
   assert.match((await ask({ reason: 'again' })).text, /already open/);
   assert.deepEqual(await call(tokens.global, 'open', { lease, url: 'https://example.com/' }),
     { error: true, text: `Waiting for a human (${h.handoff}) until ${h.deadline}. Call handoff_status.` });
+  assert.equal((await call(tokens.global, 'playbook', { lease, name: 'check-quota' })).error, false, 'playbooks are not paused');
   const listed = (await row()).handoff;
   assert.deepEqual({ ...listed, created: 0 }, { id: h.handoff, state: 'pending', reason: 'Solve the captcha please', created: 0, deadline: h.deadline });
   assert.equal(JSON.parse((await status()).text).url, h.url);
@@ -892,6 +933,7 @@ test('step-up: sensitive admin actions need a 2FA code from the last 15 minutes;
     ['/api/keys', { name: 'k', scope: 'global', expiresIn: '30d' }], ['/api/keys/x/revoke', {}], ['/api/clients/x/revoke', {}],
     ['/api/computers/shop3/config', { allow: ['example.com'] }], ['/api/computers/shop3/login-save', { site: 's', url: 'https://example.com/', username: 'u', password: 'synthetic' }],
     ['/api/computers/shop3/login-delete', { site: 's' }], ['/api/computers/shop3/delete', {}],
+    ['/api/computers/shop3/playbook-save', { name: 'p', body: 'x' }], ['/api/computers/shop3/playbook-delete', { name: 'p' }],
   ];
   for (const [path, body] of sensitive) assert.deepEqual((await admin('POST', path, { body })).json, { stepUp: true, error: 'Confirm with a 2FA code first' }, path);
   assert.equal((await admin('GET', '/api/computers/shop3')).status, 200, 'nothing deleted');

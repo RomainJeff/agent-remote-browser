@@ -7,7 +7,7 @@ import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { urlAllowed, localRequest, validId, cleanAllow, sitesOf, parseProfileId, type ProfileId } from '../policy.ts';
-import type { Profile } from '../store/store.ts';
+import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import { requireAdmin } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
@@ -18,14 +18,15 @@ import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
 const AUTH_API = new Set(['/api/auth/sign-in/email', VERIFY.code, VERIFY.backupCode, '/api/auth/sign-out', '/api/auth/get-session']);
 // Step-up: these need a second factor proven in the last 15 minutes (sign-in TOTP counts, a trusted device does not).
 const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
-const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'delete']);
+// Playbooks too: an agent follows them as trusted instructions.
+const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'playbook-save', 'playbook-delete', 'delete']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
 /** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
@@ -125,6 +126,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       // Values never leave the gateway: names and metadata only. Same for login passwords.
       logins: Object.entries(p.logins || {}).map(([site, c]) => ({ site, url: c.url, username: c.username,
         lastTestedAt: c.lastTestedAt ? new Date(c.lastTestedAt).toISOString() : null, lastResult: c.lastResult ?? null })),
+      playbooks: store.playbooks(id).map((b) => ({ ...b, description: describe(b.body), updated: new Date(b.updated).toISOString() })),
       cookies: session.cookies.map(({ value, ...c }) => c),
       storage: (session.origins || []).map((o) => ({ origin: o.origin, localStorageKeys: (o.localStorage || []).length })),
       audit: audit.read().filter((l) => l.agent === id).slice(-20).reverse().map(({ ts, tool, ok, ms, via }) => ({ ts, tool, ok, ms, via })),
@@ -219,7 +221,8 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (!m[2] || !post) return send(res, 405, { error: 'method not allowed' });
       if (SENSITIVE.has(m[2]) && stale()) return;
       const act = m[2], body = (await readJson(req)) || {};
-      audit({ agent: id, tool: `admin:${act}`, ok: true });
+      // Playbooks: one line once done, saying what happened (create or update), the name and body never in it.
+      if (!act.startsWith('playbook-')) audit({ agent: id, tool: `admin:${act}`, ok: true });
 
       if (act === 'open') { // same allowlist as the agent's `open` tool
         if (typeof body.url !== 'string' || !urlAllowed(body.url, p.allow)) return send(res, 400, { error: `Domain not allowed. Allowed: ${p.allow.join(', ')}` });
@@ -284,6 +287,18 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!Object.hasOwn(p.logins, body.site)) return send(res, 404, { error: 'unknown site' });
         store.deleteLogin(id, body.site);
         return send(res, 200, { deleted: body.site });
+      }
+      if (act === 'playbook-save') {
+        const bad = badPlaybook(body.name, body.body);
+        if (bad) return send(res, 400, { error: bad });
+        const done = store.savePlaybook(id, body.name, body.body);
+        audit({ agent: id, tool: `admin:playbook_${done === 'created' ? 'create' : 'update'}`, ok: true });
+        return send(res, 200, { saved: body.name, created: done === 'created' });
+      }
+      if (act === 'playbook-delete') {
+        if (typeof body.name !== 'string' || !store.deletePlaybook(id, body.name)) return send(res, 404, { error: 'unknown playbook' });
+        audit({ agent: id, tool: 'admin:playbook_delete', ok: true });
+        return send(res, 200, { deleted: body.name });
       }
       if (act === 'release') { leases.drop(id); return send(res, 200, { released: true }); }
       if (act === 'extend') {
