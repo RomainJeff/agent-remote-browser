@@ -61,6 +61,25 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
   assert.equal(ok(exec(ab('close'), { tty: true })), false);
 });
 
+test('exec: run_steps find, wait and get count, strictly (no --fn, no other find action, no flag as a value)', () => {
+  for (const a of [ab('find', 'text', 'Sign in', 'click'), ab('find', 'text', 'Sign in', 'click', '--exact'),
+    ab('find', 'label', 'Email', 'fill', 'me@x.test'), ab('find', 'placeholder', 'you@x', 'fill', 'zz', '--exact'),
+    ab('find', 'testid', 'go', 'click'), ab('find', 'first', 'main h1', 'click'), ab('find', 'role', 'button', 'click'),
+    ab('find', 'role', 'button', 'click', '--name', 'Go'), ab('find', 'role', 'textbox', 'fill', 'x', '--name', 'Email', '--exact'),
+    ab('wait', '300'), ab('wait', '5000'), ab('wait', '#out'), ab('wait', '--text', 'Welcome'), ab('wait', '--url', '**/dashboard'),
+    ab('wait', '--load', 'networkidle'), ab('get', 'count', 'input[type=password]')])
+    assert.ok(ok(exec(a)), a.join(' '));
+  for (const a of [ab('find', 'text', '--json', 'click'), ab('find', 'text', 'x', 'hover'), ab('find', 'nth', '2', 'a', 'click'),
+    ab('find', 'alt', 'x', 'click'), ab('find', 'label', 'x', 'fill', '--json'), ab('find', 'label', 'x', 'fill'),
+    ab('find', 'testid', 'x', 'click', '--exact'), ab('find', 'first', '-x', 'click'), ab('find', 'role', 'Button', 'click'),
+    ab('find', 'role', 'button', 'click', '--exact'), ab('find', 'role', 'button', 'click', '--name', '--json'),
+    ab('find', 'text', 'x', 'click', '--exact', '--exact'), ab('find', 'text', 'x', 'fill', 'y'.repeat(5001)),
+    ab('wait', '--fn', 'x'), ab('wait', '--fn', 'window.done'), ab('wait', '99999'), ab('wait', '5001'), ab('wait', '0'), ab('wait', '1e3'),
+    ab('wait', '--text', '--json'), ab('wait', '--load', 'idle'), ab('wait', '--download'), ab('wait'), ab('wait', '#a', '#b'),
+    ab('get', 'count', 'input'), ab('get', 'count', 'input[type=password]', '--json')])
+    assert.equal(ok(exec(a)), false, a.join(' '));
+});
+
 const dir = mkdtempSync(join(tmpdir(), 'arb-run-'));
 const path = join(dir, 'runner.sock');
 const fake = new FakeDriver();

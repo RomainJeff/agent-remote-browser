@@ -30,6 +30,25 @@ const value = (max: number) => z.string().min(1).max(max).refine((s) => s === '-
 /** A ref or CSS selector (get text), a CSS selector (snapshot -s): never a flag. */
 const sel = value(500).refine((s) => s !== '-');
 
+/** run_steps locators: find <kind> <value> click | fill <text>, nothing else (no hover, nth, check...).
+ *  `find ... fill` has no "--" separator: the text is never a flag either. */
+const action = [[lit('click')], [lit('fill'), value(5000)]] as const;
+const exact = [[], [lit('--exact')]] as const;
+const find = action.flatMap((act) => [
+  ...exact.flatMap((ex) => [z.tuple([lit('find'), z.enum(['text', 'label', 'placeholder']), value(500), ...act, ...ex])]),
+  z.tuple([lit('find'), lit('testid'), value(500), ...act]),
+  z.tuple([lit('find'), lit('first'), sel, ...act]),
+  z.tuple([lit('find'), lit('role'), z.string().regex(/^[a-z]{1,30}$/), ...act]),
+  ...exact.map((ex) => z.tuple([lit('find'), lit('role'), z.string().regex(/^[a-z]{1,30}$/), ...act, lit('--name'), value(500), ...ex])),
+]);
+/** run_steps waits: never --fn (page JavaScript). A bare number is a sleep, capped at 5 s; a selector is not a number. */
+const wait = [
+  z.tuple([lit('wait'), z.string().regex(/^\d{1,4}$/).refine((s) => +s >= 1 && +s <= 5000)]),
+  z.tuple([lit('wait'), sel.refine((s) => Number.isNaN(Number(s)))]),
+  z.tuple([lit('wait'), z.enum(['--text', '--url']), value(500)]),
+  z.tuple([lit('wait'), lit('--load'), z.enum(['load', 'domcontentloaded', 'networkidle'])]),
+];
+
 /** agent-browser subcommands the tools and the admin UI use, after AB_FLAGS. */
 const agentBrowser = z.union([
   z.tuple([lit('open'), url]),
@@ -50,6 +69,9 @@ const agentBrowser = z.union([
   z.tuple([lit('auth'), lit('save'), vault, lit('--url'), z.url({ protocol: /^https$/ }).max(4096), lit('--username'), value(200), lit('--password-stdin')]),
   z.tuple([lit('auth'), z.enum(['login', 'delete']), vault]),
   z.tuple([lit('auth'), lit('login'), vault, lit('--no-navigate')]),
+  ...find, ...wait,
+  // run_steps login if_needed: is there a password field?
+  z.tuple([lit('get'), lit('count'), lit('input[type=password]')]),
 ]);
 
 /** Screenshot file written by agent-browser inside the computer. */
