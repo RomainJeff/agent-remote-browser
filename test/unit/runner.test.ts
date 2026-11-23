@@ -67,7 +67,8 @@ test('exec: run_steps find, wait and get count, strictly (no --fn, no other find
     ab('find', 'testid', 'go', 'click'), ab('find', 'first', 'main h1', 'click'), ab('find', 'role', 'button', 'click'),
     ab('find', 'role', 'button', 'click', '--name', 'Go'), ab('find', 'role', 'textbox', 'fill', 'x', '--name', 'Email', '--exact'),
     ab('wait', '300'), ab('wait', '5000'), ab('wait', '#out'), ab('wait', '--text', 'Welcome'), ab('wait', '--url', '**/dashboard'),
-    ab('wait', '--load', 'networkidle'), ab('get', 'count', 'input[type=password]')])
+    ab('wait', '--load', 'networkidle'), ab('wait', '--text', 'Welcome', '--timeout', '17500'), ab('wait', '#out', '--timeout', '999'),
+    ab('wait', '--load', 'load', '--timeout', '500'), ab('get', 'count', 'input[type=password]')])
     assert.ok(ok(exec(a)), a.join(' '));
   for (const a of [ab('find', 'text', '--json', 'click'), ab('find', 'text', 'x', 'hover'), ab('find', 'nth', '2', 'a', 'click'),
     ab('find', 'alt', 'x', 'click'), ab('find', 'label', 'x', 'fill', '--json'), ab('find', 'label', 'x', 'fill'),
@@ -76,6 +77,8 @@ test('exec: run_steps find, wait and get count, strictly (no --fn, no other find
     ab('find', 'text', 'x', 'click', '--exact', '--exact'), ab('find', 'text', 'x', 'fill', 'y'.repeat(5001)),
     ab('wait', '--fn', 'x'), ab('wait', '--fn', 'window.done'), ab('wait', '99999'), ab('wait', '5001'), ab('wait', '0'), ab('wait', '1e3'),
     ab('wait', '--text', '--json'), ab('wait', '--load', 'idle'), ab('wait', '--download'), ab('wait'), ab('wait', '#a', '#b'),
+    ab('wait', '300', '--timeout', '1000'), ab('wait', '#a', '--timeout', '99'), ab('wait', '#a', '--timeout', '20001'),
+    ab('wait', '#a', '--timeout', '-1'), ab('wait', '#a', '--timeout'), ab('wait', '--text', 'x', '--state', 'hidden'),
     ab('get', 'count', 'input'), ab('get', 'count', 'input[type=password]', '--json')])
     assert.equal(ok(exec(a)), false, a.join(' '));
 });

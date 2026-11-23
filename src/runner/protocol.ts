@@ -41,12 +41,16 @@ const find = action.flatMap((act) => [
   z.tuple([lit('find'), lit('role'), z.string().regex(/^[a-z]{1,30}$/), ...act]),
   ...exact.map((ex) => z.tuple([lit('find'), lit('role'), z.string().regex(/^[a-z]{1,30}$/), ...act, lit('--name'), value(500), ...ex])),
 ]);
-/** run_steps waits: never --fn (page JavaScript). A bare number is a sleep, capped at 5 s; a selector is not a number. */
+/** run_steps waits: never --fn (page JavaScript). A bare number is a sleep, capped at 5 s; a selector is not a number.
+ *  The others take the gateway's --timeout (what is left of the run_steps budget). */
+const timeout = [[], [lit('--timeout'), z.string().regex(/^\d{3,5}$/).refine((s) => +s >= 100 && +s <= 20_000)]] as const;
 const wait = [
   z.tuple([lit('wait'), z.string().regex(/^\d{1,4}$/).refine((s) => +s >= 1 && +s <= 5000)]),
-  z.tuple([lit('wait'), sel.refine((s) => Number.isNaN(Number(s)))]),
-  z.tuple([lit('wait'), z.enum(['--text', '--url']), value(500)]),
-  z.tuple([lit('wait'), lit('--load'), z.enum(['load', 'domcontentloaded', 'networkidle'])]),
+  ...timeout.flatMap((t) => [
+    z.tuple([lit('wait'), sel.refine((s) => Number.isNaN(Number(s))), ...t]),
+    z.tuple([lit('wait'), z.enum(['--text', '--url']), value(500), ...t]),
+    z.tuple([lit('wait'), lit('--load'), z.enum(['load', 'domcontentloaded', 'networkidle']), ...t]),
+  ]),
 ];
 
 /** agent-browser subcommands the tools and the admin UI use, after AB_FLAGS. */

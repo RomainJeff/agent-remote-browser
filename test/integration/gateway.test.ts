@@ -374,8 +374,11 @@ test('run_steps: one call for a known path; first failure stops it with failed_a
   assert.equal(envelopes(r.text), 2, 'step 5 is neither kept nor last');
   assert.match(r.text, /\nhello\n<\/untrusted_page_content>\n[^\n]+\n\{"step":1\}\n/);
   assert.match(r.text, /\n- button\n<\/untrusted_page_content>\n[^\n]+\n\{"step":6,"truncated":true,"total_chars":22\}$/);
+  const wait = sent()[4];
+  assert.ok(+wait.at(-1)! > 16_000 && +wait.at(-1)! <= 17_500, 'the wait ends itself before the budget: ' + wait.at(-1));
   assert.deepEqual(sent(), [['open', 'https://example.com/'], ['get', 'text', '#a'], ['find', 'label', 'Email', 'fill', secret],
-    ['find', 'role', 'button', 'click', '--name', 'Go', '--exact'], ['wait', '--load', 'networkidle'], ['get', 'text', 'body'], ['snapshot', '-i', '-c']]);
+    ['find', 'role', 'button', 'click', '--name', 'Go', '--exact'], ['wait', '--load', 'networkidle', '--timeout', wait.at(-1)],
+    ['get', 'text', 'body'], ['snapshot', '-i', '-c']]);
   assert.deepEqual(audited(), { tool: 'run_steps', ok: true, steps: 7, failed_at: undefined });
 
   // First failure: later steps never run; agent-browser's message and a snapshot go in the envelope.

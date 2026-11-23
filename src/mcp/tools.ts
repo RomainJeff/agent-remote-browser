@@ -177,11 +177,16 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
           await signIn(id, p, s.login);
           continue;
         }
-        const d = await exec(stepArgv(s)!);
+        const argv = stepArgv(s)!;
+        // agent-browser ends its own wait: a client killed mid-wait leaves the daemon waiting (25 s) and the next command queued.
+        if ('wait' in s && !('ms' in s.wait)) argv.push('--timeout', String(end - Date.now() - 500));
+        const d = await exec(argv);
         if ('get_text' in s || 'snapshot' in s) outs.push({ step: i, keep: s.keep, ...readOut(s, d) });
       }
     } catch (e) {
-      const error = e instanceof PolicyError ? e.message : Date.now() >= end ? BUDGET : 'step failed';
+      // ponytail: "budget" = failed with under 1 s left (a wait capped by the budget ends ~0.5 s early); a step that fails
+      // on its own in that last second is reported as budget too.
+      const error = e instanceof PolicyError ? e.message : Date.now() >= end - 1000 ? BUDGET : 'step failed';
       // agent-browser's own message may quote the page: it goes in the envelope, with a snapshot to resume by hand.
       // ponytail: the snapshot gets 5 s on top of the budget.
       const snap = await pc.exec(id, ['snapshot', '-i', '-c'], { timeoutMs: 5000 }).catch(() => null);
