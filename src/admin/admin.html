@@ -525,7 +525,7 @@ function openNewProfile() {
 }
 
 // ---- Profile page ---------------------------------------------------------------
-const TABS = [['session', 'Session'], ['logins', 'Logins'], ['domains', 'Domains'], ['diagnostics', 'Diagnostics'], ['settings', 'Settings']];
+const TABS = [['session', 'Session'], ['logins', 'Logins'], ['playbooks', 'Playbooks'], ['domains', 'Domains'], ['diagnostics', 'Diagnostics'], ['settings', 'Settings']];
 function showProfile(id, t) {
   const c = computers.find((x) => x.id === id);
   if (!c) { if (page === 'profile') closeView(); selected = null; setPage('profile', `<div class="head"><div><span class="crumb"><a href="#/profiles">Profiles</a> › ${esc(id)}</span><h1>Profile not found</h1><p class="sub">${esc(id)} doesn't exist or was deleted.</p></div></div>`); return; }
@@ -576,6 +576,17 @@ function showProfile(id, t) {
         </form></section>
     </div>
 
+    <div data-panel="playbooks" class="stack">
+      <div class="alert a-info"><p>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. The first line is the description it sees in the list. Put a <code>run_steps</code> recipe in a <code>json</code> block, with <code>{placeholders}</code> the agent fills.</p></div>
+      <section class="card" aria-labelledby="hBooks"><div class="tblhead"><h2 id="hBooks">Playbooks</h2><span class="hint">Saving or deleting asks for your 2FA code</span></div><div id="playbooks"></div></section>
+      <section class="card pad" aria-labelledby="hBook"><h3 id="hBook">Add or replace</h3>
+        <form class="grid-form" id="bookForm">
+          <label class="f wide">Name<input class="in mono" name="name" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." required autocomplete="off" spellcheck="false"></label>
+          <label class="f wide">Text (20 KB max)<textarea class="in mono" name="body" rows="14" required spellcheck="false" placeholder="# Check the n8n quota of a workspace"></textarea></label>
+          <div class="wide row"><button type="submit" class="btn btn-p">Save</button><p class="msg" id="bookErr" aria-live="polite"></p></div>
+        </form></section>
+    </div>
+
     <div data-panel="domains" class="stack">
       <section class="card pad" aria-labelledby="hAllow"><h3 id="hAllow">Allowed domains</h3>
         <p class="hint" style="font-size:14px;line-height:20px">The agent can only open these domains and their subdomains. Everything else is blocked at the DNS level.</p>
@@ -622,6 +633,12 @@ function showProfile(id, t) {
       await api(`${p}/login-save`, 'POST', { site: f.site.value.trim(), url: f.url.value.trim(), username: f.username.value, password: f.password.value });
       f.reset(); flash($('#loginErr'), 'Saved.'); refreshDetail(); refreshList();
     } catch (err) { flash($('#loginErr'), err.message, true); }
+  });
+  submit($('#bookForm'), async (f) => {
+    try {
+      const r = await api(`${p}/playbook-save`, 'POST', { name: f.name.value.trim(), body: f.body.value });
+      f.reset(); flash($('#bookErr'), r.created ? 'Created.' : 'Updated.'); refreshDetail();
+    } catch (err) { flash($('#bookErr'), err.message, true); }
   });
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
@@ -776,6 +793,18 @@ async function refreshDetail() {
     for (const b of $$('[data-del]')) b.onclick = () => deleteLogin(b, b.dataset.del);
     for (const b of $$('[data-test]')) b.onclick = () => testLogin(b, b.dataset.test);
   }
+  setText($('[data-count="playbooks"]'), ` · ${d.playbooks.length}`);
+  if (patch('playbooks', d.playbooks, () => d.playbooks.length
+    ? `<div class="tbl"><table><tr><th>Name</th><th>Description</th><th>Updated</th><th><span class="sr">Actions</span></th></tr>${d.playbooks.map((b) => `
+      <tr><td class="mono nw" style="font-weight:600">${esc(b.name)}</td><td>${esc(b.description)}</td><td class="nw"><time data-ts="${esc(b.updated)}">${ago(b.updated)}</time></td>
+      <td class="act"><button type="button" class="btn btn-sm" data-bedit="${esc(b.name)}">Edit</button> <button type="button" class="btn btn-sm btn-dl" data-bdel="${esc(b.name)}">Delete</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">No playbooks. Write one below: how to do a known task on a site, step by step.</p>')) {
+    for (const b of $$('[data-bdel]')) b.onclick = () => deletePlaybook(b, b.dataset.bdel);
+    for (const b of $$('[data-bedit]')) b.onclick = () => {
+      const f = $('#bookForm'), x = d.playbooks.find((y) => y.name === b.dataset.bedit);
+      f.name.value = x.name; f.body.value = x.body; f.body.focus();
+    };
+  }
   patch('activity', d.audit.slice(0, 6), () => d.audit.length
     ? `<ul class="activity">${d.audit.slice(0, 6).map((l) => `<li><span class="${l.ok ? '' : 'ko'}">${l.ok ? '✓' : '✗'}</span><span class="mono">${esc(l.tool)}</span><time class="t" data-ts="${esc(l.ts)}">${ago(l.ts)}</time></li>`).join('')}</ul>`
     : '<p class="hint">No calls yet.</p>');
@@ -798,6 +827,12 @@ function deleteLogin(btn, site) {
     if (!await confirmSensitive({ title: `Delete saved login "${site}"?`, desc: 'The agent can no longer sign in with it. Existing cookies stay.', label: 'Delete', danger: true })) return false;
     await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail(); refreshList();
   }, `Saved login ${site} deleted.`);
+}
+function deletePlaybook(btn, name) {
+  act(btn, async () => {
+    if (!await confirmSensitive({ title: `Delete playbook "${name}"?`, desc: 'The agent no longer sees it.', label: 'Delete', danger: true })) return false;
+    await api(`/api/computers/${encodeURIComponent(selected)}/playbook-delete`, 'POST', { name }); refreshDetail();
+  }, `Playbook ${name} deleted.`);
 }
 function testLogin(btn, site) {
   act(btn, async () => {
