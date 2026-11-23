@@ -146,3 +146,34 @@ test('unknown command prints usage, exit code 2', async () => {
   assert.equal(await t.run(['frobnicate']), 2);
   assert.match(t.lines[0], /^Usage:/);
 });
+
+test('key create: profile-scoped key in a new 0600 file, never printed, works, expires, revocable', async () => {
+  const t = fresh(), password = randomBytes(12).toString('base64url'), file = join(t.dir, 'key');
+  t.withStore((s) => s.createProfile(parseProfileId('shop')!, ['example.com']));
+  await assert.rejects(t.run(['key', 'create', 'shop', file]), /No admin yet/);
+  assert.equal(existsSync(file), false);
+  assert.equal(await t.run(['admin', 'create', 'a@example.test'], asker(t, password)), 0);
+  await assert.rejects(t.run(['key', 'create', 'nope', file]), /No profile nope/);
+  await assert.rejects(t.run(['key', 'create', 'shop', file, '400']), /Days: 1 to 365/);
+  t.lines.length = 0;
+  assert.equal(await t.run(['key', 'create', 'shop', file]), 0);
+  const key = readFileSync(file, 'utf8');
+  assert.match(key, /^arb_k_/);
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+  assertNoSecret(t.lines, [key]);
+  const id = t.lines[0].match(/^Key (\S+) for profile shop, expires (\S+),/)!;
+  assert.ok(Math.abs(Date.parse(id[2]) - Date.now() - 86400e3) < 60e3, 'one day by default');
+  const db = openDb(join(t.env.DATA_DIR, 'arb.db'));
+  try {
+    const { createAuth, authOptions } = await import('../../src/auth/better-auth.ts');
+    const { loadConfig } = await import('../../src/config.ts');
+    const { auth } = createAuth(db, authOptions(loadConfig(t.env)));
+    const v = await auth.api.verifyApiKey({ body: { key } });
+    assert.equal(v.valid, true);
+    assert.deepEqual(v.key?.metadata, { scope: 'profile:shop' });
+  } finally { db.close(); }
+  await assert.rejects(t.run(['key', 'create', 'shop', file]), /EEXIST/);
+  assert.equal(await t.run(['key', 'revoke', id[1]]), 0);
+  assert.equal(count(t, 'SELECT count(*) n FROM apikey'), 0);
+  await assert.rejects(t.run(['key', 'revoke', id[1]]), /No key/);
+});

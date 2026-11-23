@@ -99,6 +99,13 @@ docker compose exec gateway node src/cli.ts admin create you@example.com
 
 `admin create` asks for a password (12 to 128 characters), prints an `otpauth://` URI (add it to an authenticator app), asks for a code to confirm, then prints 10 backup codes (one use each). Store the codes offline (password manager or paper), then clear the terminal: they are never shown again. One admin per gateway; signups are disabled. 2FA enrolment happens only here, on the host: the admin UI cannot enrol or reset a second factor.
 
+Test key from the host, without the admin UI (e.g. for a bench or an agent the operator lets run it): the key goes to a 0600 file, never to the terminal, and expires after 1 day unless `[days]` says otherwise (up to 365). The gateway container is read-only, so write it to its `/tmp` and copy it out:
+
+```bash
+umask 077; docker compose exec -T gateway sh -c 'node src/cli.ts key create <profile> /tmp/k >&2 && cat /tmp/k; rm -f /tmp/k' > ~/.arb-test-key
+docker compose exec gateway node src/cli.ts key revoke <id>      # id printed by key create; also revocable in the admin UI
+```
+
 Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or with the tunnel `docker compose exec gateway node -e "fetch('http://127.0.0.1:18787/readyz').then(r => process.exit(r.ok ? 0 : 1))"`.
 
 ### Reaching the admin UI
