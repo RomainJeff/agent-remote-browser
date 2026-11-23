@@ -86,9 +86,10 @@ The life of one tool call, say `click`:
 | `screenshot` | PNG of the viewport |
 | `login` | Sign in to a site with a saved login, typed by the server |
 | `run_steps` | Up to 20 steps (open, login, click, fill, press, back, wait, get_text, snapshot) in one call, 18 s in all; stops at the first failure with the step index and a snapshot of the page |
+| `playbook` | Instructions the admin wrote for this profile (often a `run_steps` recipe): the list, or one by name |
 | `request_human`, `handoff_status` | Hand the browser to a human (captcha, 2FA, consent) and wait for the outcome |
 | `list_profiles`, `create_profile` | `global` scope only: see and create profiles |
-| `lease_profile`, `release_profile` | `global` scope only: borrow a profile and give it back |
+| `lease_profile`, `release_profile` | `global` scope only: borrow a profile (the reply lists its playbooks) and give it back |
 
 A token scoped to `profile:<id>` drives that profile only. A `global` token drives a profile through a lease, passed to every browser tool.
 

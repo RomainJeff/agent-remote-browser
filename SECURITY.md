@@ -26,6 +26,7 @@ Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens
 ## Admin and agent auth
 
 - **Stolen session cookie without step-up** can still read state, start and stop computers, open allowed URLs, watch and drive a browser through the live view (paste, copy), test or fill saved logins, and extend or release leases. It cannot mint credentials or change what an agent may reach.
+- **Playbooks are trusted instructions.** Their body is returned to the agent as-is, outside the untrusted envelope, and agents follow it. Only the admin writes them, with step-up: a stolen session without step-up cannot change them. Do not paste page text into one.
 - **Handoff reason is agent-written.** It is shown escaped and quoted, but it can mislead: an agent steered by a page can ask the human to "confirm a transfer". Read it as a request, not an instruction.
 - **Handoff Done / Failed are not step-up gated.** A stolen session can end a request (and Take over unlocks live input on that profile until it ends).
 - **Handoff link is relayed by the agent.** It carries no secret, but a manipulated agent can hand over another link instead: check the host before signing in.
