@@ -424,10 +424,10 @@ test('run_steps: one call for a known path; first failure stops it with failed_a
     assert.deepEqual(sent(), [['snapshot', '-i', '-c']], 'only the failure snapshot');
   } finally { limits.budgetMs = 18_000; fake.slow = ''; }
 
-  // Schema: no --fn wait, no unknown step, 20 steps at most; nothing reaches the host.
+  // Schema: no --fn wait, no unknown step, 20 steps at most (SDK for count, handler for each step); nothing reaches the host.
   fake.calls = [];
   for (const steps of [[{ wait: { fn: 'window.x' } }], [{ screenshot: true }], Array(21).fill({ back: true }), []])
-    assert.match((await call(tokens.shop, 'run_steps', { steps })).text, /validation/i, JSON.stringify(steps).slice(0, 40));
+    assert.match((await call(tokens.shop, 'run_steps', { steps })).text, /validation|Invalid steps/i, JSON.stringify(steps).slice(0, 40));
   assert.equal(calls('exec').length, 0);
   assert.ok(!readFileSync(f.audit, 'utf8').includes(secret), 'fill values never in the audit');
 });

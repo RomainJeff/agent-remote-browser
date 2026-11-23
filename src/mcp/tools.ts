@@ -119,6 +119,9 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
   tool('open', `Open a URL in your browser. Allowed domains: ${allowList}.`, { url: z.string().url() }, async ({ url }, id, p) => {
     if (!urlAllowed(url, p.allow)) return fail(`Domain not allowed. Allowed: ${p.allow.join(', ')}`);
     const d = await pc.ab(id, ['open', url]);
+    // ponytail: SPAs return from open before rendering; get_text then read the bootstrap script and the model
+    // spent 2 more calls waiting (lot 10 bench). 3 s cap, best effort: pages that keep polling never go idle.
+    await pc.ab(id, ['wait', '--load', 'networkidle', '--timeout', '3000']).catch(() => {});
     return txt({ title: d.title, url: d.url });
   });
 
@@ -162,7 +165,12 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     'Locator L: {ref} (stale after a navigation) | {text} | {label} | {role, name?} | {placeholder} | {testid} | {css}, ' +
     'with exact?: true for a case-sensitive match. Returns the last get_text/snapshot output and those with keep: true, ' +
     'each tagged with its step index (0-based). On failure: failed_at (step index), error, and a snapshot of the page.',
-  { steps: Steps }, async ({ steps }: { steps: Step[] }, id, p) => {
+  // ponytail: advertised as plain objects, checked against the full Steps union here. The union as JSON Schema
+  // weighed 7 KB, re-read by the model every turn (lot 10 bench: +3k input tokens per turn); the description has the grammar.
+  { steps: z.array(z.object({}).passthrough()).min(1).max(20) }, async ({ steps: raw }, id, p) => {
+    const parsed = Steps.safeParse(raw);
+    if (!parsed.success) return fail('Invalid steps: ' + parsed.error.issues.slice(0, 3).map((e) => `${e.path.join('.') || 'steps'}: ${e.message}`).join('; '));
+    const steps: Step[] = parsed.data;
     const t0 = Date.now(), end = t0 + limits.budgetMs, outs: { step: number; keep?: boolean; origin: unknown; text: string; meta: object }[] = [];
     // Each exec gets what is left of the budget (the runner takes 1 s at least).
     const exec = (argv: string[]) => pc.ab(id, argv, { timeoutMs: Math.max(1000, Math.min(90_000, end - Date.now())) });
