@@ -36,7 +36,9 @@ const COUNT = (id, tag, name, ph) => {
 const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;return !e?'':e.type==='password'?'password':/^i?frame$/.test(e.localName)?'frame':''})(document.activeElement)";
 (async () => {
   const port = require('fs').readFileSync('${PROFILE}/DevToolsActivePort', 'utf8').split('\\n')[0];
-  const pages = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).filter((t) => t.type === 'page'), page = pages[0];
+  // Chrome lists its own UI as page targets too (omnibox popup, preloaded new tab page): only web pages are tabs.
+  // ponytail: a tab the user left on chrome://newtab is not counted; the view never shows one while recording.
+  const pages = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).filter((t) => t.type === 'page' && !/^(chrome|chrome-untrusted|devtools|chrome-extension):/.test(t.url)), page = pages[0];
   if (pages.length !== 1) throw Error(pages.length + ' tabs open: Record needs a single tab. Stop the browser to close them, then record again');
   const ws = new WebSocket(page.webSocketDebuggerUrl), wait = new Map(); let n = 0;
   ws.onmessage = (m) => { const d = JSON.parse(m.data); wait.get(d.id)?.(d); };
