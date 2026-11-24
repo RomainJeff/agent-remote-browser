@@ -100,6 +100,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     if (fails >= STEP_UP_FAILS) db.prepare('DELETE FROM session WHERE id = ?').run(sid);
   }
 
+  const memberCount = db.prepare('SELECT COUNT(*) AS n FROM profile_members WHERE profile = ?');
   async function listComputers(userId: string) {
     const running = new Map((await driver.list()).map((c) => [c.id, c]));
     const log = audit.read();
@@ -107,7 +108,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       const id = p.id;
       const c = running.get(id), last = log.findLast((l) => l.agent === id), l = leases.of(id), h = handoffs.open(id);
       return {
-        id, role: p.role, container: `${cfg.prefix}-${id}`,
+        id, role: p.role, members: memberCount.get(id)!.n, container: `${cfg.prefix}-${id}`,
         state: c ? (c.running ? 'running' : 'exited') : 'none',
         status: c ? (c.running ? 'running' : 'exited') : 'never started',
         // ponytail: volume presence inferred from the container; a volume orphaned by hand shows as missing.

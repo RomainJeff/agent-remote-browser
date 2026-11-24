@@ -195,6 +195,15 @@
   .auth .card { width: 100%; max-width: 420px; padding: 32px; display: flex; flex-direction: column; gap: 20px; }
   .auth form { display: flex; flex-direction: column; gap: 16px; }
   .auth h1 { font-size: 24px; line-height: 32px; }
+  .progress { list-style: none; margin: 0; padding: 0; display: flex; }
+  .progress li { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--muted); text-align: center; }
+  .progress li + li::before { content: ""; position: absolute; top: 11px; left: calc(-50% + 18px); right: calc(50% + 18px); height: 2px; background: var(--line); }
+  .progress b { box-sizing: border-box; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; border: 2px solid var(--line); background: #fff; color: var(--muted); }
+  .progress b svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .progress .done b { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .progress .done::before, .progress .cur::before { background: var(--primary); }
+  .progress .cur { color: var(--ink); font-weight: 800; }
+  .progress .cur b { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 0 4px var(--green-soft); }
   .step { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
   .linkbtn { border: 0; background: none; color: var(--primary); font: 600 14px/20px var(--sans); cursor: pointer; padding: 0; text-align: left; }
   .linkbtn:hover { text-decoration: underline; }
@@ -258,11 +267,12 @@
 </style>
 </head>
 <body>
+<section class="auth" id="invite" hidden><div class="card" id="enroll"></div></section>
 <section class="auth" id="login" aria-labelledby="hLogin" hidden>
   <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Admin console</span></div></div>
   <div class="card">
     <form id="pwForm">
-      <div><div class="step">Step 1 of 2</div><h1 id="hLogin">Admin sign-in</h1></div>
+      <div><div class="step">Step 1 of 2</div><h1 id="hLogin">Sign in</h1></div>
       <label class="f">Email<input class="in" name="email" type="email" autocomplete="username" required></label>
       <label class="f">Password<input class="in" name="password" type="password" autocomplete="current-password" required></label>
       <button class="btn btn-p" type="submit">Continue</button>
@@ -278,24 +288,24 @@
     </form>
     <div class="alert a-danger" id="loginMsg" role="alert" hidden></div>
   </div>
-  <div class="chipsrow"><span class="pill green">Local access only</span><span class="pill">Password</span><span class="pill">2FA code</span></div>
+  <div class="chipsrow"><span class="pill">Password</span><span class="pill">2FA code</span></div>
   <p class="hint" style="text-align:center;max-width:420px">Lost your 2FA and have no backup code? On the host machine, run <code>node src/cli.ts admin reset-2fa</code>.</p>
 </section>
 
 <div class="shell" id="app" hidden>
   <aside class="side">
     <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><b>Agent Remote Browser</b><span>Admin console</span></div></div>
-    <div class="badge"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Local admin only, never exposed through the tunnel</span></div>
     <nav class="navl" aria-label="Main navigation">
       <a class="nav" href="#/profiles" data-nav="profiles"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Profiles<span class="pill warn" id="nNeeds" title="Agents waiting for you" hidden></span><span class="n" id="nProfiles"></span></a>
       <a class="nav" href="#/access" data-nav="access"><svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Agent access<span class="n" id="nClients"></span></a>
+      <a class="nav" href="#/members" data-nav="members" hidden><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c2.1.7 3.5 2.7 3.5 5.6"/></svg>Members</a>
       <a class="nav" href="#/security" data-nav="security"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Security</a>
     </nav>
-    <div class="me">
+    <header class="me">
       <span class="avatar" id="avatar">AD</span>
       <span class="who"><b id="meEmail">Administrator</b><span>2FA enabled</span></span>
       <button type="button" class="btn btn-i btn-g" id="bSignOut" aria-label="Sign out" title="Sign out"><svg class="i" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg></button>
-    </div>
+    </header>
   </aside>
   <main id="main"></main>
 </div>
@@ -323,7 +333,7 @@ const api = async (path, method = 'GET', body) => {
     if (!await ask({ title: 'Confirm with your 2FA code', desc: 'This action is sensitive.', label: 'Confirm', code: true })) throw new Error('Cancelled: this action needs a 2FA code');
     return api(path, method, body);
   }
-  if (r.status === 401 && !j.stepUp && !path.startsWith('/api/auth/')) showLogin();
+  if (r.status === 401 && !j.stepUp && !path.startsWith('/api/auth/') && $('#invite').hidden) showLogin();
   if (!r.ok) throw Object.assign(new Error(j.error || j.message || `HTTP ${r.status}`), { status: r.status });
   return j;
 };
@@ -331,7 +341,7 @@ const api = async (path, method = 'GET', body) => {
 let computers = [], clients = null, me = {};
 const TITLE = document.title;
 let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control, url }
-const NOSIG = '<div class="nosig"><div><b>No signal</b>Watch shows a running browser. Take over starts it if needed.</div></div>';
+const NOSIG = '<div class="nosig"><div><b>No signal</b>Watch shows a running browser.</div></div>';
 let opening = false; // the Open button's request is in flight
 let logins = [];     // saved logins of the selected profile (detail poll): the takeover banner offers the ones matching the page
 let authed = false;  // polling stops while the sign-in screen is up
@@ -415,8 +425,9 @@ async function showApp() {
   authed = true; $('#login').hidden = true; $('#app').hidden = false;
   $('#pwForm').reset(); $('#totpForm').reset(); loginErr('');
   try { me = await api('/api/session'); } catch { me = {}; }
-  setText($('#meEmail'), me.email || 'Administrator');
+  setText($('#meEmail'), me.email || '');
   setText($('#avatar'), (me.email || 'AD').slice(0, 2).toUpperCase());
+  await checkGatewayAdmin();
   await refreshList(); refreshClients(); route();
 }
 submit($('#pwForm'), async (f) => {
@@ -448,8 +459,12 @@ $('#bSignOut').onclick = (e) => act(e.currentTarget, async () => { await api('/a
 
 // ---- Routing: #/profiles, #/p/<id>/<tab>, #/access, #/security -----------------------
 function route() {
-  if (!authed) return;
   const [, a, b, c] = location.hash.split('/');
+  if (a === 'invite' && b) return showInvite(b);
+  if (!$('#invite').hidden) {
+    $('#invite').hidden = true; $('#enroll').replaceChildren(); showLogin();
+  }
+  if (!authed) return;
   // Handoff link given to the agent's user: open its profile, Take over focused. No automatic takeover.
   if (a === 'handoff') {
     const h = computers.find((x) => x.handoff?.id === decodeURIComponent(b || ''));
@@ -460,9 +475,126 @@ function route() {
   if (a === 'p' && b) return showProfile(decodeURIComponent(b), c || 'session');
   if (page === 'profile') closeView();
   selected = null; allowDraft = null;
-  if (a === 'access') showClients(); else if (a === 'security') showSecurity(); else showProfiles();
+  if (a === 'members' && !$('[data-nav=members]').hidden) showMembers(); else if (a === 'access') showClients(); else if (a === 'security') showSecurity(); else showProfiles();
 }
 addEventListener('hashchange', route);
+function showInvite(token) {
+  closeView(); authed = false; selected = null; page = '';
+  $('#app').hidden = true; $('#login').hidden = true; $('#invite').hidden = false;
+  const box = $('#enroll');
+  const progress = (n) => `<ol class="progress">${['Password', 'Authenticator', 'Backup codes'].map((s, i) =>
+    `<li class="${i < n ? 'done' : i === n ? 'cur' : ''}"${i === n ? ' aria-current="step"' : ''}><b>${i < n ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : i + 1}</b>${s}</li>`).join('')}</ol>`;
+  const step = (n, title, fields, next) => {
+    box.innerHTML = `${progress(n)}<form><h1>${title}</h1>${fields}<button type="submit" class="btn btn-p">Continue</button><p role="alert" class="msg err"></p></form>`;
+    const form = $('form', box);
+    submit(form, async () => {
+      try { await next(form); } catch (e) { setText($('[role=alert]', form), e.message); }
+    });
+    $('input', form).focus();
+  };
+  step(0, 'Accept invitation', '<label class="f">New password<input class="in" type="password" name="password" autocomplete="new-password" required></label>', async (f) => {
+    const { totpURI } = await api('/api/invite/start', 'POST', { token, password: f.password.value });
+    if (!f.isConnected) return;
+    step(1, 'Set up your authenticator', `<label class="f">Authenticator URI<textarea class="in mono" readonly>${esc(totpURI)}</textarea></label>
+      <label class="f">6-digit code<input class="in codein" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>`, async (form) => {
+      const { backupCodes } = await api('/api/invite/finish', 'POST', { token, code: form.code.value.trim() });
+      if (form.isConnected) box.innerHTML = `${progress(2)}<div class="stack"><h1>Save your backup codes</h1><pre>${esc(backupCodes.join('\n'))}</pre><a href="#/profiles">Sign in</a></div>`;
+    });
+  });
+}
+
+async function checkGatewayAdmin() {
+  const nav = $('[data-nav=members]');
+  try { await api('/api/users'); nav.hidden = false; }
+  catch (e) { nav.hidden = true; if (e.status !== 403 && authed) toast(e.message, 'error'); }
+}
+
+function showMembers() {
+  setPage('members', `<div class="head"><h1>Members</h1></div><div class="stack">
+    <section class="card" id="users"></section>
+    <section class="card pad"><h2>Invite a member</h2><form id="inviteMember" class="row">
+      <label class="f">Email<input class="in" name="email" type="email" required></label>
+      <label class="check"><input name="admin" type="checkbox">Gateway admin</label>
+      <button type="submit" class="btn btn-p">Invite</button></form></section>
+    <section class="card"><div class="tblhead"><h2>Open invites</h2></div><div id="invites"></div></section></div>`);
+  submit($('#inviteMember'), async (f) => {
+    const { link } = await api('/api/users/invite', 'POST', { email: f.email.value.trim(), admin: f.admin.checked });
+    if (!f.isConnected) return;
+    f.reset();
+    const d = $('#keyDlg');
+    d.setAttribute('aria-labelledby', 'inviteTitle');
+    d.innerHTML = `<div class="stack"><h2 id="inviteTitle">Invite link</h2><input class="in mono" aria-label="Invite link" readonly value="${esc(link)}">
+      <div class="row"><button class="btn" id="copyInvite">Copy</button><button class="btn btn-p" id="closeInvite">Done</button></div></div>`;
+    d.oncancel = null; d.onclose = () => d.replaceChildren();
+    $('#copyInvite').onclick = (e) => copy(e.currentTarget, link);
+    $('#closeInvite').onclick = () => { d.close(); d.replaceChildren(); };
+    d.showModal(); refreshMembers();
+  });
+  refreshMembers();
+}
+
+async function refreshMembers() {
+  const owner = $('#users');
+  try {
+    const [users, invites] = await Promise.all([api('/api/users'), api('/api/users/invites')]);
+    if (!owner?.isConnected) return;
+    if (patch('users', users, () => `<div class="tbl"><table><tr><th>Email</th><th>Gateway admin</th><th>2FA</th><th>Status</th></tr>
+      ${users.map(u => `<tr><td>${esc(u.email)}</td><td><input type="checkbox" aria-label="Gateway admin · ${esc(u.email)}" data-admin="${esc(u.email)}" ${u.admin ? 'checked' : ''} ${u.pending ? 'disabled' : ''}></td>
+        <td>${u.twoFactorEnabled ? 'Enabled' : 'Off'}</td><td>${u.pending ? 'Pending' : 'Active'}</td></tr>`).join('')}</table></div>`)) {
+      for (const input of $$('[data-admin]')) input.onchange = () => act(input, async () => {
+        const admin = input.checked; input.checked = !admin;
+        await api('/api/users/admin', 'POST', { email: input.dataset.admin, admin });
+        await refreshMembers();
+      });
+    }
+    if (patch('invites', invites, () => invites.length ? `<div class="tbl"><table><tr><th>Email</th><th>Expires</th><th></th></tr>
+      ${invites.map(i => `<tr><td>${esc(i.email)}</td><td>${esc(day(i.expires))}</td><td><button class="btn btn-sm" data-invite="${esc(i.id)}">Revoke</button></td></tr>`).join('')}</table></div>` : '<p class="empty">No open invites.</p>')) {
+      for (const b of $$('[data-invite]')) b.onclick = () => act(b, async () => {
+        await api('/api/users/invites/' + encodeURIComponent(b.dataset.invite) + '/revoke', 'POST');
+        await refreshMembers();
+      });
+    }
+  } catch (e) {
+    if (!owner?.isConnected) return;
+    if (e.status === 403) { $('[data-nav=members]').hidden = true; location.hash = '#/profiles'; }
+    else toast(e.message, 'error');
+  }
+}
+
+function roleOptions(current) {
+  return ['viewer', 'editor', 'admin'].map(role => `<option ${current === role ? 'selected' : ''}>${role}</option>`).join('');
+}
+
+async function refreshSharing() {
+  const owner = $('#sharing'), id = selected, path = '/api/computers/' + encodeURIComponent(id) + '/members';
+  if (!owner) return;
+  try {
+    const members = await api(path);
+    if (!owner.isConnected || tab !== 'sharing') return;
+    const admin = computers.find(c => c.id === id)?.role === 'admin';
+    if (!$('#memberRows', owner)) owner.innerHTML = `<h2>Sharing</h2><div id="memberRows"></div>${admin ? `<form class="row" id="shareForm">
+      <label class="f">Email<input class="in" name="email" type="email" required></label>
+      <label class="f">Role<select class="in" name="role">${roleOptions('viewer')}</select></label>
+      <button class="btn btn-p" type="submit">Add member</button></form>` : ''}`;
+    const save = async (email, role) => {
+      await api(path, 'POST', { email, role });
+      await refreshList();
+      if (owner.isConnected) await refreshSharing();
+    };
+    if (patch('memberRows', members, () => `<div class="tbl"><table><tr><th>Email</th><th>Role</th>${admin ? '<th></th>' : ''}</tr>
+      ${members.map(m => `<tr><td>${esc(m.email)}</td><td>${admin ? `<select class="in" aria-label="Role · ${esc(m.email)}" data-member="${esc(m.email)}">${roleOptions(m.role)}</select>` : esc(m.role)}</td>
+      ${admin ? `<td>${m.email === me.email ? '' : `<button class="btn btn-sm" data-remove="${esc(m.email)}">Remove</button>`}</td>` : ''}</tr>`).join('')}</table></div>`)) {
+      for (const select of $$('[data-member]', owner)) select.onchange = () => act(select, async () => {
+        const role = select.value;
+        select.value = members.find(m => m.email === select.dataset.member).role;
+        await save(select.dataset.member, role);
+      });
+      for (const b of $$('[data-remove]', owner)) b.onclick = () => act(b, () => save(b.dataset.remove, null));
+    }
+    if (admin) submit($('#shareForm'), async f => { await save(f.email.value.trim(), f.elements.role.value); f.reset(); });
+  } catch (e) { if (owner.isConnected) toast(e.message, 'error'); }
+}
+
 function setPage(p, html) {
   page = p; keys = {};
   const cur = p.startsWith('profile') ? 'profiles' : p;
@@ -525,15 +657,16 @@ function renderProfiles() {
   patch('ptable', [rows, filter, search, Math.floor(Date.now() / 60000)], () => !computers.length
     ? '<p class="empty">No profiles yet. Create one, then take over to sign in to your sites.</p>'
     : !rows.length ? '<p class="empty">No matching profiles.</p>'
-    : `<div class="tbl"><table><tr><th>Profile</th><th>State</th><th>Agent</th><th>Last activity</th><th><span class="sr">Action</span></th></tr>${rows.map((c) => `
+    : `<div class="tbl"><table><tr><th>Profile</th><th>Access</th><th>State</th><th>Agent</th><th>Last activity</th><th><span class="sr">Action</span></th></tr>${rows.map((c) => `
       <tr><td><a class="mono" href="#/p/${encodeURIComponent(c.id)}" style="font-weight:600">${esc(c.id)}</a><span class="s">${esc(c.allow.join(', '))}</span></td>
+      <td>${esc(c.role)}<span class="s">${c.members === 1 ? 'Private' : 'Shared'}</span></td>
       <td>${statePill(c)}<span class="s">${esc(stateNote(c))}</span></td>
       <td>${leasePill(c)}</td>
       <td>${c.lastCall ? `${esc(ago(c.lastCall.ts))}<span class="s mono">${esc(c.lastCall.tool)}${c.lastCall.ok ? '' : ' · failed'}</span>` : '<span class="hint">No calls</span>'}</td>
-      <td class="act"><button type="button" class="btn btn-sm" data-go="${esc(c.id)}" data-ctl="${c.state === 'running' ? '' : '1'}">${c.state === 'running' ? 'Watch' : 'Start'}</button></td></tr>`).join('')}</table></div>`);
+      <td class="act"><button type="button" class="btn btn-sm" data-role="${esc(c.role)}" data-go="${esc(c.id)}" data-ctl="${c.state === 'running' ? '' : '1'}">${c.state === 'running' ? 'Watch' : 'Start'}</button></td></tr>`).join('')}</table></div>`);
   for (const b of $$('[data-go]')) b.onclick = () => {
     location.hash = `#/p/${encodeURIComponent(b.dataset.go)}`; route(); // render now: hashchange fires later
-    b.dataset.ctl ? act($('#bCtl'), () => takeControl(b.dataset.go)) : openView(b.dataset.go, false);
+    b.dataset.ctl ? act(b, () => takeControl(b.dataset.go, b.dataset.role !== 'viewer')) : openView(b.dataset.go, false);
   };
 }
 
@@ -560,20 +693,23 @@ function openNewProfile() {
 }
 
 // ---- Profile page ---------------------------------------------------------------
-const TABS = [['session', 'Session'], ['logins', 'Logins'], ['playbooks', 'Playbooks'], ['domains', 'Domains'], ['diagnostics', 'Diagnostics'], ['settings', 'Settings']];
+const TABS = [['session', 'Session'], ['logins', 'Logins'], ['playbooks', 'Playbooks'], ['domains', 'Domains'], ['diagnostics', 'Diagnostics'], ['sharing', 'Sharing'], ['settings', 'Settings']];
 function showProfile(id, t) {
   const c = computers.find((x) => x.id === id);
   if (!c) { if (page === 'profile') closeView(); selected = null; setPage('profile', `<div class="head"><div><span class="crumb"><a href="#/profiles">Profiles</a> › ${esc(id)}</span><h1>Profile not found</h1><p class="sub">${esc(id)} doesn't exist or was deleted.</p></div></div>`); return; }
-  tab = TABS.some(([k]) => k === t) ? t : 'session';
-  if (page === 'profile' && selected === id) return showTab();
-  if (view && view.id !== id) closeView();
+  const tabs = TABS.filter(([key]) => (key !== 'settings' || c.role === 'admin') &&
+    (c.role !== 'viewer' || ['session', 'diagnostics', 'sharing'].includes(key)));
+  tab = tabs.some(([k]) => k === t) ? t : 'session';
+  if (page === 'profile' && selected === id && $('#main').dataset.role === c.role) return showTab();
+  if (view && (view.id !== id || $('#main').dataset.role !== c.role)) closeView();
+  $('#main').dataset.role = c.role;
   selected = id; allowDraft = null;
   const p = `/api/computers/${encodeURIComponent(id)}`;
   setPage('profile', `
     <div class="head"><div><span class="crumb"><a href="#/profiles">Profiles</a> › <span class="mono">${esc(id)}</span></span>
       <div class="row" style="gap:12px"><h1 class="mono" id="dTitle" tabindex="-1">${esc(id)}</h1><span id="dState"></span></div></div>
       <div class="row"><button type="button" class="btn" id="bStop">Stop browser</button></div></div>
-    <nav class="tabs" aria-label="Profile sections">${TABS.map(([k, l]) => `<a class="tab" href="#/p/${encodeURIComponent(id)}/${k}" data-tab="${k}">${l}<span data-count="${k}"></span></a>`).join('')}</nav>
+    <nav class="tabs" aria-label="Profile sections">${tabs.map(([k, l]) => `<a class="tab" href="#/p/${encodeURIComponent(id)}/${k}" data-tab="${k}">${l}<span data-count="${k}"></span></a>`).join('')}</nav>
 
     <div data-panel="session" class="cols">
       <section class="card live" aria-label="Live view">
@@ -666,6 +802,7 @@ function showProfile(id, t) {
       <p class="hint">Container <span class="mono" id="fContainer"></span></p>
     </div>
 
+    <section data-panel="sharing" class="card pad"><div id="sharing"></div></section>
     <div data-panel="settings" class="stack">
       <section class="card pad dz" aria-labelledby="hDanger"><h2 id="hDanger">Danger zone</h2>
         <div class="row" style="gap:16px"><div class="grow" style="flex-basis:280px"><b>Delete profile</b><p class="hint" style="font-size:14px;line-height:20px">The container, cookies, saved logins, OAuth access and API keys of this profile are destroyed. This cannot be undone.</p></div>
@@ -673,7 +810,7 @@ function showProfile(id, t) {
     </div>`);
 
   wireMcp();
-  $('#bWatch').onclick = () => openView(id, false);
+  $('#bWatch').onclick = (e) => computers.find((c) => c.id === id)?.state === 'running' ? openView(id, false) : act(e.currentTarget, () => takeControl(id, false));
   $('#bCtl').onclick = (e) => act(e.currentTarget, () => takeOver(id));
   $('#bLeave').onclick = () => { closeView(); renderLiveBar(); $('#bCtl').focus(); };
   $('#bStop').onclick = (e) => act(e.currentTarget, async () => { closeView(); await api(`${p}/stop`, 'POST'); refreshList(); refreshDetail(); }, 'Browser stopped. The profile is kept.');
@@ -737,6 +874,7 @@ function showProfile(id, t) {
   showTab(); renderProfile(); refreshDetail();
 }
 function showTab() {
+  if (tab === 'sharing') refreshSharing();
   for (const a of $$('[data-tab]')) a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
   for (const s of $$('[data-panel]')) s.hidden = s.dataset.panel !== tab;
 }
@@ -745,6 +883,7 @@ function showTab() {
 function renderProfile() {
   const c = computers.find((x) => x.id === selected);
   if (page !== 'profile' || !c) return;
+  if ($('#main').dataset.role !== c.role) return route();
   patch('dState', [c.state, c.leasedUntil && 1], () => statePill(c) + (c.leasedUntil ? ' <span class="pill dot agent">Agent lease</span>' : ''));
   const bs = $('#bStop'); if (!bs.dataset.busy) bs.disabled = c.state !== 'running';
   setText($('[data-count="logins"]'), ` · ${c.logins.length}`);
@@ -754,6 +893,7 @@ function renderProfile() {
        <div class="row"><button type="button" class="btn btn-sm" id="bExtend">Extend 30 min</button><button type="button" class="btn btn-sm btn-dl" id="bRelease">Force release</button></div>`
     : '<p class="hint" style="font-size:14px;line-height:20px">Free. No agent is driving this profile. An agent takes a 10 min lease, extended on every action.</p>')
     && wireLease();
+  for (const b of $$('#bStop, #bExtend, #bRelease, #nav, #bRecLive')) b.hidden = c.role === 'viewer';
   tickLease();
   setText($('#vViewers'), plural(c.viewers, 'viewer'));
   setText($('#fContainer'), `${c.container} : ${c.status}`);
@@ -785,16 +925,19 @@ function renderLiveBar() {
   // Under an agent lease the server drops live input unless the admin took the agent's request.
   const h = c.handoff, locked = !!c.leasedUntil && h?.state !== 'taken';
   const up = c.state === 'running', live = view?.id === c.id;
-  if (live && view.control && locked) { view.control = false; wireControl(); }
+  const viewer = c.role === 'viewer';
+  $('#bCtl').hidden = viewer && !h;
+  if (live && view.control && (locked || (viewer && h?.state !== 'taken'))) { view.control = false; wireControl(); }
   const ctl = live && view.control;
-  setBtn($('#bWatch'), !up || (live && !ctl), !up ? 'Browser stopped: use Start and take over.' : live && !ctl ? 'Already watching' : 'Watch without sending input');
-  setText($('#bCtl'), up ? 'Take over' : 'Start and take over');
+  setText($('#bWatch'), viewer && !up ? 'Start and watch' : 'Watch');
+  setBtn($('#bWatch'), (!up && !viewer) || (live && !ctl), !up ? (viewer ? '' : 'Browser stopped: use Start and take over.') : live && !ctl ? 'Already watching' : 'Watch without sending input');
+  setText($('#bCtl'), viewer || up ? 'Take over' : 'Start and take over');
   setBtn($('#bCtl'), ctl || (locked && !h), ctl ? 'You already have control' : locked && !h ? 'An agent holds the lease: force release to take over' : '');
   $('#bLeave').hidden = !live;
   setBtn($('#bRecLive'), rec?.id === c.id || (locked && !h), rec?.id === c.id ? 'Already recording' : locked && !h ? 'An agent holds the lease: force release to take over' : 'Take over and record your gestures as a playbook');
   // ponytail: the lease holder's name is not exposed by the list API, so the banner says "an agent".
   // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
-  const here = ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
+  const here = !viewer && ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
   // The reason is the agent's words (untrusted): quoted, escaped, never phrased as an instruction from this page.
   const says = h ? `<br><i style="font-weight:400">Agent says: ${esc(h.reason)}</i>` : '';
   patch('banner', [ctl, locked, live, h && [h.id, h.state, h.reason, leftMin(h.deadline)], here.map((l) => [l.site, l.username])], () => (!h ? ''
@@ -802,10 +945,10 @@ function renderLiveBar() {
       ? `<div class="banner b-ctl"><span>The agent needs you · ${leftMin(h.deadline)} min left${says}</span><button type="button" class="btn btn-sm" id="bDecline">Decline…</button></div>`
       : `<div class="banner b-ctl"><span>You are handling the agent's request.${says}</span><button type="button" class="btn btn-sm btn-p" id="bDone">Done</button><button type="button" class="btn btn-sm" id="bFail">Failed…</button></div>`)
     + (ctl
-    ? `<div class="banner b-ctl"><span>You have control. Keyboard, mouse and copy/paste go to this browser: click the view to type.</span><button type="button" class="btn btn-sm" id="bGiveBack">Hand back</button>${here.length ? `
+    ? `<div class="banner b-ctl"><span>You have control. ${viewer ? 'Keyboard and mouse' : 'Keyboard, mouse and copy/paste'} go to this browser: click the view to type.</span><button type="button" class="btn btn-sm" id="bGiveBack">Hand back</button>${here.length ? `
        <div class="fill"><span>${here.length === 1 ? `Saved login: <b class="mono">${esc(here[0].site)}</b> · ${esc(here[0].username)}` : `${here.length} saved logins for <span class="mono">${esc(new URL(view.url).host)}</span>`}</span>
        ${here.map((l, i) => `<button type="button" class="btn btn-sm${i ? '' : ' btn-p'}" data-fill="${esc(l.site)}">${here.length === 1 ? 'Fill and submit' : `${esc(l.site)} · ${esc(l.username)}`}</button>`).join('')}</div>` : ''}</div>`
-    : locked && !h ? `<div class="banner b-agent"><span>An agent is in control. You can watch, or force release to take over.</span>${live ? '' : '<button type="button" class="btn btn-sm" id="bWatchB">Watch</button>'}<button type="button" class="btn btn-sm btn-dl" id="bForce">Force release to take over</button></div>` : ''));
+    : locked && !h && !viewer ? `<div class="banner b-agent"><span>An agent is in control. You can watch, or force release to take over.</span>${live ? '' : '<button type="button" class="btn btn-sm" id="bWatchB">Watch</button>'}<button type="button" class="btn btn-sm btn-dl" id="bForce">Force release to take over</button></div>` : ''));
   const p = `/api/computers/${encodeURIComponent(selected)}`, on = (sel, fn) => { const b = $(sel); if (b) b.onclick = (e) => fn(e.currentTarget); };
   on('#bGiveBack', () => openView(selected, false));
   on('#bWatchB', () => openView(selected, false));
@@ -1057,16 +1200,19 @@ function testLogin(btn, site) {
 
 // ---- Live view (agent-browser stream protocol) ------------------------------------
 function setVstate(text, mode) { const v = $('#vstate'); if (!v) return; setText(v, text); if ((v.dataset.mode || '') !== (mode || '')) v.dataset.mode = mode || ''; }
-async function takeControl(id) {
+async function takeControl(id, control = true) {
   setVstate('Starting…');
   try { await api(`/api/computers/${encodeURIComponent(id)}/start`, 'POST'); } catch (e) { setVstate(e.message); throw e; }
   await refreshList();
-  openView(id, true);
+  openView(id, control);
 }
 /** Take over: takes the agent's open request first, if any. */
 async function takeOver(id) {
   if (computers.find((x) => x.id === id)?.handoff) await api(`/api/computers/${encodeURIComponent(id)}/handoff-take`, 'POST');
-  await takeControl(id);
+  if (computers.find((c) => c.id === id)?.role === 'viewer') {
+    await refreshList();
+    if (selected === id && computers.find((c) => c.id === id)?.handoff?.state === 'taken') openView(id, true);
+  } else await takeControl(id);
 }
 function paintLoading() {
   const on = opening || !!view?.since;
@@ -1164,12 +1310,13 @@ function wireControl() {
     if (sc === 'v') return; // no preventDefault: the browser fires `paste` below with the local clipboard
     e.preventDefault();
     if (recording()) return type === 'keyDown' && recKey(e);
-    if (sc === 'c' || sc === 'x') { if (type === 'keyDown') copyRemote().then(() => { if (sc === 'x') { kb('keyDown', e); kb('keyUp', e); } }); return; }
+    if (sc === 'c' || sc === 'x') { if (type === 'keyDown' && computers.find((c) => c.id === selected)?.role !== 'viewer') copyRemote().then(() => { if (sc === 'x') { kb('keyDown', e); kb('keyUp', e); } }); return; }
     kb(type, e);
   };
   img.onkeydown = key('keyDown'); img.onkeyup = key('keyUp');
   img.onpaste = (e) => {
     if (!on) return; e.preventDefault();
+    if (computers.find((c) => c.id === selected)?.role === 'viewer') return;
     const t = e.clipboardData.getData('text/plain');
     if (recording()) return addBuf(t);
     if (t.length > 5000) return toast('Text too long (5000 characters max).', 'error');
@@ -1479,8 +1626,9 @@ async function refreshList() {
 }
 setInterval(() => { if (view) { setText($('#vfps'), `${view.frames} fps`); view.frames = 0; } tickLease(); }, 1000);
 setInterval(() => authed && refreshList(), 3000);
-setInterval(() => { if (!authed) return; refreshDetail(); if (page === 'access') refreshClients(); }, 5000);
-fetch('/api/auth/get-session').then((r) => r.json()).then((s) => s?.user?.twoFactorEnabled ? showApp() : showLogin(), showLogin);
+setInterval(() => { if (!authed) return; refreshDetail(); if (page === 'access') refreshClients(); if (page === 'members') refreshMembers(); if (selected && tab === 'sharing') refreshSharing(); }, 5000);
+if (location.hash.startsWith('#/invite/')) route();
+else fetch('/api/auth/get-session').then((r) => r.json()).then((s) => s?.user?.twoFactorEnabled ? showApp() : showLogin(), showLogin);
 </script>
 </body>
 </html>

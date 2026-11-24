@@ -48,8 +48,8 @@ test('windowBudget: fixed window counter', () => {
 
 test('profile actions require the specified role or higher', () => {
   const matrix: [Role, (string | null)[], (Role | null)[]][] = [
-    ['viewer', [null, 'handoff-take', 'handoff-done', 'handoff-fail'], ['viewer', 'editor', 'admin']],
-    ['editor', ['start', 'stop', 'open', 'paste', 'copy', 'config', 'login-save', 'login-test', 'login-fill', 'login-delete',
+    ['viewer', [null, 'start', 'handoff-take', 'handoff-done', 'handoff-fail'], ['viewer', 'editor', 'admin']],
+    ['editor', ['stop', 'open', 'paste', 'copy', 'config', 'login-save', 'login-test', 'login-fill', 'login-delete',
       'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'release', 'extend',
       'teach-click', 'teach-focus', 'teach-type', 'teach-press', 'teach-open', 'teach-read', 'teach-replay'], ['editor', 'admin']],
     ['admin', ['delete', 'members'], ['admin']],

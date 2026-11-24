@@ -1416,7 +1416,7 @@ test('profile members control API access, including for a gateway admin', async 
   assert.deepEqual((await admin('GET', roster)).json, [{ email: owner.email, role: 'viewer' }, { email, role: 'admin' }]);
   await upgrade({}, id);
   assert.equal(calls('stream').length, relays + 1);
-  assert.equal((await admin('POST', path + '/start', { body: {} })).status, 403);
+  assert.equal((await admin('POST', path + '/stop', { body: {} })).status, 403);
 
   const keyBody = { name: 'viewer key', scope: 'profile:' + id, expiresIn: '30d' };
   const scoped = await admin('POST', '/api/keys', { body: keyBody });
