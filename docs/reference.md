@@ -256,7 +256,7 @@ Run user management and login key rotation with the gateway stopped. Use `docker
 | `user create <email> [--admin]` | Enroll a new user with a password and TOTP. Add `--admin` to grant the gateway admin role. |
 | `user list` | List each email with its admin role, 2FA status and creation date. |
 | `user admin <email> on\|off` | Grant or revoke the gateway admin role. The last admin keeps the role. |
-| `user remove <email>` | Delete the user, their sessions, API keys, OAuth tokens and consents. Removing the last admin is refused. |
+| `user remove <email>` | Delete the user, their sessions, API keys, OAuth tokens and consents. Use Members in the admin UI if the user has private profiles, or delete those profiles first. The oldest remaining member becomes admin of each shared profile that would lose its last admin. The last active gateway admin keeps their account. |
 | `admin reset-2fa <email>` | Reset any user's password and TOTP and drop their sessions. |
 | `key create <profile>\|--global <file> [days] [--as <email>]` | Write a key to a new mode-0600 file. The first gateway admin owns the key by default. Supply `--as` to choose another user. Valid for 1 to 365 days, default 1. |
 | `key revoke <id>` | Revoke the API key with this id. |
@@ -268,7 +268,8 @@ Gateway admins manage accounts. Each user's profile memberships determine which 
 
 | Method and route | Request and result |
 | --- | --- |
-| `GET /api/users` | Lists email, gateway admin status, 2FA status, pending status and creation time. |
+| `GET /api/users` | Lists email, gateway admin status, 2FA status, pending status, creation time and private profile count (`privateProfileCount`). |
+| `POST /api/users/remove` | Send `{email}` to delete another active member, their private profiles and credentials. Returns `{removed: true}`. Shared profiles survive. If the departing member was the last profile admin, the earliest remaining membership becomes admin. Self-removal, pending accounts and removal of the last active gateway admin return 409. Unknown users return 404. |
 | `POST /api/users/admin` | Send `{email, admin}` to change a gateway admin role. The last active gateway admin keeps the role. |
 | `POST /api/users/invite` | Send `{email, admin?}` for an unregistered email. Returns `{id, link, expiresAt}` once. Up to ten invites can be open. |
 | `GET /api/users/invites` | Lists unexpired unused invites with ID, email, role flag, creation and expiry times, and creator email. Times are Unix milliseconds. |

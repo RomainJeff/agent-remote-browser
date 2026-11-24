@@ -11,7 +11,7 @@ import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import { tx } from '../store/db.ts';
 import { requireAdmin, scopedProfile, toHeaders } from '../auth/guards.ts';
-import { AccountError, listUsers, normalizedEmail, requireAvailable, setAdmin } from '../auth/accounts.ts';
+import { AccountError, listUsers, normalizedEmail, privateProfilesOf, removalTarget, removeUser, requireAvailable, setAdmin } from '../auth/accounts.ts';
 import { finishInvite, issue, openInvites, revoke, startInvite } from '../auth/invites.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
@@ -143,7 +143,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   }
 
   async function deleteProfile(id: ProfileId) {
-    await pc.remove(id).catch(() => {});
+    await pc.remove(id);
     store.deleteProfile(id); // cascades to its logins, leases, OAuth grants and API keys
   }
 
@@ -221,6 +221,19 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
             record(revoke(db, match[1]), 'invite_revoke');
             return send(res, 200, { revoked: true });
           }
+          if (path === '/api/users/remove') {
+            const email = normalizedEmail((await readJson(req))?.email);
+            const target = removalTarget(db, email);
+            if (target === session.user.id) throw new AccountError(409, 'Cannot remove yourself');
+            for (const id of privateProfilesOf(db, target)) {
+              if (!validId(id)) throw Error('Invalid stored profile');
+              await pc.serial(id, async () => {
+                if (privateProfilesOf(db, target).includes(id)) await deleteProfile(id);
+              });
+            }
+            removeUser(db, email, session.user.email, audit);
+            return send(res, 200, { removed: true });
+          }
           if (path === '/api/users/admin' || path === '/api/users/invite') {
             const b = await readJson(req) || {}, email = normalizedEmail(b.email);
             if (typeof b.admin !== 'boolean' && !(path === '/api/users/invite' && b.admin === undefined))
@@ -291,12 +304,17 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (act === 'members') {
         if (typeof body.email !== 'string' || !(body.role === null || isRole(body.role)))
           return send(res, 400, { error: 'Provide an email and a role (viewer, editor, admin or null)' });
-        requireAvailable(db, body.email.trim().toLowerCase());
-        const user = db.prepare('SELECT id FROM user WHERE email = ?').get(body.email.trim().toLowerCase());
-        if (!user) return send(res, 404, { error: 'unknown user' });
-        if (!store.setRole(id, user.id as string, body.role)) return send(res, 409, { error: 'Profile needs at least one admin' });
-        audit({ by: session.user.email, agent: id, tool: 'admin:members', ok: true });
-        return send(res, 200, { role: body.role });
+        return await pc.serial(id, async () => {
+          const current = store.roleOf(id, session.user.id);
+          if (!current) return send(res, 404, { error: 'unknown profile' });
+          if (!can(current, act)) return send(res, 403, { error: 'forbidden' });
+          requireAvailable(db, body.email.trim().toLowerCase());
+          const user = db.prepare('SELECT id FROM user WHERE email = ?').get(body.email.trim().toLowerCase());
+          if (!user) return send(res, 404, { error: 'unknown user' });
+          if (!store.setRole(id, user.id as string, body.role)) return send(res, 409, { error: 'Profile needs at least one admin' });
+          audit({ by: session.user.email, agent: id, tool: 'admin:members', ok: true });
+          return send(res, 200, { role: body.role });
+        });
       }
       const p = profile(id)!;
       // Playbooks: one line once done, saying what happened (create or update), the name and body never in it.

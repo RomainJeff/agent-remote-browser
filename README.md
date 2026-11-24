@@ -8,6 +8,8 @@ agent-remote-browser is a remote MCP server. An agent (a Notion Custom Agent, Cl
 
 You stay in control from a small admin UI on localhost: create profiles, choose their domains, save logins, grant or revoke agent access, and watch (or take over) any browser live.
 
+Invite people to the gateway and share individual profiles as viewer, editor or admin. Profiles start private. [Roles and invites](docs/reference.md#gateway-users-and-invites)
+
 ## Quick start
 
 Requires Docker.
