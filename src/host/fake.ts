@@ -31,6 +31,11 @@ export class FakeDriver implements HostDriver {
   slow = '';
   /** `get count input[type=password]` answer. */
   passwordFields = 1;
+  /** Teach mode HIT answers (`node -e HIT at|focus`): { url, chain }. */
+  hit: Record<string, unknown> = {
+    at: { url: origin + '/', chain: [{ role: 'button', name: 'OK', tag: 'button', count: 1, exact: 1 }, { role: 'RootWebArea', name: 'Fake page' }] },
+    focus: { url: origin + '/', chain: [{ role: 'textbox', name: 'Email', tag: 'input', count: 1, exact: 1 }, { role: 'RootWebArea', name: 'Fake page' }] },
+  };
 
   async ensure(id: ProfileId) {
     this.calls.push({ op: 'ensure', id });
@@ -42,6 +47,7 @@ export class FakeDriver implements HostDriver {
 
   async exec(id: ProfileId, argv: string[], { stdin, timeoutMs }: { stdin?: string; timeoutMs: number }): Promise<ExecResult> {
     this.calls.push({ op: 'exec', id, argv, ...(stdin != null && { stdin }) });
+    if (argv[0] === 'node') return { code: 0, stdout: JSON.stringify(this.hit[argv[3]]), stderr: '' };
     if (argv[0] !== 'agent-browser') return { code: 0, stdout: argv[0] === 'base64' ? 'iVBORw0K' : '', stderr: '' };
     const rest = argv.slice(1);
     while (rest[0]?.startsWith('--')) rest.splice(0, rest[0] === '--json' ? 1 : 2); // --json, --profile X, --restore X, --args X

@@ -71,7 +71,7 @@ export const Locator = z.union([
   z.strictObject({ testid: VAL }),
   z.strictObject({ css: SEL.describe('First element matching this CSS selector') }),
 ]).describe('One of ref, text, label, role (+ name), placeholder, testid, css');
-type Locator = z.output<typeof Locator>;
+export type Locator = z.output<typeof Locator>;
 
 /** Never `--fn` (JavaScript in the page). A selector that reads as a number would be a sleep: refused. */
 const Wait = z.union([

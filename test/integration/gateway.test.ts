@@ -20,7 +20,7 @@ import { FakeDriver } from '../../src/host/fake.ts';
 import { RunnerDriver } from '../../src/host/runner.ts';
 import { serveRunner } from '../../src/runner/server.ts';
 import { parseProfileId } from '../../src/policy.ts';
-import { AB_FLAGS } from '../../src/runner/protocol.ts';
+import { AB_FLAGS, HIT } from '../../src/runner/protocol.ts';
 import { limits } from '../../src/mcp/steps.ts';
 import { purgeClients } from '../../src/auth/guards.ts';
 import { totp } from '../totp.ts';
@@ -592,6 +592,70 @@ test('pb_ tools: a profile token gets one root tool per playbook with a recipe, 
 
   for (const n of [...many.slice(1), ...extra]) assert.equal((await del(n)).status, 200, n);
   assert.deepEqual((await pbTools()).map((t) => t.name), ['pb_check_quota']);
+});
+
+test('teach: each admin gesture runs as a semantic step and comes back as one; a password field becomes the saved login', async () => {
+  const teach = (a: string, body: unknown) => admin('POST', `/api/computers/shop/teach-${a}`, { body });
+  const abs = () => calls('exec').filter((c) => c.argv![0] === 'agent-browser').map((c) => c.argv!.slice(1 + AB_FLAGS.length));
+  const hits = () => calls('exec').filter((c) => c.argv![0] === 'node').map((c) => c.argv!.slice(3));
+  const defaults = { ...fake.hit }, root = { role: 'RootWebArea', name: 'Fake page' };
+  const secret = 'typed-' + randomBytes(9).toString('hex');
+  try {
+    let r = await teach('click', { x: 10, y: 20 });
+    assert.deepEqual([r.status, r.json], [200, { step: { click: { role: 'button', name: 'OK' } }, field: false }]);
+    assert.deepEqual(hits().at(-1), ['at', '10', '20']);
+    assert.ok(calls('exec').some((c) => c.argv![2] === HIT), 'the runner let the HIT script through');
+    assert.deepEqual(abs().at(-1), ['find', 'role', 'button', 'click', '--name', 'OK']);
+    for (const b of [{ x: -1, y: 2 }, { x: 1.5, y: 2 }, { x: '1', y: 2 }, { x: 1 }]) assert.equal((await teach('click', b)).status, 400, JSON.stringify(b));
+
+    fake.hit.at = { url: 'https://example.com/', chain: [{ role: 'generic', name: '' }, root] };
+    const n = abs().length;
+    r = await teach('click', { x: 1, y: 1 });
+    assert.deepEqual([r.status, r.json.error], [422, 'No stable locator for this element: try its text or label']);
+    assert.equal(abs().length, n, 'nothing clicked');
+
+    r = await teach('type', { text: 'me@example.test' });
+    assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me@example.test' } }]);
+    assert.deepEqual(abs().at(-1), ['find', 'role', 'textbox', 'fill', 'me@example.test', '--name', 'Email']);
+    assert.equal((await teach('type', { text: '-rf' })).status, 400, 'a recipe cannot fill a leading dash');
+
+    // Password field: the saved login of the page's origin is filled instead; the typed text goes nowhere.
+    fake.hit.focus = { url: 'https://example.com/login?x=1', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
+    r = await teach('type', { text: secret });
+    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true } }]);
+    assert.deepEqual(abs().at(-3), ['auth', 'login', 'gw-main', '--no-navigate']);
+    fake.hit.focus = { url: 'https://www.example.com/', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
+    assert.equal((await teach('type', { text: secret })).status, 422, 'no saved login for this origin');
+    assert.ok(!JSON.stringify(fake.calls).includes(secret) && !readFileSync(f.audit, 'utf8').includes(secret), 'typed password never sent or logged');
+
+    assert.deepEqual((await teach('press', { key: 'Enter' })).json, { step: { press: 'Enter' } });
+    assert.equal((await teach('press', { key: 'a' })).status, 400);
+    assert.equal((await teach('open', { url: 'https://example.org/' })).status, 400);
+    assert.deepEqual((await teach('open', { url: 'https://example.com/usage' })).json, { step: { open: 'https://example.com/usage' } });
+    r = await teach('read', { selector: '#usage', contains: 'hell' });
+    assert.deepEqual(r.json, { step: { get_text: { selector: '#usage', contains: 'hell' } }, text: 'hello' });
+    assert.deepEqual(abs().at(-1), ['get', 'text', '#usage']);
+    assert.equal((await teach('read', { selector: '-x' })).status, 400);
+
+    // Replay: the draft as a playbook body, run like run_playbook.
+    const body = '# Draft\n```json\n{"steps": [{"open": "https://example.com/{ws}"}, {"get_text": {}}]}\n```';
+    r = await teach('replay', { body, params: { ws: 'acme' } });
+    assert.equal(r.json.ok, true, r.json.text);
+    assert.match(r.json.text, /hello/);
+    assert.deepEqual(abs().slice(-2), [['open', 'https://example.com/acme'], ['get', 'text', 'body']]);
+    assert.deepEqual([(await teach('replay', { body })).json.error], ['Missing params: ws']);
+    assert.equal((await teach('replay', { body: body.replace('example.com', 'example.org'), params: { ws: 'a' } })).json.ok, false, 'allowlist');
+
+    const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /teach/.test(l.tool));
+    assert.deepEqual([...new Set(audit.map((l) => l.tool))].sort(), ['admin:teach-click', 'admin:teach-open', 'admin:teach-press', 'admin:teach-read', 'admin:teach-replay', 'admin:teach-type']);
+
+    const leased = await call(tokens.global, 'lease_profile', { profile: 'shop' });
+    assert.ok(!leased.error, leased.text);
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 409, 'not while an agent holds it');
+    assert.equal((await admin('POST', '/api/computers/shop/release', { body: {} })).status, 200);
+  } finally {
+    fake.hit = defaults;
+  }
 });
 
 test('kill switch refuses every tool until removed', async () => {
