@@ -1459,3 +1459,120 @@ test('profile members control API access, including for a gateway admin', async 
   sql((db) => db.prepare('DELETE FROM user WHERE email = ?').run(email));
   assert.equal(await mcpStatus({ 'x-api-key': global.json.key }), 401);
 });
+
+const createInvite = (email: string, adminRole = false) => admin('POST', '/api/users/invite', { body: { email, admin: adminRole } });
+const tokenOf = (invite: { link: string }) => new URL(invite.link).hash.slice('#/invite/'.length);
+const accept = (step: string, body: object, cookie = '') => admin('POST', '/api/invite/' + step, { body, headers: { ...adminOrigin(), cookie } });
+
+test('invite enrollment binds the session to the recipient and applies the role only on completion', async () => {
+  await restart();
+  assert.equal((await fetch(base + '/consent', { redirect: 'manual', headers: { cookie: session } })).status, 200);
+  const email = 'invitee@example.com', password = randomBytes(16).toString('hex');
+  const issued = await createInvite(email, true);
+  assert.equal(issued.status, 201);
+  const token = tokenOf(issued.json);
+  assert.equal(issued.json.link, `http://localhost:${ADMIN}/#/invite/${token}`);
+  assert.equal((await createInvite(email)).status, 409);
+  assert.equal((await createInvite(owner.email)).status, 409);
+  const open = (await admin('GET', '/api/users/invites')).json;
+  assert.deepEqual(open.map((i: any) => [i.id, i.email, i.createdBy, i.admin]), [[issued.json.id, email, owner.email, true]]);
+  const start = await accept('start', { token, password });
+  assert.equal(start.status, 200);
+  assert.deepEqual(Object.keys(start.json), ['totpURI']);
+  const row = async () => (await admin('GET', '/api/users')).json.find((u: any) => u.email === email);
+  assert.deepEqual([(await row()).admin, (await row()).pending], [false, true]);
+  assert.equal((await admin('POST', '/api/users/admin', { body: { email, admin: true } })).status, 409);
+  assert.equal((await admin('POST', '/api/computers/shop2/members', { body: { email, role: 'viewer' } })).status, 409);
+  assert.equal((await accept('finish', { token, code: totp(start.json.totpURI) }, session)).status, 401);
+  // Exercise authorization with a real pending session after the auth provider has enabled its second factor.
+  sql(db => db.prepare('UPDATE user SET twoFactorEnabled = 1 WHERE email = ?').run(email));
+  const cookie = jar(start.cookies);
+  const s = await admin('GET', '/api/auth/get-session', { headers: { cookie } });
+  assert.equal(s.json.user.twoFactorEnabled, true);
+  assert.equal((await admin('GET', '/api/session', { headers: { cookie } })).status, 401);
+  assert.equal((await fetch(base + '/consent', { redirect: 'manual', headers: { cookie } })).status, 302);
+
+  const retry = await accept('start', { token, password });
+  assert.equal(retry.status, 200);
+  const code = totp(retry.json.totpURI), wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
+  assert.equal((await accept('finish', { token, code: wrong }, jar(retry.cookies))).status, 401);
+  const finished = await accept('finish', { token, code }, jar(retry.cookies));
+  assert.equal(finished.status, 200);
+  assert.equal(finished.json.backupCodes.length, 10);
+  assert.deepEqual([(await row()).admin, (await row()).pending], [true, false]);
+  assert.equal((await admin('GET', '/api/session', { headers: { cookie: jar(retry.cookies) } })).status, 401);
+  assert.equal((await accept('finish', { token, code }, jar(retry.cookies))).status, 404);
+  assert.ok(!readFileSync(f.audit, 'utf8').includes(token));
+
+  const toggle = (adminRole: boolean) => admin('POST', '/api/users/admin', { body: { email, admin: adminRole } });
+  assert.equal((await toggle(false)).status, 200);
+  sql(db => db.exec('DELETE FROM rateLimit'));
+  const half = await admin('POST', '/api/auth/sign-in/email', { headers: adminOrigin(), body: { email, password } });
+  assert.equal(half.json.twoFactorRedirect, true);
+  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(retry.json.totpURI) } });
+  assert.equal(signed.status, 200);
+  const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
+  assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
+  for (const path of ['/api/users', '/api/users/invites']) assert.equal((await admin('GET', path, { headers })).status, 403);
+  for (const path of ['/api/users/admin', '/api/users/invite', '/api/users/invites/' + issued.json.id + '/revoke'])
+    assert.equal((await admin('POST', path, { headers, body: { email, admin: true } })).status, 403);
+});
+
+test('a default invite enrolls a member who can sign in and starts with no profiles', async () => {
+  await restart();
+  const email = 'new-member@example.com', password = randomBytes(16).toString('hex');
+  const issued = await admin('POST', '/api/users/invite', { body: { email } });
+  assert.equal(issued.status, 201);
+  const token = tokenOf(issued.json);
+  const start = await accept('start', { token, password });
+  const code = totp(start.json.totpURI);
+  assert.equal((await accept('finish', { token, code }, jar(start.cookies))).status, 200);
+  sql(db => db.exec('DELETE FROM rateLimit'));
+  const half = await admin('POST', '/api/auth/sign-in/email', { headers: adminOrigin(), body: { email, password } });
+  assert.equal(half.json.twoFactorRedirect, true);
+  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(start.json.totpURI) } });
+  assert.equal(signed.status, 200);
+  const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
+  assert.equal((await admin('GET', '/api/users', { headers })).status, 403);
+  assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
+});
+
+test('expired enrollment can be replaced, revocation removes its pending user, and only ten invites can be open', async () => {
+  await restart();
+  const email = 'abandoned@example.com', password = randomBytes(16).toString('hex');
+  const issued = await createInvite(email), token = tokenOf(issued.json);
+  assert.equal((await accept('start', { token, password })).status, 200);
+  sql(db => db.prepare('UPDATE invites SET expires = 0 WHERE id = ?').run(issued.json.id));
+  const unavailable = await accept('start', { token, password });
+  assert.equal(unavailable.status, 404);
+  const replacement = await createInvite(email);
+  assert.equal(replacement.status, 201);
+  const users = async () => (await admin('GET', '/api/users')).json.map((u: any) => u.email);
+  assert.ok(!(await users()).includes(email));
+  const next = tokenOf(replacement.json);
+  assert.equal((await accept('start', { token: next, password })).status, 200);
+  assert.equal((await admin('POST', '/api/users/invites/' + replacement.json.id + '/revoke', { body: {} })).status, 200);
+  assert.ok(!(await users()).includes(email));
+  for (const t of [next, 'unknown']) {
+    const result = await accept('start', { token: t, password });
+    assert.deepEqual([result.status, result.json], [404, unavailable.json]);
+  }
+  for (let i = 0; i < 10; i++) assert.equal((await createInvite(`cap-${i}@example.com`)).status, 201);
+  assert.equal((await createInvite(email)).status, 409);
+  sql(db => db.exec('DELETE FROM step_up'));
+  for (const path of ['/api/users/admin', '/api/users/invite', '/api/users/invites/' + replacement.json.id + '/revoke']) {
+    const r = await admin('POST', path, { body: { email, admin: true } });
+    assert.deepEqual([r.status, r.json.stepUp], [401, true]);
+  }
+});
+
+test('invite acceptance enforces the listener boundary and a shared attempt limit', async () => {
+  await restart();
+  const body = { token: 'unavailable' };
+  for (const step of ['start', 'finish']) {
+    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { origin: 'https://example.com' } })).status, 403);
+    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { host: 'example.com' } })).status, 403);
+  }
+  for (let i = 0; i < 10; i++) assert.equal((await accept(i % 2 ? 'start' : 'finish', body)).status, 404);
+  assert.equal((await accept('finish', body)).status, 429);
+});
