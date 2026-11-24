@@ -674,7 +674,7 @@ function showProfile(id, t) {
     act(e.submitter, async () => {
       let url = $('#vurl').value.trim(); if (!url) return false;
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-      if (rec?.id === id) return void withBuf(async () => addStep(await tcall('open', { url })));
+      if (rec?.id === id) return void withBuf(async (g) => addStep(g, await tcall(g, 'open', { url })));
       setVstate('Opening…');
       try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
       catch (err) { setVstate(err.message); return false; }
@@ -704,7 +704,7 @@ function showProfile(id, t) {
   $('#bRec').onclick = (e) => act(e.currentTarget, async () => {
     location.hash = `#/p/${encodeURIComponent(id)}/session`;
     await takeOver(id);
-    rec = { id, steps: [], buf: '', q: Promise.resolve() }; renderRec();
+    rec = { id, steps: [], buf: '', q: Promise.resolve(), lost: false }; renderRec();
   });
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
@@ -1101,7 +1101,7 @@ function wireControl() {
   const recording = () => on && rec?.id === view?.id;
   img.onmousedown = (e) => { if (!on) return; e.preventDefault(); img.focus(); if (recording()) return; send({ type: 'input_mouse', eventType: 'mousePressed', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) }); };
   img.onmouseup = (e) => {
-    if (recording()) { const p = pos(e); if (e.button === 0) withBuf(async () => addStep(await tcall('click', p))); return; }
+    if (recording()) { const p = pos(e); if (e.button === 0) withBuf(async (g) => addStep(g, await tcall(g, 'click', p))); return; }
     send({ type: 'input_mouse', eventType: 'mouseReleased', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) });
   };
   img.onmousemove = (e) => { if (recording() || Date.now() - lastMove < 40 && !e.buttons) return; lastMove = Date.now(); send({ type: 'input_mouse', eventType: 'mouseMoved', ...pos(e), button: e.buttons ? 'left' : 'none', clickCount: 0, modifiers: mods(e) }); };
@@ -1130,7 +1130,7 @@ function wireControl() {
   img.onpaste = (e) => {
     if (!on) return; e.preventDefault();
     const t = e.clipboardData.getData('text/plain');
-    if (recording()) { rec.buf = (rec.buf + t).slice(0, 500); return renderBuf(); }
+    if (recording()) { if (!rec.lost) rec.buf = (rec.buf + t).slice(0, 500); return renderBuf(); }
     if (t.length > 5000) return toast('Text too long (5000 characters max).', 'error');
     if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Paste failed: ${err.message}`, 'error'));
   };
@@ -1138,26 +1138,39 @@ function wireControl() {
 }
 
 // ---- Record (teach mode) ----------------------------------------------------------
-// rec = { id, steps: [{ step, matches?, field?, typed?, param?, pname? }], buf, q }. Gestures run one at a time (q).
+// rec = { id, steps: [{ step, field?, typed?, user?, param?, pname? }], buf, q, lost }. Gestures run one at a time (q),
+// each bound to the recording it started in (g): a stop, or a new recording, mid-gesture drops the rest of it.
 // Typing is buffered here and sent as one fill on the next click or key: the page shows it only then.
+// lost: the last click or typing failed, so the focus stayed on the previous field; typing is off until a click
+// goes through (the gateway refuses it too), else a password could be filled there.
 // ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
 let rec = null;
-const tcall = (a, body) => api(`/api/computers/${encodeURIComponent(rec.id)}/teach-${a}`, 'POST', body);
-function gesture(fn) { const r = rec; r.q = r.q.then(() => rec === r && fn()).catch((e) => toast(e.message, 'error')); }
-/** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(fill or login step). */
+const STALE = Symbol('stale');
+async function tcall(g, a, body) {
+  if (rec !== g) throw STALE;
+  let r;
+  try { r = await api(`/api/computers/${encodeURIComponent(g.id)}/teach-${a}`, 'POST', body); }
+  catch (e) { if (a === 'click' || a === 'type') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } throw e; }
+  if (a === 'click' || a === 'open') { g.lost = false; if (rec === g) renderBuf(); }
+  if (rec !== g) throw STALE;
+  return r;
+}
+function gesture(fn) { const g = rec; g.q = g.q.then(() => rec === g && fn(g)).catch((e) => rec === g && e !== STALE && toast(e.message, 'error')); }
+/** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(g, fill or login step). */
 function withBuf(fn) {
-  const text = rec.buf; rec.buf = ''; renderBuf();
+  const g = rec, text = g.buf; g.buf = ''; renderBuf();
   gesture(async () => {
     let r = null;
-    if (text) { r = await tcall('type', { text }); if (r.step.fill) r.typed = text; addStep(r); }
-    await fn(r);
+    if (text) { r = await tcall(g, 'type', { text }); if (r.step.fill) r.typed = text; addStep(g, r); }
+    await fn(g, r);
   });
 }
 const REC_KEYS = ['Enter', 'Tab', 'Escape'];
 function recKey(e) {
   if ((e.ctrlKey || e.metaKey) && !e.altKey) return; // shortcuts are not recorded
   // A login step submits the form itself: no Enter after it.
-  if (REC_KEYS.includes(e.key)) return withBuf(async (r) => { if (!r?.step.login) addStep(await tcall('press', { key: e.key })); });
+  if (REC_KEYS.includes(e.key)) return withBuf(async (g, r) => { if (!r?.step.login) addStep(g, await tcall(g, 'press', { key: e.key })); });
+  if (rec.lost) return renderBuf();
   if (e.key === 'Backspace') rec.buf = rec.buf.slice(0, -1);
   else if ([...e.key].length === 1) rec.buf = (rec.buf + e.key).slice(0, 500);
   else return;
@@ -1165,21 +1178,25 @@ function recKey(e) {
 }
 const same = (a, b) => a !== undefined && JSON.stringify(a) === JSON.stringify(b);
 const slug = (l) => { const s = String(l.name || l.placeholder || l.label || l.text || 'value').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30); return /^[a-z_]/.test(s) ? s : 'p_' + s; };
-function addStep(r) {
-  if (!rec) return;
-  const s = rec.steps, last = s.at(-1);
+function addStep(g, r) {
+  if (rec !== g) return;
+  const s = g.steps, last = s.at(-1);
   // One step per intent: a fill replaces the click that focused its field, or an earlier fill of the same field;
-  // a login replaces the username fill and the field clicks before it.
+  // a login replaces the field clicks (and Tabs) that led to it and the fill of its own username (r.user), nothing else.
   if (r.step.fill && last && ((last.field && same(last.step.click, r.step.fill)) || same(last.step.fill, r.step.fill))) s.pop();
-  if (r.step.login) while (s.length && (s.at(-1).step.fill || s.at(-1).field)) s.pop();
+  const nav = () => { while (s.at(-1)?.field || s.at(-1)?.step.press === 'Tab') s.pop(); };
+  if (r.step.login) { nav(); if (r.user && s.at(-1)?.typed === r.user) { s.pop(); nav(); } }
   if (r.step.fill) r.pname = slug(r.step.fill);
   s.push(r); renderRec();
 }
-function renderBuf() { setText($('#recBuf'), rec?.buf ? `Typing: ${plural(rec.buf.length, 'character')}, sent on the next click or Enter` : ''); }
+function renderBuf() {
+  setText($('#recBuf'), rec?.lost ? 'Typing is off until a click goes through: the focus may still be on the previous field'
+    : rec?.buf ? `Typing: ${plural(rec.buf.length, 'character')}, sent on the next click or Enter` : '');
+}
 /** The draft as a playbook body; ticked fills become {params}, their typed values the replay params. */
-function recBody() {
+function recBody(g) {
   const params = {};
-  const steps = rec.steps.map(({ step, param, pname, typed }) => {
+  const steps = g.steps.map(({ step, param, pname, typed }) => {
     if (!param || !step.fill) return step;
     if (!/^[A-Za-z_]\w{0,39}$/.test(pname)) throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
     params[pname] = typed; return { ...step, value: `{${pname}}` };
@@ -1195,7 +1212,6 @@ function renderRec() {
     <p class="hint">Click, type and press Enter in the view: each gesture runs as a playbook step. Typing is sent on the next click, or on Enter, Tab or Escape. In a password field, the site's saved login is used instead.</p>
     <p class="hint" id="recBuf" aria-live="polite"></p>
     ${n ? `<ol class="activity recsteps">${rec.steps.map((s, i) => `<li><code class="mono">${esc(JSON.stringify(s.step))}</code>
-      ${s.matches > 1 ? `<span class="ko">${s.matches} elements match: the first one is used</span>` : ''}
       ${s.step.fill ? `<label class="hint"><input type="checkbox" data-rparam="${i}"${s.param ? ' checked' : ''}> Param</label><input class="in mono" style="width:140px;min-height:28px" data-rpname="${i}" value="${esc(s.pname)}" aria-label="Param name">` : ''}
       <button type="button" class="btn btn-sm btn-dl" data-rdel="${i}" style="margin-left:auto">Remove</button></li>`).join('')}</ol>` : '<p class="hint">No steps yet.</p>'}
     <form class="urlbar" id="recRead"><input class="in mono" name="selector" placeholder="Output: CSS selector (optional)" autocomplete="off"><input class="in" name="contains" placeholder="or text it contains" autocomplete="off"><button type="submit" class="btn btn-sm">Add output</button></form>
@@ -1209,17 +1225,15 @@ function renderRec() {
   $('#recRead').onsubmit = (e) => {
     e.preventDefault();
     const f = e.currentTarget, selector = f.selector.value.trim(), contains = f.contains.value.trim();
-    gesture(async () => { const r = await tcall('read', { ...(selector && { selector }), ...(contains && { contains }) }); addStep(r); setText($('#recOut'), r.text); });
+    withBuf(async (g) => { const r = await tcall(g, 'read', { ...(selector && { selector }), ...(contains && { contains }) }); addStep(g, r); setText($('#recOut'), r.text); });
   };
-  // Replay runs the draft through run_playbook's path, the typed values as params.
-  $('#bRecReplay').onclick = () => act(null, () => {
-    const b = recBody();
-    gesture(async () => { setText($('#recOut'), 'Replaying…'); const r = await tcall('replay', b); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); });
-  });
+  // Replay runs the draft through run_playbook's path, the typed values as params. Replay and Save take the draft
+  // once the gestures before them (and the typing buffer) went through.
+  $('#bRecReplay').onclick = () => withBuf(async (g) => { setText($('#recOut'), 'Replaying…'); const r = await tcall(g, 'replay', recBody(g)); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); });
   // Saving goes through the playbook form: same playbook-save, same 2FA step-up.
-  $('#bRecSave').onclick = () => act(null, () => {
-    const f = $('#bookForm'); f.body.value = recBody().body;
-    location.hash = `#/p/${encodeURIComponent(rec.id)}/playbooks`; f.name.focus();
+  $('#bRecSave').onclick = () => withBuf(async (g) => {
+    const f = $('#bookForm'); f.body.value = recBody(g).body;
+    location.hash = `#/p/${encodeURIComponent(g.id)}/playbooks`; f.name.focus();
   });
 }
 
