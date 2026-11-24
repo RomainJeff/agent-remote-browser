@@ -41,13 +41,13 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
 - `src/auth/`: Better Auth setup (`better-auth.ts`), public login/consent/OAuth routes (`routes.ts`), token and admin checks (`guards.ts`), Cloudflare Access JWT (`access-jwt.ts`).
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
-- `src/cli.ts`: operator commands (`admin create`, `admin reset-2fa`, `rotate-login-key`, `backup-db`).
+- `src/cli.ts`: [operator commands](#operator-commands) for users, API keys, key rotation and backups.
 - `src/metrics.ts`: Prometheus counters and exposition.
 - `src/egress/`, `src/policy.ts`, `src/audit.ts`: egress proxy, allowlist rules, audit file and JSON logs.
 - `deploy/`: operator runbook, `backup.sh` (restic), `check-compose.ts` (`npm run check:compose`).
 - `test/unit`, `test/integration` (`npm test`), `test/e2e` (smoke), `.github/` (CI, Trivy).
 
-Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) is separate.
+Logs are JSON lines on stdout (`{level,msg,profile,tool,ms}`), never arguments or secrets. The audit file (`AUDIT_FILE`) records the signed-in user's email in `by` for admin actions.
 
 ## Gateway and runner
 
@@ -61,7 +61,7 @@ Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-onl
 
 One SQLite file, `${DATA_DIR}/arb.db` (compose: volume `arb-data`, mounted at `/data`), mode 0600, WAL, foreign keys on. Tables: `profiles` (allowlist), `logins` (one AES-256-GCM envelope per saved login, with the `key_id` of the key that sealed it, and the last admin test: `last_tested_at`, `last_result`), `leases` (token hash, expiry: they survive a restart), `step_up` (per admin session: when a second factor was last proven, failed attempts since), `handoffs`, `playbooks` (admin notes per profile, see [Playbooks](#playbooks)), `profile_headers` (one AES-256-GCM envelope per custom header, see [Custom headers](#custom-headers)), and Better Auth's tables (`user`, `account`, `session`, `twoFactor`, `verification`, `apikey`, `oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `rateLimit`, ...). Every token is stored as its sha256 (OAuth access/refresh tokens, API keys, leases); TOTP secrets are encrypted with `BETTER_AUTH_SECRET`. Deleting a profile deletes its logins, headers, leases, handoffs and playbooks (foreign key cascade), and its OAuth tokens, consents, pending codes and API keys.
 
-Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one. Lot 7b: `003` (`apikey.lastIp`), `004` (`step_up`), `005` (`logins.last_tested_at`, `last_result`). Lot 9: `006` (`handoffs`; ended ones are purged after 30 days). Lot 10c: `007` (`playbooks`). `008` (`profile_headers`). Better Auth's tables come from `002_better_auth.sql`, never from its own auto-migration; `002` also drops the Lot 3 `oauth_clients`, `oauth_tokens`, `settings` and `profiles.token_hash` (old tokens stop working, agents reconnect). Bumping `better-auth` = diff its schema (`npx @better-auth/cli generate`) and add a migration.
+Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one. Lot 7b: `003` (`apikey.lastIp`), `004` (`step_up`), `005` (`logins.last_tested_at`, `last_result`). Lot 9: `006` (`handoffs`; ended ones are purged after 30 days). Lot 10c: `007` (`playbooks`). `008` (`profile_headers`). Migration `009_users.sql` creates `admins` and grants the gateway admin role to every existing user. Better Auth's tables come from `002_better_auth.sql`, never from its own auto-migration; `002` also drops the Lot 3 `oauth_clients`, `oauth_tokens`, `settings` and `profiles.token_hash` (old tokens stop working, agents reconnect). Bumping `better-auth` = diff its schema (`npx @better-auth/cli generate`) and add a migration.
 
 Database driver: `node:sqlite` (built into Node, no native dependency, no build stage). Evidence for Lot 4 (2026-11-21): `better-auth@1.7.27` (latest) depends on `@better-auth/kysely-adapter@1.7.27`, which ships a `NodeSqliteDialect` and picks it automatically when handed a `DatabaseSync`; `node:sqlite` runs without an experimental warning on Node 24.22.1 (SQLite 3.53.4) and Node 26.13.1 (SQLite 3.54.1). `better-sqlite3` would add a native build for nothing.
 
@@ -175,15 +175,15 @@ Better Auth `1.7.27` (pinned, with `@better-auth/oauth-provider`, `@better-auth/
 - **Agents, OAuth 2.1**: `/.well-known/oauth-protected-resource` points to the issuer `${PUBLIC_URL}/api/auth`. Dynamic client registration (or a CIMD client id URL), PKCE S256 only, access tokens `arb_at_` (1 h), refresh tokens `arb_rt_` (30 days, rotated). The admin signs in on `/login` (password + TOTP or a backup code) and picks on `/consent` which scope the client gets: `profile:<id>` or `global`. The consent page shows the client id, whether it is a self-registered DCR client ("unverified": its name is self-declared) or a CIMD client (name vouched for by its metadata URL's domain), how long ago it registered, and a note for loopback redirect URIs. Granting `global` to a DCR client takes a second, explicit confirmation behind a warning. Both pages work without JavaScript, and send `Referrer-Policy: same-origin` (under `no-referrer` a browser sends `Origin: null` on the form POST, which the Origin check refuses). Signups are disabled.
 - **Agents, API keys**: `arb_k_...`, created in the admin UI with a scope (`profile:<id>` or `global`) and a mandatory expiry (30 days, 90 days, 1 year, or a date 1 to 365 days ahead), shown once. Send as `Authorization: Bearer` or `x-api-key`. The key list shows each key's expiry and last client IP (as normalized by `TRUST_PROXY`). Keys created before Lot 7b have no expiry: they keep working, are listed with `noExpiry: true`, and should be rotated (create a new one, revoke the old one).
 - **Admin UI** (one HTML file, one script under a CSP nonce, no CDN): *Profiles* (list with state; per profile, tabs Session with live view, lease and "Extend 30 min", Logins with login test, Playbooks (editor with Form and Markdown tabs kept in sync: description, notes, steps one row each, placeholders, fallback; a step the form cannot show stays as JSON), Domains, Diagnostics, Settings), *Agent access* (OAuth clients and API keys; key dialog with mandatory expiry, key shown once), *Security* (step-up window, backup codes, `reset-2fa` command). A sensitive action that gets `401 {stepUp: true}` prompts for a code, then replays the action. Agent requests: see [Human handoff](#human-handoff).
-- **Admin**: one admin per gateway, email + password (12 to 128 characters) + mandatory TOTP (or one of 10 single-use backup codes). Session cookie, 12 h. On the admin listener only, "Trust this device for 30 days" skips the TOTP step at sign-in (a `trust_device` cookie, rotated on each use); the public listener neither issues nor reads it. Sensitive actions (create or revoke a key or client, save or delete a login, a header or a playbook, change a profile's domains, delete a profile) need a second factor proven in the last 15 minutes (step-up): the sign-in TOTP counts, a trusted-device sign-in does not. Host and Origin checked on every call. Admin UI on `:18788` (localhost) only, unless `ADMIN_PUBLIC=1` (then also on `PUBLIC_URL`, behind Cloudflare Access: `ACCESS_AUD` and `ACCESS_TEAM` are required; the Access email must be the admin's). When `PUBLIC_URL` is https, the `:18788` listener uses its own Better Auth instance (same database and secret) with base URL `http://localhost:18788`, so its cookies carry no `Secure`/`__Secure-` prefix and still work through an SSH forward; the public listener's cookies are `Secure`. The Access JWKS is cached 1 h and refetched on an unknown key id (at most once a minute).
+- **Gateway users** sign in with an email, a password (12 to 128 characters) and mandatory TOTP (or one of 10 single-use backup codes). Session cookie, 12 h. On the admin listener only, "Trust this device for 30 days" skips the TOTP step at sign-in (a `trust_device` cookie, rotated on each use); the public listener neither issues nor reads it. Sensitive actions (create or revoke a key or client, save or delete a login, a header or a playbook, change a profile's domains, delete a profile) need a second factor proven in the last 15 minutes (step-up): the sign-in TOTP counts, a trusted-device sign-in does not. Host and Origin checked on every call. Admin UI on `:18788` (localhost) only, unless `ADMIN_PUBLIC=1` (then also on `PUBLIC_URL`, behind Cloudflare Access: `ACCESS_AUD` and `ACCESS_TEAM` are required; the Access email must be the admin's). When `PUBLIC_URL` is https, the `:18788` listener uses its own Better Auth instance (same database and secret) with base URL `http://localhost:18788`, so its cookies carry no `Secure`/`__Secure-` prefix and still work through an SSH forward; the public listener's cookies are `Secure`. The Access JWKS is cached 1 h and refetched on an unknown key id (at most once a minute).
 - **Limits** (stored in `rateLimit`, per client IP: `cf-connecting-ip` with `TRUST_PROXY=cloudflare`, else the TCP peer address): sign-in 5/min, TOTP 5/min (then 15 min lockout after 5 failures), consent 10/min, token 30/min. Client registration: 5/min per IP, 20/h and 1000 clients overall; clients never granted anything are purged after 24 h.
 - `BETTER_AUTH_SECRET` (Docker secret `better_auth_secret`, at least 32 characters) signs cookies and encrypts TOTP secrets. Changing it signs everyone out and invalidates every TOTP enrolment (`admin reset-2fa`). `PUBLIC_URL` is Better Auth's base URL (`BETTER_AUTH_URL`).
 
 ### Admin
 
 ```sh
-docker compose exec gateway node src/cli.ts admin create you@example.com   # password, then a TOTP code
-docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com # new password + new TOTP, sessions dropped
+docker compose run --rm --no-deps gateway node src/cli.ts admin create you@example.com   # password, then a TOTP code
+docker compose run --rm --no-deps gateway node src/cli.ts admin reset-2fa you@example.com # new password + new TOTP, sessions dropped
 ```
 
 Both prompt for the password (hidden on a TTY, one line on stdin otherwise), print an `otpauth://` URI to add to an authenticator app, then ask for a code from the app to confirm. Once confirmed, they print 10 backup codes (`xxxxx-xxxxx`, one use each, stored encrypted). **The `otpauth://` URI and the backup codes are the only secrets the CLI ever prints**, once: store the codes offline, then clear the terminal. Nothing else (password, `BETTER_AUTH_SECRET`, keys) is ever output. 2FA enrolment is CLI-only (host access), never in the admin UI. A lost authenticator: sign in with a backup code, or `admin reset-2fa` from the host (new codes, old ones void).
@@ -231,7 +231,21 @@ Back up the key and `arb.db` separately: `arb.db` with `deploy/backup.sh` (resti
 
 ### Operator commands
 
-Run with the gateway stopped; they write `arb.db` and the key file, and print counts and ids only.
+Run user management and login key rotation with the gateway stopped. Use `docker compose run --rm --no-deps gateway node src/cli.ts` followed by a command below. Backup and API key commands can also run against a live gateway with `docker compose exec gateway node src/cli.ts`.
+
+| Command | Effect |
+| --- | --- |
+| `admin create <email>` | Bootstrap the gateway with its first admin. Requires an empty user list. |
+| `user create <email> [--admin]` | Enroll a new user with a password and TOTP. Add `--admin` to grant the gateway admin role. |
+| `user list` | List each email with its admin role, 2FA status and creation date. |
+| `user admin <email> on\|off` | Grant or revoke the gateway admin role. The last admin keeps the role. |
+| `user remove <email>` | Delete the user, their sessions, API keys, OAuth tokens and consents. Removing the last admin is refused. |
+| `admin reset-2fa <email>` | Reset any user's password and TOTP and drop their sessions. |
+| `key create <profile>\|--global <file> [days] [--as <email>]` | Write a key to a new mode-0600 file. The first gateway admin owns the key by default. Supply `--as` to choose another user. Valid for 1 to 365 days, default 1. |
+| `key revoke <id>` | Revoke the API key with this id. |
+| `backup-db <file>` | Write a consistent database snapshot to a new file. |
+
+Every enrolled user currently has full admin UI access, including users listed with `admin=no`.
 
 ```sh
 docker compose stop gateway

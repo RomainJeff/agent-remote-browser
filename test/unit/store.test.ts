@@ -29,7 +29,7 @@ const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() a
 
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
   assert.equal(version(db), LATEST);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
@@ -37,7 +37,7 @@ test('migrations: empty db gets every table, WAL, foreign keys; re-running is a 
   db.close();
   const again = openDb(f.db);
   assert.equal(version(again), LATEST);
-  assert.equal(tables(again).length, BA.length + 7);
+  assert.equal(tables(again).length, BA.length + 8);
   again.close();
 });
 
@@ -55,7 +55,7 @@ test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens
 
   const db = openDb(f.db);
   assert.equal(version(db), LATEST);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
   assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
   for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
