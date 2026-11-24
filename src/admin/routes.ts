@@ -243,8 +243,9 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       }
       // Record mode: each gesture becomes a semantic step, run instead of the raw input (teach.ts).
       if (act.startsWith('teach-')) {
-        if (!driving(id)) return send(res, 409, { error: 'Leased by an agent: take over its request or force release' });
-        const [code, r] = await pc.serial(id, () => teach(act, id, p, body));
+        // Checked in the queue: an agent may lease the profile while this gesture waits behind another.
+        const [code, r] = await pc.serial(id, async () => driving(id) ? teach(act, id, p, body)
+          : [409, { error: 'Leased by an agent: take over its request or force release' }] as const);
         return send(res, code, r);
       }
       if (act === 'copy') return send(res, 200, { text: String((await pc.serial(id, () => pc.ab(id, ['eval', SELECTION]))).result ?? '') });
