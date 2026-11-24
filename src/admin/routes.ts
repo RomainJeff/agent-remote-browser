@@ -16,9 +16,10 @@ import { log, errCode } from '../audit.ts';
 import { createAccessVerifier } from '../auth/access-jwt.ts';
 import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
+import { teacher } from './teach.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-type|teach-press|teach-open|teach-read|teach-replay';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -39,6 +40,7 @@ function keyTtl(expiresIn: unknown, expiresAt: unknown) {
 
 export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, handoffs, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
+  const teach = teacher({ computers: pc, driver, store });
   // A human may drive a leased browser only while handling the agent's request (paste, saved-login fill, live input).
   const driving = (id: string) => !leases.of(id) || handoffs.open(id)?.state === 'taken';
   const pubUrl = new URL(cfg.publicUrl);
@@ -238,6 +240,12 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const [, dashes, rest] = t.match(/^(-*)([\s\S]*)$/)!; // a leading dash would read as a flag
         await pc.serial(id, async () => { for (const s of [...dashes, rest]) if (s) await pc.ab(id, ['keyboard', 'inserttext', s]); });
         return send(res, 200, { pasted: true });
+      }
+      // Record mode: each gesture becomes a semantic step, run instead of the raw input (teach.ts).
+      if (act.startsWith('teach-')) {
+        if (!driving(id)) return send(res, 409, { error: 'Leased by an agent: take over its request or force release' });
+        const [code, r] = await pc.serial(id, () => teach(act, id, p, body));
+        return send(res, code, r);
       }
       if (act === 'copy') return send(res, 200, { text: String((await pc.serial(id, () => pc.ab(id, ['eval', SELECTION]))).result ?? '') });
       if (act === 'stop') { await pc.serial(id, () => pc.stop(id)); return send(res, 200, { stopped: true }); }
