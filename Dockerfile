@@ -7,7 +7,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # ponytail: version pinned on purpose, upgrade deliberately (API moves fast)
-ARG AB_VERSION=0.43.0
+ARG AB_VERSION=0.44.0
 RUN npm i -g agent-browser@${AB_VERSION} && npm cache clean --force \
  && useradd -m -u 10001 agent && mkdir -p /home/agent/.agent-browser && chown -R agent /home/agent
 
