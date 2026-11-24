@@ -160,6 +160,11 @@
   .screen .nosig { display: grid; place-items: center; height: clamp(200px, 36vh, 360px); padding: 20px; text-align: center; color: #9199A1;
     background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; }
   .screen .nosig b { display: block; color: #E9EBEC; font-size: 15px; margin-bottom: 4px; }
+  /* Page loading: spinner in the address bar, indeterminate bar over the view. */
+  .vload { align-self: center; flex: none; width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--ok); border-radius: 50%; animation: spin .7s linear infinite; }
+  .screen.loading::after { content: ""; position: absolute; top: 0; left: 0; z-index: 1; width: 30%; height: 3px; background: var(--ok); animation: slide 1.1s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
   .screen .veil { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(13,17,22,.55); color: #fff; font-weight: 600; text-align: center; }
   .b-ctl .fill { flex-basis: 100%; display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--warn-line); font-weight: 400; color: var(--ink); }
   .b-ctl .fill > span { flex: 1 1 220px; }
@@ -326,6 +331,8 @@ const api = async (path, method = 'GET', body) => {
 let computers = [], clients = null, me = {};
 const TITLE = document.title;
 let page = '', selected = null, tab = 'session', view = null; // view = { id, ws, control, url }
+const NOSIG = '<div class="nosig"><div><b>No signal</b>Watch shows a running browser. Take over starts it if needed.</div></div>';
+let opening = false; // the Open button's request is in flight
 let logins = [];     // saved logins of the selected profile (detail poll): the takeover banner offers the ones matching the page
 let authed = false;  // polling stops while the sign-in screen is up
 let keys = {};       // last rendered data per section: polling only touches the DOM when data changed
@@ -579,8 +586,8 @@ function showProfile(id, t) {
           <span class="grow"></span><span class="vstate" id="vstate" aria-live="polite">No view</span><span class="hint" id="vfps"></span>
         </div>
         <form class="urlbar" id="nav"><label for="vurl" class="sr">Address</label>
-          <input class="in mono" id="vurl" placeholder="https://… (allowed domains only)" autocomplete="off"><button type="submit" class="btn">Open</button></form>
-        <div class="bezel"><div class="screen" id="screen"><div class="nosig"><div><b>No signal</b>Watch shows a running browser. Take over starts it if needed.</div></div></div></div>
+          <input class="in mono" id="vurl" placeholder="https://… (allowed domains only)" autocomplete="off"><span class="vload" id="vload" title="Page loading" hidden><span class="sr">Page loading</span></span><button type="submit" class="btn">Open</button></form>
+        <div class="bezel"><div class="screen" id="screen">${NOSIG}</div></div>
         <div class="vfoot"><span id="vViewers"></span><span class="pt" id="pageinfo"></span></div>
       </section>
       <div class="stack">
@@ -676,9 +683,10 @@ function showProfile(id, t) {
       let url = $('#vurl').value.trim(); if (!url) return false;
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
       if (rec?.id === id) return void withBuf(async (g) => addStep(g, await tcall(g, 'open', { url })));
-      setVstate('Opening…');
-      try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
+      setVstate('Opening…'); opening = true; paintLoading();
+      try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); } // `open` returns once the page fired load
       catch (err) { setVstate(err.message); return false; }
+      finally { opening = false; paintLoading(); }
       refreshDetail();
     });
   };
@@ -1060,31 +1068,56 @@ async function takeOver(id) {
   if (computers.find((x) => x.id === id)?.handoff) await api(`/api/computers/${encodeURIComponent(id)}/handoff-take`, 'POST');
   await takeControl(id);
 }
+function paintLoading() {
+  const on = opening || !!view?.since;
+  $('#screen')?.classList.toggle('loading', on);
+  const s = $('#vload'); if (s) s.hidden = !on;
+}
+// ponytail: the stream protocol has no load event (frame, status, tabs, url, console only), so a navigation (url message)
+// counts as loading until frames stop changing for 1 s, 15 s max. Upgrade: the gateway runs `wait --load load` and sends a message.
+function loading(v, nav) {
+  if (nav) v.since = Date.now();
+  else if (!v.since || Date.now() - v.since > 15_000) return;
+  clearTimeout(v.settle);
+  v.settle = setTimeout(() => { v.since = 0; paintLoading(); }, 1000);
+  paintLoading();
+}
 function openView(id, control) {
   if (view?.id === id) { view.control = control; wireControl(); renderLiveBar(); return; }
   closeView();
   if (!$('#screen')) return;
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/computers/${encodeURIComponent(id)}/stream?pacing=ack&maxFps=20`);
   view = { id, ws, control, meta: null, frames: 0 };
-  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live view of the browser">';
+  // The image stays hidden until its first frame: an empty <img> renders nothing, not a loading state.
+  $('#screen').innerHTML = '<img id="frame" tabindex="0" alt="Live view of the browser" hidden><div class="nosig" id="vwait"><div><b>Connecting…</b>Waiting for the first image of the page.</div></div>';
+  $('#screen').classList.add('loading');
   const img = $('#frame'), v = view;
   ws.onopen = () => { setVstate(v.control ? 'You have control' : 'Live', v.control ? 'control' : 'watch'); };
-  ws.onclose = () => { if (view === v) { view = null; setVstate('View closed'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderLiveBar(); } };
+  ws.onclose = () => { if (view === v) { view = null; clearTimeout(v.settle); if (!v.seen && $('#screen')) $('#screen').innerHTML = NOSIG; paintLoading(); setVstate('View closed'); setText($('#vfps'), ''); $('#screen')?.classList.remove('control'); renderLiveBar(); } };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'frame') {
-      v.meta = msg.metadata; v.frames++;
-      img.onload = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'ack', seq: msg.seq }));
+      v.meta = msg.metadata; v.frames++; loading(v);
+      img.onload = () => {
+        if (!v.seen) { v.seen = true; img.hidden = false; $('#vwait')?.remove(); paintLoading(); }
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ack', seq: msg.seq }));
+      };
       img.src = 'data:image/jpeg;base64,' + msg.data;
     } else if (msg.type === 'url') {
-      v.url = msg.url; renderLiveBar();
+      v.url = msg.url; loading(v, true); renderLiveBar();
       if ($('#vurl') && document.activeElement !== $('#vurl')) $('#vurl').value = msg.url === 'about:blank' ? '' : msg.url;
     }
   };
   wireControl();
   renderLiveBar();
 }
-function closeView() { if (rec) { rec = null; renderRec(); } if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
+function closeView() {
+  const v = view, s = $('#screen');
+  if (rec) { rec = null; renderRec(); }
+  if (v) { view = null; clearTimeout(v.settle); v.ws.close(); if (!v.seen && s) s.innerHTML = NOSIG; }
+  if (s) s.classList.remove('control');
+  setText($('#vfps'), ''); paintLoading();
+}
 
 // Human input -> agent-browser stream protocol (same fields as its own dashboard).
 // The remote Chrome runs on Linux: on a Mac, Cmd is sent as Ctrl so Cmd+A, Cmd+Z... behave as expected.
