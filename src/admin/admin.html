@@ -704,7 +704,7 @@ function showProfile(id, t) {
   $('#bRec').onclick = (e) => act(e.currentTarget, async () => {
     location.hash = `#/p/${encodeURIComponent(id)}/session`;
     await takeOver(id);
-    rec = { id, steps: [], buf: '', q: Promise.resolve(), lost: false }; renderRec();
+    rec = { id, rid: crypto.getRandomValues(new Uint32Array(4)).join('-'), steps: [], buf: '', q: Promise.resolve(), lost: false }; renderRec();
   });
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
@@ -1138,32 +1138,37 @@ function wireControl() {
 }
 
 // ---- Record (teach mode) ----------------------------------------------------------
-// rec = { id, steps: [{ step, field?, typed?, user?, form?, param?, pname? }], buf, q, lost, seq?, pick? }.
+// rec = { id, rid, steps: [{ step, field?, typed?, param?, pname? }], buf, q, lost, seq?, pick? }.
 // Gestures run one at a time (q), each bound to the recording it started in (g): a stop, or a new recording,
 // mid-gesture drops the rest of it.
 // Typing is buffered here and sent as one fill on the next click or key: the page shows it only then.
-// lost: the last gesture (other than a read) failed, so the focus stayed on the previous field; typing is off until a
-// click goes through (the gateway refuses it too), else a password could be filled there.
-// seq: the last gesture that may move the focus; typing names it (after), so the gateway refuses text that follows a
-// gesture it did not run. pick: the saved logins of the site to pick from, for a password field.
+// lost: the last gesture (other than a read) failed, a replay that stopped partway included, so the focus may be on
+// another field; typing is off until a click goes through (the gateway refuses it too), else a password could be filled there.
+// seq: the last gesture that may move the focus; typing names it (after) and this recording (rid, every call), so the
+// gateway refuses text that follows a gesture it did not run, or one of another tab's recording.
+// pick: the saved logins of the site to pick from, for a password field; Save and Replay wait for it.
 // ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
 let rec = null;
 let SEQ = 0;
 const STALE = Symbol('stale');
 async function tcall(g, a, body) {
   if (rec !== g) throw STALE;
-  body = a === 'type' ? { ...body, after: g.seq } : a === 'read' ? body : { ...body, seq: g.seq = ++SEQ };
+  body = { ...body, rec: g.rid, ...(a === 'type' ? { after: g.seq } : a === 'read' ? {} : { seq: g.seq = ++SEQ }) };
+  const fail = () => { if (a !== 'read') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } };
   let r;
   try { r = await api(`/api/computers/${encodeURIComponent(g.id)}/teach-${a}`, 'POST', body); }
-  catch (e) { if (a !== 'read') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } throw e; }
+  catch (e) { fail(); throw e; }
+  // A replay that stopped partway left the focus wherever it stopped.
+  if (a === 'replay' && !r.ok) fail();
   if (a === 'click' || a === 'open') { g.lost = false; if (rec === g) renderBuf(); }
   if (rec !== g) throw STALE;
   return r;
 }
 function gesture(fn) { const g = rec; g.q = g.q.then(() => rec === g && fn(g)).catch((e) => rec === g && e !== STALE && toast(e.message, 'error')); }
-/** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(g, fill or login step). */
-function withBuf(fn) {
-  const g = rec, text = g.buf; g.buf = ''; g.pick = null; renderBuf();
+/** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(g, fill or login step).
+ *  draft (Save, Replay): a login still to pick stops it, else the draft would miss the login; a gesture in the view drops the pick. */
+function withBuf(fn, draft) {
+  const g = rec, text = g.buf; g.buf = ''; if (!draft) g.pick = null; renderBuf();
   gesture(async () => {
     let r = null;
     if (text) {
@@ -1175,6 +1180,7 @@ function withBuf(fn) {
       if (r.step.fill) r.typed = text;
       addStep(g, r);
     }
+    if (draft && g.pick) throw new Error('Pick the saved login to use first, or Cancel');
     await fn(g, r);
   });
 }
@@ -1195,20 +1201,21 @@ function addStep(g, r) {
   if (rec !== g) return;
   const s = g.steps, last = s.at(-1);
   // One step per intent: a fill replaces the click that focused its field, or an earlier fill of the same field;
-  // a login replaces the field clicks (and Tabs) that led to it and the fill of its own username (r.user) in its own form
-  // (r.form; none known: the fill is kept), nothing else.
+  // a login replaces the field clicks (and Tabs) that led to it, nothing else (a username fill before it stays: harmless,
+  // and a field that only looks like it may be a required one).
   if (r.step.fill && last && ((last.field && same(last.step.click, r.step.fill)) || same(last.step.fill, r.step.fill))) s.pop();
   const nav = () => { while (s.at(-1)?.field || s.at(-1)?.step.press === 'Tab') s.pop(); };
-  if (r.step.login) { nav(); const u = s.at(-1); if (r.user && r.form !== undefined && u?.typed === r.user && u.form === r.form) { s.pop(); nav(); } }
+  if (r.step.login) nav();
   if (r.step.fill) { const b = slug(r.step.fill); let n = b, i = 2; while (s.some((x) => x.pname === n)) n = `${b}_${i++}`; r.pname = n; }
   s.push(r); renderRec();
 }
 function renderBuf() {
   // Pending typing counts: Replay and Save send it first.
-  for (const b of [$('#bRecReplay'), $('#bRecSave')]) if (b) b.disabled = !rec?.steps.length && !rec?.buf;
+  for (const b of [$('#bRecReplay'), $('#bRecSave')]) if (b) b.disabled = !!rec?.pick || (!rec?.steps.length && !rec?.buf);
   const el = $('#recBuf'); if (!el) return;
   if (rec?.pick) {
-    el.innerHTML = `Several saved logins for this site, use: ${rec.pick.map((l, i) => `<button type="button" class="btn btn-sm" data-rpick="${i}">${esc(l.site)} (${esc(l.username)})</button>`).join(' ')}`;
+    el.innerHTML = `Several saved logins for this site, use: ${rec.pick.map((l, i) => `<button type="button" class="btn btn-sm" data-rpick="${i}">${esc(l.site)} (${esc(l.username)})</button>`).join(' ')} <button type="button" class="btn btn-sm" id="bRecPickNo">Cancel</button>`;
+    $('#bRecPickNo', el).onclick = () => { rec.pick = null; renderBuf(); };
     for (const b of $$('[data-rpick]', el)) b.onclick = () => {
       const g = rec, site = g.pick[+b.dataset.rpick].site; g.pick = null; renderBuf();
       gesture(async () => addStep(g, await tcall(g, 'type', { login: site })));
@@ -1223,7 +1230,7 @@ function recBody(g) {
   const params = {};
   const steps = g.steps.map(({ step, param, pname, typed }) => {
     if (!param || !step.fill) return step;
-    if (!/^[A-Za-z_]\w{0,39}$/.test(pname)) throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
+    if (!/^[A-Za-z_]\w{0,39}$/.test(pname) || pname === '__proto__') throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
     if (Object.hasOwn(params, pname) && params[pname] !== typed) throw new Error(`Param "${pname}" is used for different values: rename one`);
     params[pname] = typed; return { ...step, value: `{${pname}}` };
   });
@@ -1255,12 +1262,12 @@ function renderRec() {
   };
   // Replay runs the draft through run_playbook's path, the typed values as params. Replay and Save take the draft
   // once the gestures before them (and the typing buffer) went through.
-  $('#bRecReplay').onclick = () => withBuf(async (g) => { setText($('#recOut'), 'Replaying…'); const r = await tcall(g, 'replay', recBody(g)); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); });
+  $('#bRecReplay').onclick = () => withBuf(async (g) => { setText($('#recOut'), 'Replaying…'); const r = await tcall(g, 'replay', recBody(g)); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); }, true);
   // Saving goes through the playbook form: same playbook-save, same 2FA step-up.
   $('#bRecSave').onclick = () => withBuf(async (g) => {
     const f = $('#bookForm'); f.body.value = recBody(g).body; f.body.dispatchEvent(new Event('input'));
     location.hash = `#/p/${encodeURIComponent(g.id)}/playbooks`; f.name.focus();
-  });
+  }, true);
 }
 
 // ---- Agent access: OAuth clients (scope picked at consent) and API keys -----------------
