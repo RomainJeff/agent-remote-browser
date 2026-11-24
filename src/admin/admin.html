@@ -501,8 +501,8 @@ function showInvite(token) {
   step(0, 'Accept invitation', '<label class="f">New password<input class="in" type="password" name="password" autocomplete="new-password" required></label>', async (f) => {
     const { totpURI } = await api('/api/invite/start', 'POST', { token, password: f.password.value });
     if (!f.isConnected) return;
-    step(1, 'Set up your authenticator', `<label class="f">Authenticator URI<textarea class="in mono" readonly>${esc(totpURI)}</textarea></label>
-      <label class="f">6-digit code<input class="in codein" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>`, async (form) => {
+    step(1, 'Set up your authenticator', `<label class="f">Add this link to your authenticator app<textarea class="in mono" readonly>${esc(totpURI)}</textarea></label>
+      <label class="f">6-digit code shown in the app<input class="in codein" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>`, async (form) => {
       const { backupCodes } = await api('/api/invite/finish', 'POST', { token, code: form.code.value.trim() });
       if (form.isConnected) box.innerHTML = `${progress(2)}<div class="stack"><h1>Save your backup codes</h1><pre>${esc(backupCodes.join('\n'))}</pre><a href="#/profiles">Sign in</a></div>`;
     });
