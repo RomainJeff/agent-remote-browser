@@ -16,7 +16,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 now() { python3 -c 'import time; print(int(time.time() * 1000))'; }
 
-TWO='[0-9][0-9,.]*[^0-9,.]+[0-9][0-9,.]*'  # two whole numbers, as in check-quota.sh
+TWO='(?<![A-Za-z0-9.,])[0-9][0-9,.]*(?![A-Za-z0-9])'  # two standalone numbers, as in check-quota.sh
 runs=()
 for i in $(seq "$N"); do
   t0=$(now)
@@ -27,8 +27,10 @@ for i in $(seq "$N"); do
   ms=$(( $(now) - t0 ))
   r=$(jq -s --argjson ms "$ms" --argjson rc "$rc" --arg two "$TWO" '[.[] | select(.type == "item.completed") | .item
       | select(.type | IN("agent_message", "reasoning", "todo_list", "error") | not)] as $calls
-    | [$calls[] | select(.type == "mcp_tool_call" and (.tool | test("^(run_steps|run_playbook|pb_.+)$")))
-      | .result.content[0].text? // "" | split("\n")[0] | fromjson? // {}] as $b
+    # A browser call that started but never completed counts as a failed reply (last event per item id).
+    | ([.[] | select(.type | IN("item.started", "item.completed")) | .item
+      | select(.type == "mcp_tool_call" and (.tool | test("^(run_steps|run_playbook|pb_.+)$")))] | group_by(.id) | map(last)
+      | map(.result.content[0].text? // "" | split("\n")[0] | fromjson? // {})) as $b
     | last(.[] | select(.type == "turn.completed")) as $turn
     | (last(.[] | select(.type == "item.completed" and .item.type == "agent_message")).item.text // "") as $a | {
     input_tokens: $turn.usage.input_tokens,
@@ -38,7 +40,7 @@ for i in $(seq "$N"); do
     browser_ms: ($b | map(.ms // empty) | add),
     ms: $ms,
     exit: $rc,
-    ok: ($rc == 0 and $turn != null and ($b | length > 0 and all(.ok == true)) and ($a | test($two))),
+    ok: ($rc == 0 and $turn != null and ($b | length > 0 and all(.ok == true)) and ($a | [scan($two)] | length >= 2)),
     answer: ($a | .[0:200])}' "$tmp/run$i.jsonl" 2> /dev/null) || r=$(jq -n --argjson rc "$rc" '{exit: $rc, ok: false, answer: "unparseable output"}')
   echo "run $i: $(jq -c . <<<"$r")"
   runs+=("$r")
