@@ -22,21 +22,30 @@ ARB_TOKEN="$ARB_TOKEN" jq -n --arg url "$ARB_MCP_URL" \
   '{mcpServers: {arb: {type: "http", url: $url, headers: {Authorization: ("Bearer " + env.ARB_TOKEN)}}}}' > "$tmp/mcp.json"
 unset ARB_TOKEN
 
+# The answer must hold two whole numbers ("1,234 / 2,500", "1234 of 2500").
+TWO='[0-9][0-9,.]*[^0-9,.]+[0-9][0-9,.]*'
 runs=()
 for i in $(seq "$N"); do
   # Empty cwd and no settings: no CLAUDE.md, hooks or other MCP servers in the measure. Only the arb tools are allowed.
+  rc=0
   (cd "$tmp" && claude -p "$PROMPT" --mcp-config "$tmp/mcp.json" --strict-mcp-config --setting-sources project \
-    --tools "" --allowedTools mcp__arb --no-session-persistence --output-format stream-json --verbose) > "$tmp/run$i.jsonl"
-  r=$(jq -s '[.[] | select(.type == "user") | .message.content[]? | select(.type == "tool_result")
-      | (.content | if type == "array" then map(.text? // "") | join("") else . end) | split("\n")[0] | fromjson? | select(.ms?)] as $b
-    | (last(.[] | select(.type == "result")).result // "") as $a | {
-    input_tokens: (last(.[] | select(.type == "result")).usage | .input_tokens + .cache_creation_input_tokens + .cache_read_input_tokens),
-    tool_use: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use")] | length,
-    tools: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use") | .name | sub("^mcp__arb__"; "")],
-    browser_ms: ($b | map(.ms) | add),
-    ms: last(.[] | select(.type == "result")).duration_ms,
-    ok: ((last(.[] | select(.type == "result")).is_error | not) and ($b | length > 0 and all(.ok == true)) and ($a | test("[0-9][^0-9]+[0-9]"))),
-    answer: ($a | .[0:200])}' "$tmp/run$i.jsonl")
+    --tools "" --allowedTools mcp__arb --no-session-persistence --output-format stream-json --verbose) > "$tmp/run$i.jsonl" || rc=$?
+  # Browser calls (run_steps, run_playbook, pb_*) are matched to their reply by tool_use_id: each needs a JSON reply with ok:true.
+  r=$(jq -s --argjson rc "$rc" '[.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use")
+      | {id, name: (.name | sub("^mcp__arb__"; ""))}] as $calls
+    | ([.[] | select(.type == "user") | .message.content[]? | select(.type == "tool_result")
+      | {key: .tool_use_id, value: ((.content | if type == "array" then map(.text? // "") | join("") else . end) | split("\n")[0] | fromjson? // {})}]
+      | from_entries) as $reply
+    | [$calls[] | select(.name | test("^(run_steps|run_playbook|pb_.+)$")) | $reply[.id] // {}] as $b
+    | last(.[] | select(.type == "result")) as $res | ($res.result // "") as $a | {
+    input_tokens: ($res.usage | .input_tokens + .cache_creation_input_tokens + .cache_read_input_tokens),
+    tool_use: ($calls | length),
+    tools: ($calls | map(.name)),
+    browser_ms: ($b | map(.ms // empty) | add),
+    ms: $res.duration_ms,
+    exit: $rc,
+    ok: ($rc == 0 and $res != null and ($res.is_error | not) and ($b | length > 0 and all(.ok == true)) and ($a | test($two))),
+    answer: ($a | .[0:200])}' --arg two "$TWO" "$tmp/run$i.jsonl" 2> /dev/null) || r=$(jq -n --argjson rc "$rc" '{exit: $rc, ok: false, answer: "unparseable output"}')
   echo "run $i: $(jq -c . <<<"$r")"
   runs+=("$r")
 done
@@ -47,4 +56,4 @@ printf '%s\n' "${runs[@]}" | jq -s -c --arg label "$label" --arg at "$(date -u +
    failed: map(select(.ok | not) | .answer),
    median_input_tokens: (map(select(.ok) | .input_tokens) | median), median_tool_use: (map(select(.ok) | .tool_use) | median),
    median_ms: (map(select(.ok) | .ms) | median), median_browser_ms: (map(select(.ok) | .browser_ms // empty) | median),
-   runs: map({input_tokens, tool_use, ms, browser_ms, tools, ok})}' | tee -a "$here/results.jsonl"
+   runs: map({input_tokens, tool_use, ms, browser_ms, tools, exit, ok})}' | tee -a "$here/results.jsonl"
