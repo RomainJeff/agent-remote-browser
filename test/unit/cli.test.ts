@@ -19,7 +19,7 @@ let n = 0;
 function fresh() {
   const dir = join(scratch, String(++n));
   mkdirSync(dir);
-  const env = { DATA_DIR: join(dir, 'data'), LOGIN_KEY_FILE: join(dir, 'login.key'), ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: randomBytes(32).toString('hex') };
+  const env = { AUDIT_FILE: join(dir, 'audit.jsonl'), DATA_DIR: join(dir, 'data'), LOGIN_KEY_FILE: join(dir, 'login.key'), ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: randomBytes(32).toString('hex') };
   const lines: string[] = [];
   const run = (args: string[], ask?: Parameters<typeof main>[3]) => main(args, env, (l) => lines.push(l), ask);
   const withStore = <T>(fn: (s: ReturnType<typeof openStore>, db: DatabaseSync) => T) => {
@@ -178,6 +178,10 @@ test('key ownership: default to the first admin, honor --as, and remove only key
   const defaultKey = await makeKey('default');
   const memberKey = await makeKey('member', '--as', member.toUpperCase());
   const secondMemberKey = await makeKey('another', '2', '--as', member);
+  const profile = parseProfileId('private')!;
+  t.withStore((s, db) => s.createProfile(profile, ['example.com'], String(db.prepare('SELECT id FROM user WHERE email = ?').get(member)!.id)));
+  await assert.rejects(t.run(['user', 'remove', member]), /admin UI/);
+  t.withStore(s => s.deleteProfile(profile));
   await t.run(['user', 'remove', member]);
   for (const key of [memberKey, secondMemberKey]) await assert.rejects(t.run(['key', 'revoke', key]), /No key/);
   assert.equal(await t.run(['key', 'revoke', defaultKey]), 0);

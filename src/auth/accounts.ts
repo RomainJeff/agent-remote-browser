@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Auth } from './better-auth.ts';
+import { tx } from '../store/db.ts';
+import type { Audit } from '../audit.ts';
 
 export class AccountError extends Error {
   status: number;
@@ -65,18 +67,57 @@ export function deleteSessions(db: DatabaseSync, id: string) {
   db.prepare('DELETE FROM session WHERE userId = ?').run(id);
 }
 
-export function listUsers(db: DatabaseSync) {
-  return db.prepare(`SELECT email, admins.user_id IS NOT NULL AS admin, twoFactorEnabled, createdAt,
-    email IN pending_emails AS pending FROM user LEFT JOIN admins ON admins.user_id = user.id ORDER BY email`).all()
-    .map(r => ({ email: r.email, admin: !!r.admin, twoFactorEnabled: !!r.twoFactorEnabled, createdAt: r.createdAt, pending: !!r.pending }));
+const privateProfiles = `SELECT profile, user_id FROM profile_members GROUP BY profile HAVING count(*) = 1`;
+
+export function privateProfilesOf(db: DatabaseSync, id: string) {
+  return db.prepare(`SELECT profile FROM (${privateProfiles}) WHERE user_id = ?`).all(id)
+    .map(row => String(row.profile));
 }
 
-// Called inside the same transaction as user removal, when applicable.
+function keepGatewayAdmin(db: DatabaseSync, id: string) {
+  if (db.prepare('SELECT 1 FROM admins WHERE user_id = ?').get(id) &&
+    !db.prepare('SELECT 1 FROM admins JOIN user ON user.id = user_id WHERE user_id != ? AND email NOT IN pending_emails').get(id))
+    throw new AccountError(409, 'Cannot remove the last gateway admin');
+}
+
+export function removalTarget(db: DatabaseSync, email: string) {
+  const id = userId(db, email);
+  keepGatewayAdmin(db, id);
+  return id;
+}
+
+export function removeUser(db: DatabaseSync, email: string, by: string, audit: Audit) {
+  const promoted = tx(db, () => {
+    const id = removalTarget(db, email);
+    if (privateProfilesOf(db, id).length)
+      throw new AccountError(409, 'Remove this member from the admin UI or delete their private profiles first');
+    const rows = db.prepare(`UPDATE profile_members SET role = 'admin' WHERE rowid IN (
+      SELECT min(other.rowid) FROM profile_members departing JOIN profile_members other USING (profile)
+      WHERE departing.user_id = ? AND departing.role = 'admin' AND other.user_id != ?
+      GROUP BY profile HAVING max(other.role = 'admin') = 0
+    ) RETURNING profile, (SELECT email FROM user WHERE id = profile_members.user_id) AS email`).all(id, id);
+    db.prepare('DELETE FROM apikey WHERE referenceId = ?').run(id);
+    db.prepare('DELETE FROM user WHERE id = ?').run(id);
+    return rows;
+  });
+  for (const row of promoted)
+    audit({ by, agent: String(row.profile), member: String(row.email), tool: 'admin:member_promote', ok: true });
+  audit({ by, agent: email, tool: 'admin:user_remove', ok: true });
+}
+
+export function listUsers(db: DatabaseSync) {
+  return db.prepare(`SELECT email, admins.user_id IS NOT NULL AS admin, twoFactorEnabled, createdAt,
+    email IN pending_emails AS pending, (SELECT count(*) FROM (${privateProfiles}) WHERE user_id = user.id) AS privateProfileCount FROM user LEFT JOIN admins ON admins.user_id = user.id ORDER BY email`).all()
+    .map(r => ({ email: r.email, admin: !!r.admin, twoFactorEnabled: !!r.twoFactorEnabled, createdAt: r.createdAt, pending: !!r.pending, privateProfileCount: Number(r.privateProfileCount) }));
+}
+
+// Caller owns the transaction.
 export function setAdmin(db: DatabaseSync, email: string, admin: boolean) {
   const id = userId(db, email);
   if (admin) db.prepare('INSERT INTO admins VALUES (?) ON CONFLICT DO NOTHING').run(id);
-  else if (db.prepare('DELETE FROM admins WHERE user_id = ?').run(id).changes &&
-    !db.prepare('SELECT 1 FROM admins JOIN user ON user.id = admins.user_id WHERE email NOT IN pending_emails').get())
-    throw new AccountError(409, 'Cannot remove the last gateway admin');
+  else {
+    keepGatewayAdmin(db, id);
+    db.prepare('DELETE FROM admins WHERE user_id = ?').run(id);
+  }
   return id;
 }

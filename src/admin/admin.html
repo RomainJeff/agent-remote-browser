@@ -538,9 +538,16 @@ async function refreshMembers() {
   try {
     const [users, invites] = await Promise.all([api('/api/users'), api('/api/users/invites')]);
     if (!owner?.isConnected) return;
-    if (patch('users', users, () => `<div class="tbl"><table><tr><th>Email</th><th>Gateway admin</th><th>2FA</th><th>Status</th></tr>
+    if (patch('users', users, () => `<div class="tbl"><table><tr><th>Email</th><th>Gateway admin</th><th>2FA</th><th>Status</th><th></th></tr>
       ${users.map(u => `<tr><td>${esc(u.email)}</td><td><input type="checkbox" aria-label="Gateway admin · ${esc(u.email)}" data-admin="${esc(u.email)}" ${u.admin ? 'checked' : ''} ${u.pending ? 'disabled' : ''}></td>
-        <td>${u.twoFactorEnabled ? 'Enabled' : 'Off'}</td><td>${u.pending ? 'Pending' : 'Active'}</td></tr>`).join('')}</table></div>`)) {
+        <td>${u.twoFactorEnabled ? 'Enabled' : 'Off'}</td><td>${u.pending ? 'Pending' : 'Active'}</td>
+        <td>${u.pending || me.email === u.email ? '' : `<button class="btn btn-sm" data-remove-user="${esc(u.email)}">Remove</button>`}</td></tr>`).join('')}</table></div>`)) {
+      for (const b of $$('[data-remove-user]')) b.onclick = () => act(b, async () => {
+        const email = b.dataset.removeUser, n = users.find(u => u.email === email).privateProfileCount;
+        if (!await confirmSensitive({ title: `Remove ${email}?`, desc: `Permanently deletes ${n} private profile${n === 1 ? '' : 's'}.`, danger: true, label: 'Remove' })) return false;
+        await api('/api/users/remove', 'POST', { email });
+        await refreshMembers();
+      });
       for (const input of $$('[data-admin]')) input.onchange = () => act(input, async () => {
         const admin = input.checked; input.checked = !admin;
         await api('/api/users/admin', 'POST', { email: input.dataset.admin, admin });

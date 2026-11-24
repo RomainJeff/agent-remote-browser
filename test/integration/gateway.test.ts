@@ -1483,6 +1483,7 @@ test('invite enrollment binds the session to the recipient and applies the role 
   assert.deepEqual([(await row()).admin, (await row()).pending], [false, true]);
   assert.equal((await admin('POST', '/api/users/admin', { body: { email, admin: true } })).status, 409);
   assert.equal((await admin('POST', '/api/computers/shop2/members', { body: { email, role: 'viewer' } })).status, 409);
+  assert.equal((await admin('POST', '/api/users/remove', { body: { email } })).status, 409);
   assert.equal((await accept('finish', { token, code: totp(start.json.totpURI) }, session)).status, 401);
   // Exercise authorization with a real pending session after the auth provider has enabled its second factor.
   sql(db => db.prepare('UPDATE user SET twoFactorEnabled = 1 WHERE email = ?').run(email));
@@ -1514,7 +1515,7 @@ test('invite enrollment binds the session to the recipient and applies the role 
   const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
   assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
   for (const path of ['/api/users', '/api/users/invites']) assert.equal((await admin('GET', path, { headers })).status, 403);
-  for (const path of ['/api/users/admin', '/api/users/invite', '/api/users/invites/' + issued.json.id + '/revoke'])
+  for (const path of ['/api/users/remove', '/api/users/admin', '/api/users/invite', '/api/users/invites/' + issued.json.id + '/revoke'])
     assert.equal((await admin('POST', path, { headers, body: { email, admin: true } })).status, 403);
 });
 
@@ -1535,6 +1536,39 @@ test('a default invite enrolls a member who can sign in and starts with no profi
   const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
   assert.equal((await admin('GET', '/api/users', { headers })).status, 403);
   assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
+});
+
+test('removing a member deletes their private computer and gives the oldest remaining member shared administration', async () => {
+  const email = 'departing@example.com', headers = await signInNewUser(email);
+  const later = 'later@example.com';
+  await signInNewUser(later);
+  const roster = '/api/computers/remove-shared/members';
+  const remove = (email: string) => admin('POST', '/api/users/remove', { body: { email } });
+  assert.equal((await remove('missing@example.com')).status, 404);
+  assert.equal((await remove(owner.email)).json.error, 'Cannot remove the last gateway admin');
+  assert.equal((await admin('POST', '/api/users/admin', { body: { email: later, admin: true } })).status, 200);
+  assert.equal((await remove(owner.email)).json.error, 'Cannot remove yourself');
+  for (const id of ['remove-private', 'remove-shared'])
+    assert.equal((await admin('POST', '/api/profiles', { headers, body: { id, allow: ['example.com'] } })).status, 201);
+  assert.equal((await admin('POST', '/api/computers/remove-private/start', { headers, body: {} })).status, 200);
+  for (const other of [owner.email, later])
+    assert.equal((await admin('POST', roster, { headers, body: { email: other, role: 'viewer' } })).status, 200);
+  const key = await admin('POST', '/api/keys', { headers, body: { name: 'sample', scope: 'global', expiresIn: '30d' } });
+  assert.equal(key.status, 201);
+  const users = await admin('GET', '/api/users');
+  assert.equal(users.json.find((u: any) => u.email === email).privateProfileCount, 1);
+  assert.equal((await remove(email)).status, 200);
+  assert.ok(calls('remove').some(call => call.id === 'remove-private' && call.keepVolume === false));
+  sql(db => {
+    assert.equal(db.prepare("SELECT 1 FROM profiles WHERE id = 'remove-private'").get(), undefined);
+    assert.equal(db.prepare('SELECT 1 FROM apikey WHERE id = ?').get(key.json.id), undefined);
+  });
+  assert.equal((await admin('GET', '/api/session', { headers })).status, 401);
+  assert.deepEqual((await admin('GET', roster)).json.map((m: any) => [m.email, m.role]).sort(),
+    [[owner.email, 'admin'], [later, 'viewer']].sort());
+  const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.ok(audit.some(e => e.tool === 'admin:member_promote' && e.by === owner.email && e.member === owner.email && e.agent === 'remove-shared'));
+  assert.ok(audit.some(e => e.tool === 'admin:user_remove' && e.by === owner.email && e.agent === email));
 });
 
 test('expired enrollment can be replaced, revocation removes its pending user, and only ten invites can be open', async () => {
@@ -1560,7 +1594,7 @@ test('expired enrollment can be replaced, revocation removes its pending user, a
   for (let i = 0; i < 10; i++) assert.equal((await createInvite(`cap-${i}@example.com`)).status, 201);
   assert.equal((await createInvite(email)).status, 409);
   sql(db => db.exec('DELETE FROM step_up'));
-  for (const path of ['/api/users/admin', '/api/users/invite', '/api/users/invites/' + replacement.json.id + '/revoke']) {
+  for (const path of ['/api/users/remove', '/api/users/admin', '/api/users/invite', '/api/users/invites/' + replacement.json.id + '/revoke']) {
     const r = await admin('POST', path, { body: { email, admin: true } });
     assert.deepEqual([r.status, r.json.stepUp], [401, true]);
   }
