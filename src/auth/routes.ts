@@ -1,10 +1,10 @@
 // Public OAuth surface for MCP clients (MCP auth spec): metadata, the allowlisted Better Auth endpoints
 // (DCR, authorize, token, revoke), and two no-JS pages: admin login (password + TOTP) and consent, where the
-// admin picks the scope the client gets (one profile or global).
+// user picks the scope the client gets (one profile or global).
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { DatabaseSync } from 'node:sqlite';
-import { windowBudget, parseProfileId } from '../policy.ts';
-import { requireAdmin, toHeaders } from './guards.ts';
+import type { Ctx } from '../server.ts';
+import { windowBudget } from '../policy.ts';
+import { requireAdmin, scopedProfile, toHeaders } from './guards.ts';
 import type { Auth } from './better-auth.ts';
 import { count } from '../metrics.ts';
 
@@ -92,7 +92,7 @@ ul{margin:0;padding-left:20px;color:#585F66;display:flex;flex-direction:column;g
 }
 
 /** Public routes on the MCP listener. Returns false when the request is not one of them. */
-export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<string, string>, base: string) {
+export function createAuthRoutes({ db, auth, store }: Pick<Ctx, 'db' | 'auth' | 'store'>, pending: Map<string, string>, base: string) {
   const origin = new URL(base).origin;
   const registerBudget = windowBudget(20, 3600_000);
   const sameOrigin = (req: IncomingMessage) => req.headers.origin === origin;
@@ -131,18 +131,18 @@ export function createAuthRoutes(db: DatabaseSync, auth: Auth, pending: Map<stri
     const m = iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)) : NaN;
     return Number.isNaN(m) ? 'at an unknown date' : m < 1 ? 'just now' : m < 120 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
   };
-  const GLOBAL_WARNING = 'Unverified client with Global access: it could manage, lease and delete every profile and its saved logins. Accept only if you registered this client yourself just now.';
+  const GLOBAL_WARNING = 'Unverified client with Global access. It can use all your profiles and their saved logins. Accept only if you registered this client yourself just now.';
 
   /** `confirmGlobal`: the second page an unverified (DCR) client gets after picking Global. */
-  function consentPage(res: Res, q: string, confirmGlobal = false) {
+  function consentPage(res: Res, q: string, user: string, confirmGlobal = false) {
     const p = new URLSearchParams(q), c = clientOf(p.get('client_id') ?? '');
     let host = '', loopback = false;
     try { const u = new URL(p.get('redirect_uri') ?? ''); host = u.host; loopback = ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname); } catch {}
-    const profiles = (db.prepare('SELECT id FROM profiles ORDER BY id').all() as { id: string }[]).map((r) => r.id);
+    const profiles = store.accessible(user).sort((a, b) => a.id.localeCompare(b.id, 'en'));
     const choice = confirmGlobal ? `<input type="hidden" name="scope" value="global"><input type="hidden" name="confirm" value="global">
 <p class="err"><b>${esc(GLOBAL_WARNING)}</b></p>`
-      : `<fieldset><legend>Access granted</legend>${profiles.map((id, i) => `<label class="opt"><input type="radio" name="scope" value="profile:${esc(id)}"${i ? '' : ' checked'}><span>Profile <b class="mono">${esc(id)}</b><small>This browser only, with its domains and saved logins.</small></span></label>`).join('')}
-<label class="opt g"><input type="radio" name="scope" value="global"${profiles.length ? '' : ' checked'}><span>Global: manages and leases every profile<small>${c.dcr ? 'Not recommended for an unverified client.' : 'Including profiles created later.'}</small></span></label></fieldset>`;
+      : `<fieldset><legend>Access granted</legend>${profiles.map(({ id, role }, i) => `<label class="opt"><input type="radio" name="scope" value="profile:${esc(id)}"${i ? '' : ' checked'}><span>Profile <b class="mono">${esc(id)}</b><small>Your role: ${esc(role)}. This browser only, with its domains and saved logins.</small></span></label>`).join('')}
+<label class="opt g"><input type="radio" name="scope" value="global"${profiles.length ? '' : ' checked'}><span>Global (all my profiles)<small>${c.dcr ? 'Not recommended for an unverified client.' : 'Includes profiles you gain access to later.'}</small></span></label></fieldset>`;
     page(res, 200, `<h1>Connect ${esc(c.name)}</h1>
 <p>It will drive a remote browser with the access you choose. You will then return to <b>${esc(host)}</b>.</p>
 <dl><dt>Client ID</dt><dd class="mono">${esc(c.id)}</dd>
@@ -200,19 +200,19 @@ ${choice}
     }
 
     if (path === '/consent' && req.method === 'GET') {
-      if (!await requireAdmin(auth, req.headers)) return res.writeHead(302, { location: '/login?' + q, 'cache-control': 'no-store' }).end(), true;
-      return consentPage(res, q), true;
+      const s = await requireAdmin(auth, req.headers);
+      if (!s) return res.writeHead(302, { location: '/login?' + q, 'cache-control': 'no-store' }).end(), true;
+      return consentPage(res, q, s.user.id), true;
     }
     if (path === '/consent' && req.method === 'POST') {
       if (!sameOrigin(req)) return res.writeHead(403).end(), true;
       const s = await requireAdmin(auth, req.headers);
       const b = await form(req);
       if (!s) return res.writeHead(302, { location: '/login?' + (b.oauth_query ?? '') }).end(), true;
-      const scope = b.scope === 'global' ? 'global' : b.scope?.startsWith('profile:') && parseProfileId(b.scope.slice(8))
-        && db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(b.scope.slice(8)) ? b.scope : null;
-      if (!scope) return res.writeHead(400).end(), true;
+      const scope = b.scope;
+      if (scope !== 'global' && !scopedProfile(store, scope, s.user.id)) return res.writeHead(400).end(), true;
       const oq = b.oauth_query ?? '';
-      if (scope === 'global' && b.accept === 'true' && b.confirm !== 'global' && clientOf(new URLSearchParams(oq).get('client_id') ?? '').dcr) return consentPage(res, oq, true), true;
+      if (scope === 'global' && b.accept === 'true' && b.confirm !== 'global' && clientOf(new URLSearchParams(oq).get('client_id') ?? '').dcr) return consentPage(res, oq, s.user.id, true), true;
       pending.set(s.session.id, scope);
       try {
         req.headers.accept = 'application/json';

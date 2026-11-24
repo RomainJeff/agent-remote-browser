@@ -5,7 +5,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 /** A validated profile id. Only parseProfileId() makes one, so a driver never receives a raw string. */
 export type ProfileId = string & { readonly __brand: 'ProfileId' };
 /** Who is calling /mcp: one profile, or global (manage + lease profiles). From the OAuth grant or API key scope. */
-export type Principal = { global: true; profile?: never } | { profile: ProfileId; global?: never };
+export type Principal = { user: string; email: string } & ({ global: true; profile?: never } | { profile: ProfileId; global?: never });
 
 const roles = ['viewer', 'editor', 'admin'] as const;
 export type Role = typeof roles[number];

@@ -8,6 +8,7 @@ export interface Lease { profile: string; exp: number; ms: number }
 export type Leases = ReturnType<typeof createLeases>;
 
 export function createLeases(db: DatabaseSync) {
+  const member = 'profile IN (SELECT profile FROM profile_members WHERE user_id = ?)';
   return {
     /** The live lease on a profile, if any. Expired leases are dropped on the way. */
     of(id: string) {
@@ -21,11 +22,11 @@ export function createLeases(db: DatabaseSync) {
       return { token, exp };
     },
     /** A live lease by token; its expiry slides with each use (never shortens one frozen by a handoff). */
-    use: (token: string) => (db.prepare('UPDATE leases SET exp = MAX(exp, ? + ms) WHERE id_hash = ? AND exp >= ? RETURNING profile, exp, ms')
-      .get(Date.now(), hash(token), Date.now()) as Lease | undefined) ?? null,
+    use: (token: string, user: string) => (db.prepare(`UPDATE leases SET exp = MAX(exp, ? + ms) WHERE id_hash = ? AND exp >= ? AND ${member} RETURNING profile, exp, ms`)
+      .get(Date.now(), hash(token), Date.now(), user) as Lease | undefined) ?? null,
     /** Admin: the live lease on a profile ends at least `minutes` from now (never shortened: a handoff may have frozen it), and slides by that much on each use. */
     extend: (id: string, minutes: number) => (db.prepare('UPDATE leases SET exp = MAX(exp, ?), ms = ? WHERE profile = ? AND exp >= ? RETURNING profile, exp, ms')
       .get(Date.now() + minutes * 60_000, minutes * 60_000, id, Date.now()) as Lease | undefined) ?? null,
-    release: (token: string) => db.prepare('DELETE FROM leases WHERE id_hash = ?').run(hash(token)).changes > 0,
+    release: (token: string, user: string) => db.prepare(`DELETE FROM leases WHERE id_hash = ? AND ${member}`).run(hash(token), user).changes > 0,
   };
 }

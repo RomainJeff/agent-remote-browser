@@ -17,21 +17,22 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 let n = 0;
 function setup() {
   const db = openDb(join(scratch, `${++n}.db`)), store = openStore(db, join(scratch, `${n}.key`)), lines: AuditEntry[] = [];
-  store.createProfile(parseProfileId('p')!, ['example.com'], fixtureUser(db));
+  const user = fixtureUser(db);
+  store.createProfile(parseProfileId('p')!, ['example.com'], user);
   const audit = Object.assign((e: AuditEntry) => { lines.push(e); }, { read: () => [] });
-  return { db, leases: createLeases(db), h: createHandoffs(db, audit), lines };
+  return { db, user, leases: createLeases(db), h: createHandoffs(db, audit), lines };
 }
 const MIN = 60_000;
 
 test('lifecycle: request -> take -> done; one open per profile; lease frozen then sliding again', () => {
-  const { db, leases, h } = setup();
+  const { db, user, leases, h } = setup();
   const { token } = leases.take('p', 1), lh = hash(token);
   const r = h.request('p', lh, 'captcha', 30)!;
   assert.match(r.id, /^h_[\w-]{16}$/);
   assert.equal(r.state, 'pending');
   assert.equal(h.request('p', lh, 'again', 30), null);
   assert.ok(leases.of('p')!.exp >= r.deadline + MIN, 'frozen until the deadline');
-  assert.ok(leases.use(token)!.exp >= r.deadline + MIN, 'use() does not shorten a frozen lease');
+  assert.ok(leases.use(token, user)!.exp >= r.deadline + MIN, 'use() does not shorten a frozen lease');
   assert.ok(leases.extend('p', 1)!.exp >= r.deadline + MIN, 'admin extend does not shorten a frozen lease');
   assert.equal(h.take(r.id)?.state, 'taken');
   assert.equal(h.take(r.id), null);
@@ -46,14 +47,14 @@ test('lifecycle: request -> take -> done; one open per profile; lease frozen the
 });
 
 test('lazy transitions: deadline passed -> expired, lease gone -> cancelled; both audited', () => {
-  const { db, leases, h, lines } = setup();
+  const { db, user, leases, h, lines } = setup();
   const a = h.request('p', null, 'x', 1)!;
   db.prepare('UPDATE handoffs SET deadline = ? WHERE id = ?').run(Date.now() - 1, a.id);
   assert.equal(h.open('p'), null);
   assert.equal(h.last('p', null)?.state, 'expired');
   const { token } = leases.take('p', 1);
   h.request('p', hash(token), 'y', 30);
-  leases.release(token);
+  leases.release(token, user);
   assert.equal(h.last('p', hash(token))?.state, 'cancelled');
   assert.deepEqual(lines.map((l) => l.tool), ['handoff:expired', 'handoff:cancelled']);
 });

@@ -103,6 +103,23 @@ function admin(method: string, path: string, { body, headers = {} }: { body?: un
 }
 const adminOrigin = () => ({ origin: `http://127.0.0.1:${ADMIN}`, cookie: '' });
 
+async function signInNewUser(email: string) {
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+  const password = randomBytes(12).toString('base64url');
+  let uri = '';
+  const answers = [() => password, () => totp(uri)];
+  assert.equal(await main(['user', 'create', email], env(), (line) => {
+    if (line.startsWith('otpauth://')) uri = line;
+  }, async () => answers.shift()!()), 0);
+  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email, password }, headers: adminOrigin() });
+  assert.equal(half.status, 200);
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', {
+    body: { code: totp(uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) },
+  });
+  assert.equal(ok.status, 200);
+  return { cookie: jar(ok.cookies, jar(half.cookies)) };
+}
+
 async function mcp<T>(token: string, fn: (c: Client) => Promise<T>) {
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { authorization: `Bearer ${token}` } } }));
@@ -999,29 +1016,34 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   assert.equal(new URL(viaBackup.headers.get('location')!, base).pathname, '/consent');
 
   /** Consent page -> code, for a session that already signed in (authorize then goes straight to consent). */
-  const grant = async (scope: string) => {
-    const toConsent = await get('/api/auth/oauth2/authorize?' + authorizeQuery, cookie);
+  const grant = async (scope: string, consentCookie = cookie) => {
+    const toConsent = await get('/api/auth/oauth2/authorize?' + authorizeQuery, consentCookie);
     assert.equal(new URL(toConsent.headers.get('location')!, base).pathname, '/consent');
     const cq = queryOf(toConsent);
-    const page = await get('/consent?' + cq, cookie);
+    const page = await get('/consent?' + cq, consentCookie);
     assert.equal(page.status, 200);
     const html = await page.text();
     assert.match(html, /test client/);
-    assert.match(html, /value="profile:other"/);
+    assert.ok(html.includes('value="' + scope + '"'));
+    if (scope === 'global') {
+      assert.match(html, /other<\/b><small>Your role: admin/);
+      assert.ok(!html.includes('value="profile:private-oauth"'));
+      assert.equal((await postForm('/consent', { scope: 'profile:private-oauth', accept: 'true', oauth_query: cq }, consentCookie)).status, 400);
+    }
     assert.ok(html.includes(client_id));
     assert.match(html, /Unverified client/);
     assert.match(html, /Registered (just now|\d+ min ago)/);
     assert.match(html, /Loopback: the authorization goes to an app/);
-    assert.match(html, /Global: manages and leases every profile<small>Not recommended for an unverified client/);
-    assert.equal((await postForm('/consent', { scope: 'profile:nope', accept: 'true', oauth_query: cq }, cookie)).status, 400);
-    assert.equal((await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie, 'http://evil.test')).status, 403);
-    let r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, cookie);
+    assert.match(html, /Global \(all my profiles\)<small>Not recommended for an unverified client/);
+    assert.equal((await postForm('/consent', { scope: 'profile:nope', accept: 'true', oauth_query: cq }, consentCookie)).status, 400);
+    assert.equal((await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, consentCookie, 'http://evil.test')).status, 403);
+    let r = await postForm('/consent', { scope, accept: 'true', oauth_query: cq }, consentCookie);
     if (scope === 'global') {
       assert.equal(r.status, 200);
       const warn = await r.text();
       assert.match(warn, /Unverified client with Global access/);
       assert.match(warn, /name="confirm" value="global"/);
-      r = await postForm('/consent', { scope, confirm: 'global', accept: 'true', oauth_query: cq }, cookie);
+      r = await postForm('/consent', { scope, confirm: 'global', accept: 'true', oauth_query: cq }, consentCookie);
     }
     assert.equal(r.status, 200, 'consent answers a page, not a 302 (form-action would block the redirect)');
     const ref = r.headers.get('refresh')!, loc = new URL(ref.slice(ref.indexOf('url=') + 4));
@@ -1033,6 +1055,12 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   };
   const token = (form: Record<string, string>) => postForm('/api/auth/oauth2/token', { client_id, resource, ...form }, '', '');
   const exchange = (code: string, verifier = code_verifier) => token({ grant_type: 'authorization_code', redirect_uri, code, code_verifier: verifier });
+
+  const peer = await signInNewUser('oauth-member@example.com');
+  assert.equal((await admin('POST', '/api/profiles', { headers: peer, body: { id: 'private-oauth', allow: ['example.com'] } })).status, 201);
+  const peerGrant = await (await exchange(await grant('profile:private-oauth', peer.cookie))).json();
+  assert.ok(peerGrant.access_token && peerGrant.refresh_token);
+  assert.deepEqual((await admin('GET', '/api/clients')).json.oauth, []);
 
   // Global for an unverified (DCR) client: a second page with a strong warning, then the grant.
   const globalCode = await grant('global');
@@ -1100,11 +1128,26 @@ test('OAuth: DCR, login + TOTP, consent picks the profile, PKCE, refresh rotatio
   } finally { db.close(); }
   assert.notEqual(abandoned, client_id);
 
-  // Revoking the client from the admin kills its tokens.
+  // Revoking one user's grants leaves the other user's access, refresh and consent intact.
   assert.equal((await admin('POST', `/api/clients/${encodeURIComponent(client_id)}/revoke`, { body: {} })).status, 200);
   assert.equal(await mcpStatus({ authorization: `Bearer ${next.access_token}` }), 401);
   assert.equal(await mcpStatus({ authorization: `Bearer ${otherToken}` }), 401);
   assert.equal((await refresh(next.refresh_token)).status >= 400, true);
+  assert.equal((await admin('POST', `/api/clients/${encodeURIComponent(client_id)}/revoke`, { body: {} })).status, 404);
+  assert.deepEqual((await admin('GET', '/api/clients')).json.oauth, []);
+  const peerClients = (await admin('GET', '/api/clients', { headers: peer })).json.oauth;
+  assert.deepEqual(peerClients.map((c: any) => [c.id, c.scopes]), [[client_id, 'profile:private-oauth']]);
+  sql((db) => assert.deepEqual(db.prepare('SELECT referenceId FROM oauthConsent WHERE clientId = ?').all(client_id)
+    .map((row) => row.referenceId), ['profile:private-oauth']));
+  assert.equal((await call(peerGrant.access_token, 'playbook')).error, false);
+  const peerRefresh = await refresh(peerGrant.refresh_token);
+  assert.equal(peerRefresh.status, 200);
+  const peerAccess = (await peerRefresh.json()).access_token;
+  assert.equal((await call(peerAccess, 'playbook')).error, false);
+  const members = '/api/computers/private-oauth/members';
+  assert.equal((await admin('POST', members, { headers: peer, body: { email: owner.email, role: 'admin' } })).status, 200);
+  assert.equal((await admin('POST', members, { body: { email: 'oauth-member@example.com', role: null } })).status, 200);
+  assert.equal(await mcpStatus({ authorization: `Bearer ${peerAccess}` }), 401);
   assert.equal((await call(tokens.shop, 'open', { url: 'https://example.com/' })).error, false);
 });
 
@@ -1350,20 +1393,7 @@ test('handoff url: PUBLIC_URL base with ADMIN_PUBLIC=1', async () => {
 });
 
 test('profile members control API access, including for a gateway admin', async () => {
-  sql((db) => db.exec('DELETE FROM rateLimit'));
-  const email = 'member@example.com', password = randomBytes(12).toString('base64url');
-  let uri = '';
-  const answers = [() => password, () => totp(uri)];
-  assert.equal(await main(['user', 'create', email], env(), (line) => {
-    if (line.startsWith('otpauth://')) uri = line;
-  }, async () => answers.shift()!()), 0);
-  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email, password }, headers: adminOrigin() });
-  assert.equal(half.status, 200);
-  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', {
-    body: { code: totp(uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) },
-  });
-  assert.equal(ok.status, 200);
-  const headers = { cookie: jar(ok.cookies, jar(half.cookies)) };
+  const email = 'member@example.com', headers = await signInNewUser(email);
   const id = 'private', path = '/api/computers/' + id, roster = path + '/members';
   const setRole = (role: string | null, target = owner.email) => admin('POST', roster, { headers, body: { email: target, role } });
   const listed = async () => (await admin('GET', '/api/computers')).json.find((item: any) => item.id === id);
@@ -1388,6 +1418,10 @@ test('profile members control API access, including for a gateway admin', async 
   assert.equal(calls('stream').length, relays + 1);
   assert.equal((await admin('POST', path + '/start', { body: {} })).status, 403);
 
+  const keyBody = { name: 'viewer key', scope: 'profile:' + id, expiresIn: '30d' };
+  const scoped = await admin('POST', '/api/keys', { body: keyBody });
+  assert.equal(scoped.status, 201);
+  assert.equal((await call(scoped.json.key, 'playbook')).error, false);
   assert.equal((await setRole('editor')).status, 200);
   assert.equal((await admin('POST', path + '/start', { body: {} })).json.started, true);
   assert.equal((await admin('POST', path + '/delete', { body: {} })).status, 403);
@@ -1397,8 +1431,31 @@ test('profile members control API access, including for a gateway admin', async 
   const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
   assert.ok(audit.some((entry) => entry.agent === id && entry.tool === 'admin:members' && entry.by === email && entry.ok));
 
-  const created = await call(tokens.global, 'create_profile', { id: 'global-acl', allow: ['example.com'] });
+  assert.equal(await mcpStatus({ 'x-api-key': scoped.json.key }), 401);
+  assert.equal((await admin('POST', '/api/keys', { body: keyBody })).status, 400);
+
+  const global = await admin('POST', '/api/keys', { headers, body: { ...keyBody, scope: 'global' } });
+  assert.equal(global.status, 201);
+  assert.deepEqual((await admin('GET', '/api/clients', { headers })).json.keys.map((k: any) => k.id), [global.json.id]);
+  assert.equal((await admin('POST', `/api/keys/${global.json.id}/revoke`, { body: {} })).status, 404);
+  const agent = (name: string, args = {}) => call(global.json.key, name, args);
+  assert.deepEqual(JSON.parse((await agent('list_profiles')).text).map((p: any) => p.id), [id]);
+  assert.deepEqual(await agent('lease_profile', { profile: 'shop2' }), await agent('lease_profile', { profile: 'missing' }));
+  const picked = JSON.parse((await agent('lease_profile', { domain: 'example.com' })).text);
+  assert.equal(picked.profile, id);
+  const lease = { lease: picked.lease };
+  assert.match((await call(tokens.global, 'playbook', lease)).text, /Unknown or expired lease/);
+  assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', lease)).text), { released: false });
+  assert.equal((await setRole('viewer')).status, 200);
+  assert.equal((await call(tokens.global, 'playbook', lease)).error, false);
+  assert.deepEqual(JSON.parse((await call(tokens.global, 'release_profile', lease)).text), { released: true });
+
+  const created = await agent('create_profile', { id: 'global-acl', allow: ['example.com'] });
   assert.equal(created.error, false);
-  assert.deepEqual((await admin('GET', '/api/computers/global-acl/members')).json, [{ email: owner.email, role: 'admin' }]);
-  assert.equal((await admin('GET', '/api/computers/global-acl', { headers })).status, 404);
+  assert.deepEqual((await admin('GET', '/api/computers/global-acl/members', { headers })).json, [{ email, role: 'admin' }]);
+  assert.equal((await admin('GET', '/api/computers/global-acl')).status, 404);
+  assert.equal(JSON.parse(readFileSync(f.audit, 'utf8').trim().split('\n').at(-1)!).by, email);
+
+  sql((db) => db.prepare('DELETE FROM user WHERE email = ?').run(email));
+  assert.equal(await mcpStatus({ 'x-api-key': global.json.key }), 401);
 });

@@ -2,6 +2,8 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { hash, parseProfileId, type Principal } from '../policy.ts';
+import type { Ctx } from '../server.ts';
+import type { Store } from '../store/store.ts';
 import { PREFIX, type Auth } from './better-auth.ts';
 
 export function toHeaders(h: IncomingHttpHeaders) {
@@ -16,23 +18,34 @@ export async function requireAdmin(auth: Auth, headers: IncomingHttpHeaders) {
   return s?.user.twoFactorEnabled ? s : null;
 }
 
-/** Bearer `arb_at_…` (OAuth) or `arb_k_…` (API key, also via x-api-key) -> the scope the admin granted.
- *  `ip`: the client IP as the listener settled it (clientIp in server.ts), kept as the key's last IP. */
-export async function principal(db: DatabaseSync, auth: Auth, token: unknown, ip?: string): Promise<Principal | null> {
+export function scopedProfile(store: Store, scope: unknown, user: string) {
+  const id = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
+  return id && store.roleOf(id, user) ? id : null;
+}
+
+/** Resolve the bearer on each MCP request, using the holder's current account and memberships. */
+export async function principal({ db, auth, store }: Pick<Ctx, 'db' | 'auth' | 'store'>, token: unknown, ip?: string): Promise<Principal | null> {
   if (typeof token !== 'string') return null;
-  let scope: unknown;
+  let scope: unknown, user: string | null | undefined;
   if (token.startsWith(PREFIX.access)) {
     // Same lookup as Better Auth's introspection: sha256 of the token without its prefix.
-    scope = (db.prepare('SELECT referenceId FROM oauthAccessToken WHERE token = ? AND revoked IS NULL AND expiresAt > ?')
-      .get(hash(token.slice(PREFIX.access.length)), new Date().toISOString()) as { referenceId: string | null } | undefined)?.referenceId;
+    const grant = db.prepare('SELECT userId, referenceId FROM oauthAccessToken WHERE token = ? AND revoked IS NULL AND expiresAt > ?')
+      .get(hash(token.slice(PREFIX.access.length)), new Date().toISOString()) as { userId: string | null; referenceId: string | null } | undefined;
+    scope = grant?.referenceId;
+    user = grant?.userId;
   } else if (token.startsWith(PREFIX.apiKey)) {
     const r = await auth.api.verifyApiKey({ body: { key: token } }).catch(() => null);
-    scope = r?.valid ? (r.key?.metadata as { scope?: unknown } | null)?.scope : null;
-    if (r?.valid && r.key) db.prepare('UPDATE apikey SET lastIp = ? WHERE id = ?').run(ip ?? null, r.key.id);
+    if (!r?.valid || !r.key) return null;
+    scope = (r.key.metadata as { scope?: unknown } | null)?.scope;
+    user = r.key.referenceId;
+    db.prepare('UPDATE apikey SET lastIp = ? WHERE id = ?').run(ip ?? null, r.key.id);
   }
-  if (scope === 'global') return { global: true };
-  const id = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
-  return id && db.prepare('SELECT 1 FROM profiles WHERE id = ?').get(id) ? { profile: id } : null;
+  if (!user) return null;
+  const holder = db.prepare('SELECT id AS user, email FROM user WHERE id = ?').get(user) as { user: string; email: string } | undefined;
+  if (!holder) return null;
+  if (scope === 'global') return { ...holder, global: true };
+  const profile = scopedProfile(store, scope, user);
+  return profile ? { ...holder, profile } : null;
 }
 
 /** DCR leaves a client behind for every abandoned connection: drop the ones never granted anything after 24 h. */
