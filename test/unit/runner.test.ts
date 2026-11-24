@@ -39,12 +39,17 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ab('back'), ab('screenshot'), ab('close'), ab('stream', 'status'),
     ab('keyboard', 'inserttext', 'two\nlines'), ab('keyboard', 'inserttext', '-'), ab('eval', SELECTION),
     ab('auth', 'save', 'gw-shop-1', '--url', 'https://example.com/login', '--username', 'me@example.test', '--password-stdin'),
+    ab('open', 'https://example.com/', '--headers', '{"x-bypass":"t0k3n","authorization":"Bearer a b"}'),
     ab('auth', 'login', 'gw-shop-1'), ab('auth', 'login', 'gw-shop-1', '--no-navigate'), ab('auth', 'delete', 'gw-shop-1'),
     ['base64', '-w0', '/tmp/shot.png'], ['rm', '-f', '/home/agent/.agent-browser/tmp/s-1.png'], ['cat', SESSION]])
     assert.ok(ok(exec(a)), a.join(' '));
   for (const a of [['sh', '-c', 'id'], ['agent-browser', 'open', 'https://example.com'], ab('eval', '1'),
     ['agent-browser', ...AB_FLAGS.slice(0, -1), '--no-sandbox', 'open', 'https://example.com'],
     ab('open', 'file:///etc/passwd'), ab('open', 'javascript:alert(1)'), ab('open', 'https://example.com', '--extra'),
+    ab('open', 'https://example.com', '--headers', 'nope'), ab('open', 'https://example.com', '--headers', '["x"]'),
+    ab('open', 'https://example.com', '--headers', '{}'), ab('open', 'https://example.com', '--headers', '{"X-A":"b"}'),
+    ab('open', 'https://example.com', '--headers', '{"x-a":"b\\nc"}'), ab('open', 'https://example.com', '--headers', '{"x-a":1}'),
+    ab('open', 'https://example.com', '--headers', '{"x-a":"b"}', '--extra'),
     ab('press', '--foo'), ab('click', 'e1'), ab('keyboard', 'inserttext', '--json'), ab('keyboard', 'inserttext', 'x'.repeat(5001)),
     ab('keyboard', 'type', 'x'), ab('eval', SELECTION + ';1'), ab('fill', '@e1', 'no separator'),
     ab('auth', 'save', 'gw-x', '--url', 'http://example.com', '--username', 'u', '--password-stdin'),

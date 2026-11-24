@@ -33,9 +33,23 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
     lastUsed.set(id, Date.now());
   }
 
+  /** The profile's custom headers for this URL's origin, or null. */
+  const headersFor = (id: string, url: string) => {
+    let o: string; try { o = new URL(url).origin; } catch { return null; }
+    const h = store.headerValues(id, o);
+    return Object.keys(h).length ? h : null;
+  };
+  /** Every `open` to an origin with custom headers carries them. agent-browser keeps them per origin (document,
+   *  subresources and fetches of that origin only) until the browser closes.
+   *  ponytail: a click or redirect into that origin before any `open` of it in this browser session sends none. */
+  const withHeaders = (id: string, args: string[]) => {
+    const h = args[0] === 'open' && args.length === 2 ? headersFor(id, args[1]) : null;
+    return h ? [...args, '--headers', JSON.stringify(h)] : args;
+  };
+
   /** One agent-browser command on an already running computer, without touching its idle timer. Returns `data` or throws. */
   async function exec(id: ProfileId, args: string[], { stdin, timeoutMs = 90_000 }: ExecOpts = {}): Promise<Record<string, any>> {
-    const r = await driver.exec(id, ['agent-browser', ...AB_FLAGS, ...args], { stdin, timeoutMs });
+    const r = await driver.exec(id, ['agent-browser', ...AB_FLAGS, ...withHeaders(id, args)], { stdin, timeoutMs });
     if (r.code !== 0 && !r.stdout) throw Error((r.stderr || `exit ${r.code}`).slice(0, 500));
     const out = JSON.parse(r.stdout);
     if (out.error || out.success === false) throw new BrowserError(String(out.error));
@@ -52,6 +66,7 @@ export function createComputers(driver: HostDriver, store: Store, { egressDir, i
 
   return {
     serial, ensure, exec, stop,
+    hasHeaders: (id: string, url: string) => !!headersFor(id, url),
     /** Same as exec, starting the computer if needed. */
     ab: async (id: ProfileId, args: string[], opts?: ExecOpts) => { await ensure(id); return exec(id, args, opts); },
 
