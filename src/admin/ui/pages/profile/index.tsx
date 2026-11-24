@@ -5,16 +5,17 @@ import { PageHead } from '@/components/page';
 import { StatePill } from '@/components/state';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { computersQuery, profilePath } from '@/lib/queries';
+import { computersQuery, detailsQuery, profilePath } from '@/lib/queries';
 import type { Computer } from '@/lib/types';
 import { DiagnosticsTab } from './diagnostics';
 import { DomainsTab } from './domains';
 import { LoginsTab } from './logins';
+import { PlaybooksTab } from './playbooks';
 import { SessionTab } from './session';
 import { SettingsTab } from './settings';
 import { SharingTab } from './sharing';
 
-export const TABS = { session: 'Session', logins: 'Logins', domains: 'Domains', diagnostics: 'Diagnostics', sharing: 'Sharing', settings: 'Settings' } as const;
+export const TABS = { session: 'Session', logins: 'Logins', playbooks: 'Playbooks', domains: 'Domains', diagnostics: 'Diagnostics', sharing: 'Sharing', settings: 'Settings' } as const;
 export type Tab = keyof typeof TABS;
 
 const tabsFor = (c: Computer) => (Object.keys(TABS) as Tab[]).filter((t) => (t !== 'settings' || c.role === 'admin')
@@ -24,6 +25,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   const { data: computers, isPending } = useQuery(computersQuery);
   const queryClient = useQueryClient();
   const c = computers?.find((x) => x.id === id);
+  const { data: details } = useQuery({ ...detailsQuery(id), enabled: !!c });
   const crumb = (rest: React.ReactNode) => <><Link to="/profiles" className="font-semibold text-primary">Profiles</Link> › {rest}</>;
   if (isPending) return null;
   if (!c) return <PageHead crumb={crumb(id)} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
@@ -31,7 +33,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   // A tab this role does not get (or a mistyped one): the session, with the URL saying so.
   if (tab && !tabs.includes(tab as Tab)) return <Navigate to="/profiles/$id" params={{ id }} replace />;
   const current = (tab ?? 'session') as Tab;
-  const count: Partial<Record<Tab, number>> = { logins: c.logins.length, domains: c.allow.length };
+  const count: Partial<Record<Tab, number>> = { logins: c.logins.length, playbooks: details?.playbooks.length, domains: c.allow.length };
 
   return (
     <>
@@ -51,6 +53,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
       </nav>
       {current === 'session' && <SessionTab c={c} />}
       {current === 'logins' && <LoginsTab id={id} />}
+      {current === 'playbooks' && <PlaybooksTab id={id} />}
       {current === 'domains' && <DomainsTab c={c} />}
       {current === 'diagnostics' && <DiagnosticsTab c={c} />}
       {current === 'sharing' && <SharingTab c={c} />}

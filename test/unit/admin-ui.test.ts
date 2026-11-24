@@ -19,7 +19,7 @@ const computer = (id, extra) => ({ id, role: 'admin', members: 1, container: 'ar
   allow: ['example.com'], logins: [], leasedUntil: null, lastCall: null, idleStopInS: null, viewers: 0, handoff: null, ...extra });
 let computers = [computer('sample', { state: 'running', status: 'running', profile: true, logins: ['notion'] }), computer('other', { allow: ['notion.so'] })];
 let members = [{ email, role: 'admin' }];
-const SENSITIVE = ['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'delete', 'members'];
+const SENSITIVE = ['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete', 'members'];
 window.fetch = async (path, options = {}) => {
   const body = options.body && JSON.parse(options.body);
   if (body) writes.push([path, body]);
@@ -28,7 +28,8 @@ window.fetch = async (path, options = {}) => {
   if (m) {
     const [, id, act] = m;
     if (options.method === 'POST' && SENSITIVE.includes(act) && !stepUpLeft) return json({ stepUp: true, error: 'Confirm with a 2FA code first' }, 401);
-    if (!act) return json({ id, running: true, page: null, headers: [], playbooks: [], cookies: [], storage: [], audit: [],
+    if (!act) return json({ id, running: true, page: null, headers: [], cookies: [], storage: [], audit: [],
+      playbooks: [{ name: 'check-quota', description: 'Check quota', updated: new Date().toISOString(), body: '# Check quota\\n\\n\\u0060\\u0060\\u0060json\\n{"steps": [\\n  {"open": "https://example.com"}\\n]}\\n\\u0060\\u0060\\u0060' }],
       logins: [{ site: 'notion', url: 'https://www.notion.so/login', username: 'me', lastTestedAt: null, lastResult: null }] });
     if (act === 'members' && body) { members = body.role ? [...members.filter(x => x.email !== body.email), { email: body.email, role: body.role }] : members.filter(x => x.email !== body.email); return json({ role: body.role }); }
     if (act === 'members') return json(members);
@@ -36,6 +37,7 @@ window.fetch = async (path, options = {}) => {
     if (act === 'config') { computers = computers.map(c => c.id === id ? { ...c, allow: body.allow } : c); return json({}); }
     if (act === 'delete') { computers = computers.filter(c => c.id !== id); return json({ deleted: true }); }
     if (act === 'start') return json({});
+    if (act === 'playbook-save') return json({ created: false });
     throw Error(path);
   }
   switch (path) {
@@ -225,3 +227,28 @@ browserCase('saving domains with a stale second factor asks for a code once, the
     ['/api/computers/sample/config', { allow: ['new.example'] }]]), 'requests ' + sent());
   check(!text().includes('Unsaved changes'), 'draft cleared');
 `, 'signedIn = true');
+
+browserCase('playbook editor: edit in the form, check the Markdown, pause on an error, then save', '#/profiles/sample?tab=playbooks', `
+  (await until(() => button('Edit'), 'playbook row')).click();
+  await until(() => field('name').value === 'check-quota', 'loaded name');
+  check(document.querySelector('#bdesc').value === 'Check quota', 'description');
+  check(document.querySelectorAll('ol li').length === 1, 'one step');
+  button('+ Add step').click();
+  await until(() => document.querySelectorAll('ol li').length === 2, 'step added');
+  choose(document.querySelector('ol li:nth-child(2) [aria-label="Text on the page"]'), 'Sign in');
+  choose(document.querySelector('#bdesc'), 'Check the quota');
+  const body = '# Check the quota\\n\\n\\u0060\\u0060\\u0060json\\n{"steps": [\\n  {"open": "https://example.com"},\\n  {"click": {"text": "Sign in"}}\\n]}\\n\\u0060\\u0060\\u0060';
+  document.querySelector('input[value=md]').click();
+  const md = await until(() => document.querySelector('[aria-label="Playbook Markdown"]'), 'markdown');
+  check(md.value === body, 'markdown ' + JSON.stringify(md.value));
+  choose(md, '# x\\n\\u0060\\u0060\\u0060json\\n{"steps": [\\n\\u0060\\u0060\\u0060');
+  document.querySelector('input[value=form]').click();
+  await until(() => text().includes('the form is paused: invalid JSON'), 'paused');
+  check(document.querySelector('#bdesc').closest('fieldset').disabled, 'form disabled');
+  document.querySelector('input[value=md]').click();
+  choose(await until(() => document.querySelector('[aria-label="Playbook Markdown"]'), 'markdown again'), body);
+  button('Save').click();
+  await until(() => text().includes('Updated.'), 'saved');
+  check(field('name').value === '' && document.querySelector('#bdesc')?.value === '', 'editor reset to the form, empty');
+  check(sent() === JSON.stringify([['/api/computers/sample/playbook-save', { name: 'check-quota', body }]]), 'save request ' + sent());
+`, 'signedIn = true; stepUpLeft = 900');
