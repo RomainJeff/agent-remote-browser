@@ -189,7 +189,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (profile(id)) return send(res, 409, { error: 'This profile already exists' });
         if (!a) return send(res, 400, { error: 'Invalid allow list: plain domains like example.com' });
         store.createProfile(id, a);
-        audit({ agent: id, tool: 'admin:create', ok: true });
+        audit({ by: session.user.email, agent: id, tool: 'admin:create', ok: true });
         return send(res, 201, { id });
       }
       // Connected clients: OAuth clients (with the scopes granted) and API keys. A key is shown once, at creation.
@@ -203,7 +203,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const ttl = keyTtl(expiresIn, expiresAt);
         if (!ttl) return send(res, 400, { error: 'Expiry required: expiresIn 30d, 90d or 1y, or expiresAt 1 to 365 days ahead' });
         const k = await pubAuth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope }, expiresIn: ttl } });
-        audit({ agent: pid ?? 'global', tool: 'admin:api-key', ok: true });
+        audit({ by: session.user.email, agent: pid ?? 'global', tool: 'admin:api-key', ok: true });
         return send(res, 201, { id: k.id, key: k.key, expiresAt: new Date(k.expiresAt!).toISOString() });
       }
       const rv = path.match(/^\/api\/(keys|clients)\/([^/]+)\/revoke$/);
@@ -214,7 +214,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const n = rv[1] === 'keys' ? db.prepare('DELETE FROM apikey WHERE id = ?').run(target).changes
           : db.prepare('DELETE FROM oauthClient WHERE clientId = ?').run(target).changes;
         if (!n) return send(res, 404, { error: 'not found' });
-        audit({ agent: 'admin', tool: `admin:revoke-${rv[1] === 'keys' ? 'key' : 'client'}`, ok: true });
+        audit({ by: session.user.email, agent: 'admin', tool: `admin:revoke-${rv[1] === 'keys' ? 'key' : 'client'}`, ok: true });
         return send(res, 200, { revoked: target });
       }
       const m = path.match(new RegExp(`^/api/computers/([^/]+)(?:/(${ACTIONS}))?$`));
@@ -225,7 +225,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (SENSITIVE.has(m[2]) && stale()) return;
       const act = m[2], body = (await readJson(req)) || {};
       // Playbooks: one line once done, saying what happened (create or update), the name and body never in it.
-      if (!act.startsWith('playbook-')) audit({ agent: id, tool: `admin:${act}`, ok: true });
+      if (!act.startsWith('playbook-')) audit({ by: session.user.email, agent: id, tool: `admin:${act}`, ok: true });
 
       if (act === 'open') { // same allowlist as the agent's `open` tool
         if (typeof body.url !== 'string' || !urlAllowed(body.url, p.allow)) return send(res, 400, { error: `Domain not allowed. Allowed: ${p.allow.join(', ')}` });
@@ -310,12 +310,12 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const bad = badPlaybook(body.name, body.body);
         if (bad) return send(res, 400, { error: bad });
         const done = store.savePlaybook(id, body.name, body.body);
-        audit({ agent: id, tool: `admin:playbook_${done === 'created' ? 'create' : 'update'}`, ok: true });
+        audit({ by: session.user.email, agent: id, tool: `admin:playbook_${done === 'created' ? 'create' : 'update'}`, ok: true });
         return send(res, 200, { saved: body.name, created: done === 'created' });
       }
       if (act === 'playbook-delete') {
         if (typeof body.name !== 'string' || !store.deletePlaybook(id, body.name)) return send(res, 404, { error: 'unknown playbook' });
-        audit({ agent: id, tool: 'admin:playbook_delete', ok: true });
+        audit({ by: session.user.email, agent: id, tool: 'admin:playbook_delete', ok: true });
         return send(res, 200, { deleted: body.name });
       }
       if (act === 'release') { leases.drop(id); return send(res, 200, { released: true }); }
@@ -350,7 +350,8 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     const id = m && validId(m[1]) ? m[1] : null, key = req.headers['sec-websocket-key'];
     if (!m || !id || !profile(id) || !/^[\w+/=]+$/.test(key || '')) return sock.destroy();
     // Browsers send the Origin on WebSocket upgrades: gate() refuses cross-site ones.
-    if (!await gate(req, pub).catch(() => null)) return sock.destroy();
+    const session = await gate(req, pub).catch(() => null);
+    if (!session) return sock.destroy();
     let port: number, relay: Duplex;
     try {
       ({ port } = await pc.exec(id, ['stream', 'status']));
@@ -360,7 +361,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       `Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
     relay.pipe(sock);
     const leave = pc.watch(id);
-    audit({ agent: id, tool: 'admin:view', ok: true });
+    audit({ by: session.user.email, agent: id, tool: 'admin:view', ok: true });
     let closed = false;
     const done = () => {
       if (closed) return;

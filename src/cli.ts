@@ -2,13 +2,14 @@
 //   node src/cli.ts rotate-login-key
 //   node src/cli.ts admin create <email>      (password, then TOTP code, on stdin)
 //   node src/cli.ts admin reset-2fa <email>   (new password and new TOTP secret)
+//   node src/cli.ts user create <email> [--admin]
+//   node src/cli.ts user list | user remove <email> | user admin <email> on|off
 //   node src/cli.ts backup-db <file>          (consistent snapshot of arb.db; safe while the gateway runs)
-//   node src/cli.ts key create <profile>|--global <file> [days]   (API key written to <file>, 0600; default 1 day)
+//   node src/cli.ts key create <profile>|--global <file> [days] [--as <email>]   (0600 file, default 1 day)
 //   node src/cli.ts key revoke <id>
 //   (both safe while the gateway runs: an operator, or an agent the operator lets run them, gets a test key
 //    without the admin UI's password and TOTP. Docker access to the host already outranks that 2FA.)
-// Output: counts, key ids, profile ids and Docker resource names. Never a password, token or key, with one
-// exception: `admin create` / `admin reset-2fa` print the TOTP otpauth:// URI once, to load in an authenticator app.
+// Enrollment prints the TOTP URI and backup codes once. Passwords and API keys are never printed.
 import { writeFileSync, renameSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -25,7 +26,16 @@ type Out = (line: string) => void;
 /** Reads one line, without echo on a TTY. */
 type Ask = (prompt: string) => Promise<string>;
 
-const USAGE = 'Usage: node src/cli.ts rotate-login-key | admin create|reset-2fa <email> | backup-db <file> | key create <profile>|--global <file> [days] | key revoke <id>';
+const USAGE = `Usage: node src/cli.ts <command>
+  admin create|reset-2fa <email>
+  user create <email> [--admin]
+  user list
+  user remove <email>
+  user admin <email> on|off
+  key create <profile>|--global <file> [days] [--as <email>]
+  key revoke <id>
+  rotate-login-key
+  backup-db <file>`;
 
 function withStore<T>(cfg: Config, fn: (store: ReturnType<typeof openStore>, db: ReturnType<typeof openDb>) => T): T {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
@@ -67,25 +77,37 @@ function backupDb(cfg: Config, file: string, out: Out) {
   });
 }
 
-/** One admin (single-operator gateway). `create` makes it, `reset-2fa` sets a new password and TOTP secret.
- *  Both end with a verified TOTP code, 10 fresh one-time backup codes printed once, and no session left behind. */
-async function adminCmd(cfg: Config, sub: string, email: string, ask: Ask, out: Out) {
+function normalizedEmail(email: string) {
   if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw Error('Invalid email');
-  email = email.toLowerCase();
+  return email.toLowerCase();
+}
+
+/** Create or recover a credential account, verify TOTP and print the new backup codes once. */
+async function enroll(cfg: Config, email: string, mode: 'bootstrap' | 'admin' | 'member' | 'reset-2fa', ask: Ask, out: Out) {
+  email = normalizedEmail(email);
   const db = openDb(join(cfg.dataDir, 'arb.db'));
   try {
     const { auth } = createAuth(db, authOptions(cfg));
     const ctx = await auth.$context;
+    const creatingAdmin = mode === 'bootstrap' || mode === 'admin';
     let user = await ctx.internalAdapter.findUserByEmail(email).then((r) => r?.user ?? null);
-    if (sub === 'create' && user) throw Error(`${email} exists: use admin reset-2fa`);
-    if (sub === 'create' && db.prepare('SELECT 1 FROM user').get()) throw Error('An admin already exists: one admin per gateway');
-    if (sub === 'reset-2fa' && !user) throw Error(`No admin ${email}`);
+    const checkBootstrap = () => {
+      if (mode === 'bootstrap' && db.prepare('SELECT 1 FROM user').get()) throw Error('A user already exists: use user create');
+    };
+    checkBootstrap();
+    if (mode !== 'reset-2fa' && user) throw Error(`${email} exists: use admin reset-2fa`);
+    if (mode === 'reset-2fa' && !user) throw Error(`No user ${email}`);
     const password = await ask('Password (12+ characters): ');
     if (password.length < 12 || password.length > 128) throw Error('Password: 12 to 128 characters');
     const hashed = await ctx.password.hash(password);
     if (!user) {
-      user = await ctx.internalAdapter.createUser({ email, name: 'Admin', emailVerified: true }, { method: 'admin' });
+      // Keep the bootstrap check, credential and role in one write transaction. close() rolls back on failure.
+      db.exec('BEGIN IMMEDIATE');
+      checkBootstrap();
+      user = await ctx.internalAdapter.createUser({ email, name: creatingAdmin ? 'Admin' : 'User', emailVerified: true }, { method: 'admin' });
       await ctx.internalAdapter.linkAccount({ userId: user.id, providerId: 'credential', accountId: user.id, password: hashed });
+      if (creatingAdmin) db.prepare('INSERT INTO admins VALUES (?)').run(user.id);
+      db.exec('COMMIT');
     } else {
       const id = user.id;
       tx(db, () => {
@@ -107,13 +129,48 @@ async function adminCmd(cfg: Config, sub: string, email: string, ask: Ask, out: 
     finally { db.prepare('DELETE FROM session WHERE userId = ?').run(user.id); }
     out('Backup codes, one use each (shown once, store them offline; reset-2fa makes new ones):');
     for (const c of enrolled.backupCodes) out(c);
-    out(`Admin ${email} ready: sign in with the password and a TOTP code.`);
+    out(`${creatingAdmin ? 'Admin' : 'User'} ${email} ready: sign in with the password and a TOTP code.`);
   } finally { db.close(); }
 }
 
-/** Same key as the admin UI's (scope profile:<id>, or global with --global), owned by the admin, but written to a new 0600 file
+function userId(db: DatabaseSync, email: string) {
+  const row = db.prepare('SELECT id FROM user WHERE email = ?').get(normalizedEmail(email));
+  if (!row) throw Error(`No user ${email}`);
+  return row.id as string;
+}
+
+function manageUsers(cfg: Config, args: string[], out: Out) {
+  const db = openDb(join(cfg.dataDir, 'arb.db'));
+  try {
+    const [sub, email, setting] = args;
+    if (sub === 'list') {
+      const rows = db.prepare(`SELECT email, admins.user_id AS admin, twoFactorEnabled, createdAt
+        FROM user LEFT JOIN admins ON admins.user_id = user.id ORDER BY email`).all();
+      for (const row of rows) {
+        out(`${row.email}\tadmin=${row.admin ? 'yes' : 'no'}\t2fa=${row.twoFactorEnabled ? 'yes' : 'no'}\tcreated=${row.createdAt}`);
+      }
+      return;
+    }
+    tx(db, () => {
+      const id = userId(db, email);
+      if (setting === 'on') {
+        db.prepare('INSERT INTO admins VALUES (?) ON CONFLICT DO NOTHING').run(id);
+        return;
+      }
+      if (db.prepare('DELETE FROM admins WHERE user_id = ?').run(id).changes && !db.prepare('SELECT 1 FROM admins').get()) {
+        throw Error('Cannot remove the last gateway admin');
+      }
+      if (sub === 'remove') {
+        db.prepare('DELETE FROM apikey WHERE referenceId = ?').run(id);
+        db.prepare('DELETE FROM user WHERE id = ?').run(id);
+      }
+    });
+  } finally { db.close(); }
+}
+
+/** Same key as the admin UI's (scope profile:<id>, or global with --global), written to a new 0600 file
  *  instead of being shown: the CLI never prints a key. Days: 1 to 365, default 1 (a test key should not outlive the test). */
-async function keyCmd(cfg: Config, args: string[], out: Out) {
+async function keyCmd(cfg: Config, args: string[], out: Out, as?: string) {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
   try {
     if (args[0] === 'revoke') {
@@ -124,13 +181,19 @@ async function keyCmd(cfg: Config, args: string[], out: Out) {
     const [, raw, file, d = '1'] = args, days = Number(d), global = raw === '--global', id = global ? null : parseProfileId(raw);
     if (!global && !(id && openStore(db, cfg.loginKeyFile).profile(id))) throw Error(`No profile ${raw}`);
     if (!Number.isInteger(days) || days < 1 || days > 365) throw Error('Days: 1 to 365');
-    const admin = db.prepare('SELECT id FROM user').get() as { id: string } | undefined;
-    if (!admin) throw Error('No admin yet: run admin create first');
-    writeFileSync(file, '', { flag: 'wx', mode: 0o600 }); // never overwrite: claim the file before the key exists
+    db.exec('BEGIN IMMEDIATE'); // Serialize key creation with user removal (apikey.referenceId has no foreign key).
+    const owner = as === undefined
+      ? db.prepare('SELECT user_id FROM admins ORDER BY rowid LIMIT 1').get()?.user_id as string | undefined
+      : userId(db, as);
+    if (!owner) throw Error('No gateway admin: specify --as <email> or create an admin');
     const { auth } = createAuth(db, authOptions(cfg));
-    const k = await auth.api.createApiKey({ body: { name: `cli ${id ?? 'global'}`, userId: admin.id, metadata: { scope: id ? `profile:${id}` : 'global' }, expiresIn: days * 86400 } })
-      .catch((e) => { rmSync(file); throw e; });
-    writeFileSync(file, k.key);
+    writeFileSync(file, '', { flag: 'wx', mode: 0o600 }); // never overwrite: claim the file before the key exists
+    let k;
+    try {
+      k = await auth.api.createApiKey({ body: { name: `cli ${id ?? 'global'}`, userId: owner, metadata: { scope: id ? `profile:${id}` : 'global' }, expiresIn: days * 86400 } });
+      writeFileSync(file, k.key);
+      db.exec('COMMIT');
+    } catch (e) { rmSync(file, { force: true }); throw e; }
     out(`Key ${k.id} for ${id ? `profile ${id}` : 'all profiles (global)'}, expires ${new Date(k.expiresAt!).toISOString()}, written to ${file}. Revoke: key revoke ${k.id}`);
   } finally { db.close(); }
 }
@@ -155,7 +218,23 @@ export async function main(args: string[], env: NodeJS.ProcessEnv, out: Out, ask
   if (cmd === 'rotate-login-key' && rest.length === 0) { rotateLoginKey(cfg, out); return 0; }
   if (cmd === 'backup-db' && rest.length === 1) { backupDb(cfg, rest[0], out); return 0; }
   if (cmd === 'admin' && ['create', 'reset-2fa'].includes(rest[0]) && rest.length === 2) {
-    await adminCmd(cfg, rest[0], rest[1], ask ?? stdinAsk(), out);
+    await enroll(cfg, rest[1], rest[0] === 'create' ? 'bootstrap' : 'reset-2fa', ask ?? stdinAsk(), out);
+    return 0;
+  }
+  if (cmd === 'user') {
+    const [sub, email, flag] = rest;
+    if (sub === 'create' && (rest.length === 2 || (rest.length === 3 && flag === '--admin'))) {
+      await enroll(cfg, email, flag ? 'admin' : 'member', ask ?? stdinAsk(), out);
+      return 0;
+    }
+    if ((sub === 'list' && rest.length === 1) || (sub === 'remove' && rest.length === 2) ||
+        (sub === 'admin' && rest.length === 3 && ['on', 'off'].includes(flag))) {
+      manageUsers(cfg, rest, out);
+      return 0;
+    }
+  }
+  if (cmd === 'key' && rest[0] === 'create' && [5, 6].includes(rest.length) && rest.at(-2) === '--as') {
+    await keyCmd(cfg, rest.slice(0, -2), out, rest.at(-1));
     return 0;
   }
   if (cmd === 'key' && ((rest[0] === 'create' && [3, 4].includes(rest.length)) || (rest[0] === 'revoke' && rest.length === 2))) {
