@@ -1232,7 +1232,7 @@ function renderRec() {
   $('#bRecReplay').onclick = () => withBuf(async (g) => { setText($('#recOut'), 'Replaying…'); const r = await tcall(g, 'replay', recBody(g)); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); });
   // Saving goes through the playbook form: same playbook-save, same 2FA step-up.
   $('#bRecSave').onclick = () => withBuf(async (g) => {
-    const f = $('#bookForm'); f.body.value = recBody(g).body;
+    const f = $('#bookForm'); f.body.value = recBody(g).body; f.body.dispatchEvent(new Event('input'));
     location.hash = `#/p/${encodeURIComponent(g.id)}/playbooks`; f.name.focus();
   });
 }
