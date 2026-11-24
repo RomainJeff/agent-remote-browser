@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Steps, Step, stepArgv } from '../../src/mcp/steps.ts';
+import { Steps, Step, stepArgv, placeholders } from '../../src/mcp/steps.ts';
 
 const parse = (s: unknown) => Step.parse(s);
 const ok = (s: unknown) => Step.safeParse(s).success;
@@ -64,4 +64,13 @@ test('stepArgv: each step to its agent-browser argv', () => {
     [{ snapshot: { compact: false, scope: 'main' } }, ['snapshot', '-i', '-s', 'main']],
   ];
   for (const [s, argv] of cases) assert.deepEqual(stepArgv(parse(s)), argv, JSON.stringify(s));
+});
+
+test('placeholders: those of the recipe in order of first use, [] for none, null without a usable recipe', () => {
+  const pb = (json: string) => `# Title\n\n\`\`\`json\n${json}\n\`\`\`\n{outside} is not in the recipe`;
+  assert.deepEqual(placeholders(pb('{"steps": [{"open": "https://a.test/"}]}')), []);
+  assert.deepEqual(placeholders(pb('[{"open": "https://a.test/{ws}"}]')), ['ws']);
+  assert.deepEqual(placeholders(pb('[{"open": "https://{host}/{ws}"}, {"fill": {"label": "{ws}"}, "value": "{q} {_x1}"}]')), ['host', 'ws', 'q', '_x1']);
+  for (const body of ['No recipe {here}', pb('{"steps": [}'), pb('{"stepz": []}'), pb('[]'), pb('{"steps": []}')])
+    assert.equal(placeholders(body), null, body.slice(0, 30));
 });

@@ -128,18 +128,23 @@ export function stepArgv(s: Step): string[] | null {
 }
 
 /** The steps of a playbook's first ```json block ({steps: [...]} or [...]), {placeholders} in its strings filled from params;
- *  an error message otherwise. Filled values go through Steps and the allowlist like any run_steps input. */
-export function recipe(body: string, params: Record<string, string>): unknown[] | string {
+ *  an error message otherwise (`missing` gets the unfilled ones). Filled values go through Steps and the allowlist like any run_steps input. */
+export function recipe(body: string, params: Record<string, string>, missing = new Set<string>()): unknown[] | string {
   const m = body.match(/```json[^\n]*\n([\s\S]*?)\n```/);
   if (!m) return 'This playbook has no run_steps recipe (```json block): read it with playbook';
   let j: any;
   try { j = JSON.parse(m[1]); } catch { return 'The recipe of this playbook is not valid JSON'; }
   const steps = Array.isArray(j) ? j : j?.steps;
-  if (!Array.isArray(steps)) return 'The recipe of this playbook has no steps';
-  const missing = new Set<string>();
+  if (!Array.isArray(steps) || !steps.length) return 'The recipe of this playbook has no steps';
   const fill = (v: unknown): unknown => typeof v === 'string'
     ? v.replace(/\{([A-Za-z_]\w*)\}/g, (all, k) => (Object.hasOwn(params, k) ? params[k] : (missing.add(k), all)))
     : Array.isArray(v) ? v.map(fill) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)])) : v;
   const out = fill(steps) as unknown[];
   return missing.size ? `Missing params: ${[...missing].join(', ')}` : out;
+}
+
+/** The {placeholders} of a playbook's recipe, in order of first use ([] for none); null without a recipe. */
+export function placeholders(body: string): string[] | null {
+  const missing = new Set<string>();
+  return Array.isArray(recipe(body, {}, missing)) || missing.size ? [...missing] : null;
 }
