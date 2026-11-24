@@ -11,7 +11,7 @@ import { count } from '../metrics.ts';
 import type { Ctx } from '../server.ts';
 import type { Handoff } from './handoffs.ts';
 import { BrowserError } from '../computers.ts';
-import { REF, GET_TEXT, SNAPSHOT, Steps, BUDGET, limits, at, clip, readOut, stepArgv, recipe, type Step } from './steps.ts';
+import { REF, GET_TEXT, SNAPSHOT, Steps, BUDGET, limits, at, clip, readOut, stepArgv, recipe, placeholders, type Step } from './steps.ts';
 
 const untrusted = (origin: unknown, text: string) =>
   `<untrusted_page_content origin="${origin}">\n${text}\n</untrusted_page_content>\n` +
@@ -263,7 +263,10 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
   const described = own ? index(own.id).map((b) => `${b.name} (${b.description})`).join('; ') || 'none' : 'those returned by lease_profile';
   tool('run_playbook', 'Run the run_steps recipe of a playbook in one call, its {placeholders} filled from params. Same reply as ' +
     `run_steps; on failure the playbook follows (what to do next). Playbooks: ${described}.`,
-  { name: z.string().max(40), params: z.record(z.string(), z.string().max(500)).optional() }, async ({ name, params = {} }, id, p) => {
+  { name: z.string().max(40), params: z.record(z.string(), z.string().max(500)).optional() }, ({ name, params = {} }, id, p) => runPlaybook(name, params, id, p));
+
+  // run_playbook and the pb_ tools: one path.
+  async function runPlaybook(name: string, params: Record<string, string>, id: ProfileId, p: Profile): Promise<Result> {
     const b = store.playbook(id, name);
     if (!b) return fail(`Unknown playbook. Available: ${index(id).map((x) => x.name).join(', ') || 'none'}`);
     const steps = recipe(b.body, params);
@@ -271,7 +274,30 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     const r = await runSteps(steps, id, p);
     // ponytail: appended to the one text item; some clients only show the first.
     return !r.isError ? r : { ...r, content: [{ type: 'text', text: `${(r.content[0] as { text: string }).text}\n\nPlaybook ${name}:\n${b.body}` }] };
-  });
+  }
+
+  // Profile token: each playbook with a recipe is also a root tool pb_<name>, its {placeholders} as required params, so
+  // the client finds it in its tool list. Audited and counted as run_playbook (never the name). A global token's tool list
+  // does not depend on a profile: run_playbook only.
+  // ponytail: 20 at most, by name; past that, run_playbook. Names are [a-z0-9-], so pb_ names cannot clash with each
+  // other or with the tools above; the check only covers rows written around savePlaybook.
+  if (own) {
+    const pb = new Set<string>();
+    for (const b of store.playbooks(own.id)) {
+      const ph = placeholders(b.body), name = 'pb_' + b.name.replace(/-/g, '_');
+      if (!ph || pb.has(name) || pb.size >= 20) continue;
+      pb.add(name);
+      server.registerTool(name, { description: describe(b.body), inputSchema: Object.fromEntries(ph.map((k) => [k, z.string().max(500)])) },
+        wrap('run_playbook', (a, id, p) => runPlaybook(b.name, a, id, p), 'browser') as any);
+    }
+    // A client may call a pb_ tool from a tools/list taken before its playbook was deleted: this request's server has none.
+    // ponytail: overrides the SDK's private error builder (its "Tool x not found"); the gateway test fails if a bump renames it.
+    const sdkError = (server as any).createToolError.bind(server);
+    (server as any).createToolError = (msg: string) => {
+      const m = msg.match(/Tool (pb_\w+) not found$/);
+      return m ? fail(`${m[1]}: no such playbook any more (deleted, renamed or without a recipe). Call playbook for the list.`) : sdkError(msg);
+    };
+  }
 
   if (!g) return server;
 

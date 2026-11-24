@@ -490,6 +490,76 @@ test('playbooks: admin writes them (step-up, audited without name or body), the 
   assert.ok(!log.includes(marker) && !log.includes('check-quota'), 'neither body nor name in the audit');
 });
 
+test('pb_ tools: a profile token gets one root tool per playbook with a recipe, run like run_playbook', async () => {
+  const save = (name: string, b: string) => admin('POST', '/api/computers/shop/playbook-save', { body: { name, body: b } });
+  const del = (name: string) => admin('POST', '/api/computers/shop/playbook-delete', { body: { name } });
+  const json = (j: string) => `\`\`\`json\n${j}\n\`\`\``;
+  const pbTools = async (token = tokens.shop) => (await mcp(token, (c) => c.listTools())).tools.filter((t) => t.name.startsWith('pb_'));
+  const extra = ['no-params', 'two-params', 'notes', 'bad-json', 'no-steps'];
+  for (const [name, b] of [['no-params', `Open the home\n${json('[{"open": "https://example.com/"}]')}`],
+    ['two-params', `# Search\n${json('[{"open": "https://example.com/{ws}"}, {"fill": {"label": "Q"}, "value": "{q} in {ws}"}]')}`],
+    ['notes', 'Just notes, {nothing} to run'], ['bad-json', `Bad\n${json('{"steps": [}')}`], ['no-steps', `Empty\n${json('{"steps": []}')}`]])
+    assert.equal((await save(name, b)).status, 200, name);
+
+  // Schema: one required string (500 max) per placeholder, in order; description = the playbook's.
+  const tools = Object.fromEntries((await pbTools()).map((t) => [t.name, t]));
+  assert.deepEqual(Object.keys(tools).sort(), ['pb_check_quota', 'pb_no_params', 'pb_two_params'], 'no recipe, invalid JSON, no steps: no tool');
+  assert.equal(tools.pb_check_quota.description, 'Check the quota');
+  assert.deepEqual(tools.pb_check_quota.inputSchema.required, ['workspace']);
+  assert.deepEqual(tools.pb_check_quota.inputSchema.properties, { workspace: { type: 'string', maxLength: 500 } });
+  assert.deepEqual([tools.pb_no_params.description, tools.pb_no_params.inputSchema.properties, tools.pb_no_params.inputSchema.required ?? []],
+    ['Open the home', {}, []]);
+  assert.deepEqual(tools.pb_two_params.inputSchema.required, ['ws', 'q']);
+  assert.deepEqual(await pbTools(tokens.global), [], 'global token: run_playbook only');
+
+  // A call runs the recipe exactly like run_playbook: same reply, same audit line (never the name or params).
+  fake.calls = [];
+  const ran = await call(tokens.shop, 'pb_check_quota', { workspace: 'w2' });
+  assert.ok(!ran.error, ran.text);
+  assert.equal(JSON.parse(ran.text.split('\n')[0]).ok, true);
+  assert.deepEqual(agentBrowser('open').map((c) => c.argv!.at(-1)), ['https://example.com/w2']);
+  const last = () => { const { tool, ok, steps, failed_at } = JSON.parse(readFileSync(f.audit, 'utf8').trim().split('\n').at(-1)!); return { tool, ok, steps, failed_at }; };
+  assert.deepEqual(last(), { tool: 'run_playbook', ok: true, steps: 1, failed_at: undefined });
+  fake.failOn = 'open';
+  try {
+    const bad = await call(tokens.shop, 'pb_check_quota', { workspace: 'w2' });
+    assert.ok(bad.error);
+    assert.match(bad.text, /"failed_at":0/);
+    assert.match(bad.text, /\n\nPlaybook check-quota:\n# Check the quota/);
+    assert.deepEqual(last(), { tool: 'run_playbook', ok: false, steps: 1, failed_at: 0 });
+  } finally { fake.failOn = ''; }
+  fake.calls = [];
+  assert.equal((await call(tokens.shop, 'pb_check_quota', {})).error, true, 'required param');
+  assert.equal((await call(tokens.shop, 'pb_two_params', { ws: 'x'.repeat(501), q: 'a' })).error, true, '500 max');
+  assert.equal(calls('exec').length, 0, 'refused before the host');
+  const log = readFileSync(f.audit, 'utf8');
+  assert.ok(!log.includes('check_quota') && !log.includes('w2'), 'neither name nor params in the audit');
+
+  // Collision: a row written around savePlaybook (names are slugs, no "_") maps to the same pb_ name; the later one is skipped.
+  sql((db) => db.prepare('INSERT INTO playbooks (profile, name, body, updated) VALUES (?, ?, ?, ?)').run('shop', 'no_params', `Twin\n${json('[{"back": true}]')}`, Date.now()));
+  try {
+    assert.deepEqual((await pbTools()).filter((t) => t.name === 'pb_no_params').map((t) => t.description), ['Open the home']);
+  } finally { sql((db) => db.prepare('DELETE FROM playbooks WHERE name = ?').run('no_params')); }
+
+  // Cap: 20 pb_ tools at most, the first by name; run_playbook still runs the others.
+  const many = Array.from({ length: 20 }, (_, i) => `z-${String(i).padStart(2, '0')}`);
+  for (const n of many) assert.equal((await save(n, `Many ${n}\n${json('[{"back": true}]')}`)).status, 200);
+  const capped = (await pbTools()).map((t) => t.name).sort();
+  assert.equal(capped.length, 20);
+  assert.deepEqual(capped.slice(-3), ['pb_z_14', 'pb_z_15', 'pb_z_16'], 'by name: z-17 to z-19 left out');
+  assert.equal((await call(tokens.shop, 'run_playbook', { name: 'z-19' })).error, false);
+
+  // A pb_ tool from a stale tools/list (playbook deleted since): a clear error, no crash.
+  assert.equal((await del('z-00')).status, 200);
+  assert.deepEqual(await call(tokens.shop, 'pb_z_00'),
+    { error: true, text: 'pb_z_00: no such playbook any more (deleted, renamed or without a recipe). Call playbook for the list.' });
+  assert.match((await call(tokens.shop, 'pb_nope_x')).text, /Call playbook for the list/);
+  assert.match((await call(tokens.shop, 'nope')).text, /Tool nope not found$/, 'other unknown tools: the SDK error');
+
+  for (const n of [...many.slice(1), ...extra]) assert.equal((await del(n)).status, 200, n);
+  assert.deepEqual((await pbTools()).map((t) => t.name), ['pb_check_quota']);
+});
+
 test('kill switch refuses every tool until removed', async () => {
   writeFileSync(f.kill, '');
   try {
