@@ -22,7 +22,7 @@ import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import { teacher } from './teach.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'members|start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-focus|teach-type|teach-press|teach-open|teach-read|teach-replay';
+const ACTIONS = 'members|candidates|start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-focus|teach-type|teach-press|teach-open|teach-read|teach-replay';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -298,6 +298,10 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (!role) return send(res, 404, { error: 'unknown profile' });
       if (!can(role, post ? act : null)) return send(res, 403, { error: 'forbidden' });
       if (req.method === 'GET' && act === 'members') return send(res, 200, store.members(id));
+      if (act === 'candidates') {
+        if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+        return can(role, 'members') ? send(res, 200, store.candidates(id)) : send(res, 403, { error: 'forbidden' });
+      }
       if (req.method === 'GET' && act === null) return send(res, 200, await computerDetails(id, profile(id)!));
       if (!post || !act) return send(res, 405, { error: 'method not allowed' });
       if (SENSITIVE.has(act) && stale()) return;

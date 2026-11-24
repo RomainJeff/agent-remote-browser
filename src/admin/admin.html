@@ -40,7 +40,7 @@
   .btn-g { border-color: transparent; background: transparent; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btn[aria-busy="true"] { cursor: progress; }
-  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
+  .f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--muted); }
   input.in, select.in, textarea.in { font: 400 14px/20px var(--sans); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; min-height: 40px; padding: 0 12px; min-width: 0; width: 100%; }
   textarea.in { padding: 8px 12px; resize: vertical; }
   input.in.mono { font-family: var(--mono); font-size: 13px; }
@@ -48,6 +48,12 @@
   input.in:user-invalid { border-color: var(--danger); }
   .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 400; color: var(--ink); cursor: pointer; }
   .check input { margin: 3px 0 0; accent-color: var(--primary); width: 16px; height: 16px; flex: none; }
+  #shareForm { align-items: flex-end; }
+  .pick { position: relative; min-width: 220px; }
+  .pick > summary::-webkit-details-marker { display: none; }
+  .pick > summary::after { content: '▾'; margin-left: auto; padding-left: 12px; color: var(--muted); }
+  .pick > summary { display: flex; align-items: center; list-style: none; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font: 400 14px/20px var(--sans); color: var(--ink); cursor: pointer; }
+  .pick > div { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: 240px; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.12); }
   .hint { color: var(--muted); font-size: 12px; line-height: 16px; margin: 0; }
   .msg { font-size: 13px; margin: 0; min-height: 20px; color: var(--muted); transition: opacity .4s; }
   .msg.err { color: var(--danger-ink); font-weight: 600; }
@@ -576,29 +582,41 @@ async function refreshSharing() {
   const owner = $('#sharing'), id = selected, path = '/api/computers/' + encodeURIComponent(id) + '/members';
   if (!owner) return;
   try {
-    const members = await api(path);
-    if (!owner.isConnected || tab !== 'sharing') return;
     const admin = computers.find(c => c.id === id)?.role === 'admin';
+    const [members, candidates] = await Promise.all([api(path), admin ? api(path.replace(/members$/, 'candidates')) : []]);
+    if (!owner.isConnected || tab !== 'sharing') return;
     if (!$('#memberRows', owner)) owner.innerHTML = `<h2>Sharing</h2><div id="memberRows"></div>${admin ? `<form class="row" id="shareForm">
-      <label class="f">Email<input class="in" name="email" type="email" required></label>
+      <div class="f">Members<details class="pick"><summary></summary><div id="sharePick"></div></details></div>
       <label class="f">Role<select class="in" name="role">${roleOptions('viewer')}</select></label>
-      <button class="btn btn-p" type="submit">Add member</button></form>` : ''}`;
-    const save = async (email, role) => {
-      await api(path, 'POST', { email, role });
+      <button class="btn btn-p" type="submit">Add</button></form>` : ''}`;
+    const save = async (emails, role) => {
+      for (const email of emails) await api(path, 'POST', { email, role });
       await refreshList();
       if (owner.isConnected) await refreshSharing();
     };
+    if (admin && patch('sharePick', candidates, () => candidates.length
+      ? candidates.map(email => `<label class="check"><input type="checkbox" name="email" value="${esc(email)}">${esc(email)}</label>`).join('')
+      : '<p class="hint">Everyone already has access.</p>')) {
+      const form = $('#shareForm'), summary = $('summary', form);
+      form.onchange = () => { const n = $$('[name=email]:checked', form).length; summary.textContent = n ? `${n} selected` : 'Choose'; };
+      form.onchange();
+    }
     if (patch('memberRows', members, () => `<div class="tbl"><table><tr><th>Email</th><th>Role</th>${admin ? '<th></th>' : ''}</tr>
       ${members.map(m => `<tr><td>${esc(m.email)}</td><td>${admin ? `<select class="in" aria-label="Role · ${esc(m.email)}" data-member="${esc(m.email)}">${roleOptions(m.role)}</select>` : esc(m.role)}</td>
       ${admin ? `<td>${m.email === me.email ? '' : `<button class="btn btn-sm" data-remove="${esc(m.email)}">Remove</button>`}</td>` : ''}</tr>`).join('')}</table></div>`)) {
       for (const select of $$('[data-member]', owner)) select.onchange = () => act(select, async () => {
         const role = select.value;
         select.value = members.find(m => m.email === select.dataset.member).role;
-        await save(select.dataset.member, role);
+        await save([select.dataset.member], role);
       });
-      for (const b of $$('[data-remove]', owner)) b.onclick = () => act(b, () => save(b.dataset.remove, null));
+      for (const b of $$('[data-remove]', owner)) b.onclick = () => act(b, () => save([b.dataset.remove], null));
     }
-    if (admin) submit($('#shareForm'), async f => { await save(f.email.value.trim(), f.elements.role.value); f.reset(); });
+    if (admin) submit($('#shareForm'), async f => {
+      const emails = $$('[name=email]:checked', f).map(i => i.value), pick = $('details', f);
+      pick.open = !emails.length;
+      if (emails.length) await save(emails, f.elements.role.value);
+      return false;
+    });
   } catch (e) { if (owner.isConnected) toast(e.message, 'error'); }
 }
 

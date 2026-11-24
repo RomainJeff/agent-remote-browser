@@ -82,6 +82,9 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       one('SELECT role FROM profile_members WHERE profile = ? AND user_id = ?', id, userId)?.role ?? null,
     members: (id: string) => all(`SELECT u.email, m.role FROM profile_members m JOIN user u ON u.id = m.user_id
       WHERE m.profile = ? ORDER BY u.email`, id) as { email: string; role: Role }[],
+    /** Active accounts not yet on the profile: what its admins can pick from when sharing. */
+    candidates: (id: string) => all(`SELECT email FROM user WHERE email NOT IN pending_emails
+      AND id NOT IN (SELECT user_id FROM profile_members WHERE profile = ?) ORDER BY email`, id).map((r) => r.email as string),
     createProfile: (id: ProfileId, allow: string[], userId: string) => tx(db, () => {
       run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), Date.now());
       run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);

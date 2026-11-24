@@ -1410,7 +1410,12 @@ test('profile members control API access, including for a gateway admin', async 
   assert.equal((await setRole(null, email)).status, 409);
   assert.equal((await setRole('invalid')).status, 400);
   assert.equal((await setRole('editor', 'missing@example.com')).status, 404);
+  const candidates = path + '/candidates';
+  assert.ok(!(await admin('GET', candidates, { headers })).json.includes(email));
+  assert.ok((await admin('GET', candidates, { headers })).json.includes(owner.email));
   assert.equal((await setRole('viewer')).status, 200);
+  assert.ok(!(await admin('GET', candidates, { headers })).json.includes(owner.email));
+  assert.equal((await admin('GET', candidates)).status, 403);
   assert.equal((await listed()).role, 'viewer');
   assert.equal((await admin('GET', path)).json.id, id);
   assert.deepEqual((await admin('GET', roster)).json, [{ email: owner.email, role: 'viewer' }, { email, role: 'admin' }]);

@@ -32,6 +32,7 @@ window.fetch = async (path, options = {}) => {
     case '/api/computers': return json([{id:'sample', role, members:1, allow:[], logins:[], state:'running'}]);
     case '/api/computers/sample': return json({logins:[], headers:[], playbooks:[], audit:[], cookies:[], storage:[]});
     case '/api/computers/sample/members': return json(body || members);
+    case '/api/computers/sample/candidates': return json(['new@example.com', 'third@example.com']);
     default: throw Error(path);
   }
 };`;
@@ -98,15 +99,20 @@ browserCase('editor opening settings sees the session without Delete', '#/p/samp
   check(!visible(document.querySelector('#bDelete')), 'delete');
 `);
 
-browserCase('profile admin adds, changes and removes sharing by email', '#/p/sample/sharing', "members.push({ email: 'other@example.com', role: 'editor' });", `
-  const f = document.querySelector('#shareForm');
-  f.email.value = 'new@example.com'; f.elements.role.value = 'viewer'; f.requestSubmit(); await settle();
+browserCase('profile admin picks members to add, then changes and removes sharing', '#/p/sample/sharing', "members.push({ email: 'other@example.com', role: 'editor' });", `
+  const f = document.querySelector('#shareForm'), pick = f.querySelector('details');
+  f.requestSubmit(); await settle();
+  check(pick.open && writes.length === 0, 'empty pick opens the list');
+  for (const box of f.querySelectorAll('[name=email]')) box.click();
+  check(f.querySelector('summary').textContent === '2 selected', 'selection count');
+  f.elements.role.value = 'viewer'; f.requestSubmit(); await settle();
+  check(!pick.open, 'list closed after adding');
   const select = document.querySelector('[data-member]');
   select.value = 'editor'; select.dispatchEvent(new Event('change')); await settle();
   check(!document.querySelector('[data-remove="' + email + '"]'), 'no Remove on own row');
   document.querySelector('[data-remove]').click(); await settle();
   check(JSON.stringify(writes) === JSON.stringify([
-    {email:'new@example.com', role:'viewer'}, {email, role:'editor'}, {email:'other@example.com', role:null}
+    {email:'new@example.com', role:'viewer'}, {email:'third@example.com', role:'viewer'}, {email, role:'editor'}, {email:'other@example.com', role:null}
   ].map(body => ['/api/computers/sample/members', body])), 'membership requests ' + JSON.stringify(writes));
 `);
 
