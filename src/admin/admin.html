@@ -1130,7 +1130,7 @@ function wireControl() {
   img.onpaste = (e) => {
     if (!on) return; e.preventDefault();
     const t = e.clipboardData.getData('text/plain');
-    if (recording()) { if (!rec.lost) rec.buf = (rec.buf + t).slice(0, 500); return renderBuf(); }
+    if (recording()) return addBuf(t);
     if (t.length > 5000) return toast('Text too long (5000 characters max).', 'error');
     if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Paste failed: ${err.message}`, 'error'));
   };
@@ -1147,13 +1147,15 @@ function wireControl() {
 // seq: the last gesture that may move the focus; typing names it (after) and this recording (rid, every call), so the
 // gateway refuses text that follows a gesture it did not run, or one of another tab's recording.
 // pick: the saved logins of the site to pick from, for a password field; Save and Replay wait for it.
+// The first character typed into an empty buffer queues teach-focus: the gateway notes the field focused then and fills
+// only that field on the flush, so text typed after a Tab is dropped if the page moved the focus in between.
 // ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
 let rec = null;
 let SEQ = 0;
 const STALE = Symbol('stale');
 async function tcall(g, a, body) {
   if (rec !== g) throw STALE;
-  body = { ...body, rec: g.rid, ...(a === 'type' ? { after: g.seq } : a === 'read' ? {} : { seq: g.seq = ++SEQ }) };
+  body = { ...body, rec: g.rid, ...(a === 'type' || a === 'focus' ? { after: g.seq } : a === 'read' ? {} : { seq: g.seq = ++SEQ }) };
   const fail = () => { if (a !== 'read') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } };
   let r;
   try { r = await api(`/api/computers/${encodeURIComponent(g.id)}/teach-${a}`, 'POST', body); }
@@ -1193,8 +1195,13 @@ function recKey(e) {
   if (REC_KEYS.includes(e.key)) return withBuf(async (g, r) => { if (!r?.step.login) addStep(g, await tcall(g, 'press', { key: e.key })); });
   if (rec.lost) return renderBuf();
   if (e.key === 'Backspace') rec.buf = rec.buf.slice(0, -1);
-  else if ([...e.key].length === 1) rec.buf = (rec.buf + e.key).slice(0, 500);
+  else if ([...e.key].length === 1) return addBuf(e.key);
   else return;
+  renderBuf();
+}
+function addBuf(t) {
+  const g = rec;
+  if (!g.lost && t) { if (!g.buf) gesture(() => tcall(g, 'focus', {})); g.buf = (g.buf + t).slice(0, 500); }
   renderBuf();
 }
 const same = (a, b) => a !== undefined && JSON.stringify(a) === JSON.stringify(b);

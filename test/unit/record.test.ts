@@ -16,7 +16,7 @@ function page() {
   };
   vm.createContext(ctx);
   const src = html.slice(html.indexOf('let rec = null;'), html.indexOf('function renderRec()'));
-  vm.runInContext(src + ';T = { get rec() { return rec }, set rec(v) { rec = v }, withBuf, addStep, recBody, tcall, renderBuf };', ctx);
+  vm.runInContext(src + ';T = { get rec() { return rec }, set rec(v) { rec = v }, withBuf, addStep, addBuf, recBody, tcall, renderBuf };', ctx);
   const T = ctx.T;
   const start = (id = 'p') => (T.rec = { id, rid: 'r-' + id, steps: [] as any[], buf: '', q: Promise.resolve(), lost: false } as any);
   const click = () => T.withBuf(async (g: any) => T.addStep(g, await T.tcall(g, 'click', { x: 1, y: 1 })));
@@ -88,6 +88,20 @@ test('record: Save and Replay wait for a pending login pick instead of dropping 
   assert.deepEqual([saved, g.pick.length, ctx.toasts], [false, 2, ['Pick the saved login to use first, or Cancel']]);
   T.withBuf(async () => {}); await settle(); // a gesture in the view: the pick is dropped
   assert.equal(g.pick, null);
+});
+
+test('record: the first character asks the gateway to note the focused field; the flush follows it, a refusal drops the text', async () => {
+  const { ctx, T, start, click } = page(), g = start();
+  ctx.replies.click = OK; click(); await settle();
+  ctx.replies.focus = {}; ctx.replies.type = fill('Email', 'ab');
+  T.addBuf('a'); T.addBuf('b'); click(); await settle();
+  assert.deepEqual(ctx.calls, ['click', 'focus', 'type', 'click']);
+  assert.deepEqual([{ ...ctx.bodies[1] }, ctx.bodies[2].after], [{ rec: g.rid, after: 1 }, 1]);
+  // The page moved the focus before the HIT noted it: the text is dropped, never sent.
+  ctx.replies.focus = new Error('The focus is not on the field you clicked'); ctx.calls.length = 0;
+  T.addBuf('hunter2'); click(); await settle();
+  assert.deepEqual([ctx.calls, g.lost, g.buf], [['focus'], true, '']);
+  T.addBuf('x'); assert.deepEqual([ctx.calls, g.buf], [['focus'], ''], 'typing is off until a click goes through');
 });
 
 test('record: a pick that comes back while a view click waits is dropped by that click', async () => {

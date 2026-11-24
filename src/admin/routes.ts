@@ -19,7 +19,7 @@ import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import { teacher } from './teach.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-type|teach-press|teach-open|teach-read|teach-replay';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-focus|teach-type|teach-press|teach-open|teach-read|teach-replay';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };

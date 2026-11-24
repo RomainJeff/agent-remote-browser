@@ -596,12 +596,23 @@ test('pb_ tools: a profile token gets one root tool per playbook with a recipe, 
 
 test('teach: each admin gesture runs as a semantic step and comes back as one; a password field becomes the saved login', async () => {
   // As the page does: its recording id (rec) on every call, a seq on each gesture that may move the focus, typing after
-  // the last one; explicit values in body win.
+  // the last one; explicit values in body win. Typed text: teach-focus first (the page sends it on the first character),
+  // its refusal drops the text; raw: one call as given.
   let S = 0;
-  const teach = (a: string, body: Record<string, unknown>) => {
-    const b: Record<string, unknown> = { rec: 'R', ...(a === 'type' ? { after: S } : a === 'read' ? {} : { seq: ++S }), ...body };
+  const fill = (a: string, body: Record<string, unknown>) => {
+    const b: Record<string, unknown> = { rec: 'R', ...(a === 'type' || a === 'focus' ? { after: S } : a === 'read' ? {} : { seq: ++S }), ...body };
     if (typeof b.seq === 'number') S = b.seq;
-    return admin('POST', `/api/computers/shop/teach-${a}`, { body: b });
+    return b;
+  };
+  const send = (a: string, b: Record<string, unknown>) => admin('POST', `/api/computers/shop/teach-${a}`, { body: b });
+  const raw = (a: string, body: Record<string, unknown>) => send(a, fill(a, body));
+  const teach = async (a: string, body: Record<string, unknown>) => {
+    const b = fill(a, body);
+    if (a === 'type' && b.text !== undefined) {
+      const f = await send('focus', { rec: b.rec, after: b.after });
+      if (f.status !== 200) return f;
+    }
+    return send(a, b);
   };
   const abs = () => calls('exec').filter((c) => c.argv![0] === 'agent-browser').map((c) => c.argv!.slice(1 + AB_FLAGS.length));
   const hits = () => calls('exec').filter((c) => c.argv![0] === 'node').map((c) => c.argv!.slice(3));
@@ -695,18 +706,53 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
       r = await teach('type', { login: 'alt', after: 5 });
       assert.deepEqual([r.status, r.json], [200, { step: { login: 'alt', if_needed: true } }]);
       assert.ok(abs().slice(k).some((a) => a.join(' ') === 'auth login gw-alt --no-navigate'), 'the picked login filled');
-      assert.equal((await teach('type', { login: 'nope', after: 5 })).status, 400);
+      assert.equal((await raw('type', { login: 'alt', after: 5 })).status, 409, 'the noted field served its flush');
+      assert.equal((await raw('focus', { after: 5 })).status, 200);
+      assert.equal((await raw('type', { login: 'nope', after: 5 })).status, 400);
       assert.equal((await teach('click', { x: 1, y: 1, seq: 6 })).status, 200);
+      assert.equal((await raw('focus', { after: 6 })).status, 200);
       fake.hit.focus = email;
-      assert.deepEqual([(await teach('type', { login: 'alt', after: 6 })).json.error], [MOVED], 'a pick for a field that is no longer a password');
+      assert.deepEqual([(await raw('type', { login: 'alt', after: 6 })).json.error], [MOVED], 'a pick for a field that is no longer a password');
+      assert.equal((await teach('click', { x: 1, y: 1, seq: 7 })).status, 200);
+      assert.equal((await raw('focus', { after: 7 })).status, 200);
+      assert.deepEqual([(await raw('type', { login: 'alt', after: 7 })).json.error], [MOVED], 'a pick for a field that never was a password');
     } finally {
       assert.equal((await admin('POST', '/api/computers/shop/login-delete', { body: { site: 'alt' } })).status, 200);
     }
     assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
-    // A stale tab's call (another recording) is refused before any input and leaves the active tab's state alone.
+
+    // Typing is bound to the field focused when it began (teach-focus). A Tab into the password field, typing, then the
+    // page refreshes and autofocuses its email field before the flush: refused, nothing filled, the password not echoed.
+    const pw = { url: 'https://example.com/login', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
+    const name = { url: 'https://example.com/', chain: [{ role: 'textbox', name: 'Name', tag: 'input', count: 1, exact: 1 }, root] };
+    assert.equal((await teach('press', { key: 'Tab' })).status, 200);
+    fake.hit.focus = pw;
+    assert.equal((await raw('focus', {})).status, 200);
+    fake.hit.focus = email; k = abs().length;
+    r = await raw('type', { text: secret });
+    assert.deepEqual([r.status, r.json, abs().length], [409, { error: MOVED }, k]);
+    // The other way round: typing began in the email field, the focus is now on a password: no login, no fill.
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
+    assert.equal((await raw('focus', {})).status, 200);
+    fake.hit.focus = pw; k = abs().length;
+    assert.deepEqual([(await raw('type', { text: secret })).status, abs().length], [409, k]);
+    // Another field than the one typing began in: refused.
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
     fake.hit.focus = email;
-    assert.equal((await teach('type', { text: secret, rec: 'OLD' })).status, 409);
-    r = await teach('type', { text: 'me' });
+    assert.equal((await raw('focus', {})).status, 200);
+    fake.hit.focus = name; k = abs().length;
+    assert.deepEqual([(await raw('type', { text: secret })).json.error, abs().length], [MOVED, k]);
+    // No field noted (a page that skipped teach-focus): refused.
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
+    k = abs().length;
+    assert.deepEqual([(await raw('type', { text: secret })).status, abs().length], [409, k]);
+    // A stale tab's calls (another recording) are refused before any input and leave the active tab's state alone.
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
+    fake.hit.focus = email;
+    assert.equal((await raw('focus', {})).status, 200);
+    assert.equal((await raw('type', { text: secret, rec: 'OLD' })).status, 409);
+    assert.equal((await raw('focus', { rec: 'OLD' })).status, 409);
+    r = await raw('type', { text: 'me' });
     assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me' } }]);
     assert.ok(!JSON.stringify(fake.calls).includes(secret), 'typed password never sent');
 
@@ -732,7 +778,7 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     assert.deepEqual([(await teach('type', { text: secret })).status, abs().length], [409, k]);
 
     const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /teach/.test(l.tool));
-    assert.deepEqual([...new Set(audit.map((l) => l.tool))].sort(), ['admin:teach-click', 'admin:teach-open', 'admin:teach-press', 'admin:teach-read', 'admin:teach-replay', 'admin:teach-type']);
+    assert.deepEqual([...new Set(audit.map((l) => l.tool))].sort(), ['admin:teach-click', 'admin:teach-focus', 'admin:teach-open', 'admin:teach-press', 'admin:teach-read', 'admin:teach-replay', 'admin:teach-type']);
 
     // A gesture queued behind another while an agent leases the profile: checked once its turn comes.
     let go!: (v?: unknown) => void;
