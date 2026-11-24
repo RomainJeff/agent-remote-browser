@@ -1483,7 +1483,8 @@ test('invite enrollment binds the session to the recipient and applies the role 
   assert.deepEqual(open.map((i: any) => [i.id, i.email, i.createdBy, i.admin]), [[issued.json.id, email, owner.email, true]]);
   const start = await accept('start', { token, password });
   assert.equal(start.status, 200);
-  assert.deepEqual(Object.keys(start.json), ['totpURI']);
+  assert.deepEqual(Object.keys(start.json), ['totpURI', 'qrSVG']);
+  assert.match(start.json.qrSVG, /^<svg /);
   const row = async () => (await admin('GET', '/api/users')).json.find((u: any) => u.email === email);
   assert.deepEqual([(await row()).admin, (await row()).pending], [false, true]);
   assert.equal((await admin('POST', '/api/users/admin', { body: { email, admin: true } })).status, 409);
