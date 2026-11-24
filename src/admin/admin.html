@@ -1170,6 +1170,8 @@ function gesture(fn) { const g = rec; g.q = g.q.then(() => rec === g && fn(g)).c
 function withBuf(fn, draft) {
   const g = rec, text = g.buf; g.buf = ''; if (!draft) g.pick = null; renderBuf();
   gesture(async () => {
+    // A pick that came back while this view gesture waited (its type was queued before): this gesture drops it too.
+    if (!draft && g.pick) { g.pick = null; renderBuf(); }
     let r = null;
     if (text) {
       // A gesture queued before this one failed: the focus is not where this text was typed.

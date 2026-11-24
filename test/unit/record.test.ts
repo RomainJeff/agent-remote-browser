@@ -90,6 +90,13 @@ test('record: Save and Replay wait for a pending login pick instead of dropping 
   assert.equal(g.pick, null);
 });
 
+test('record: a pick that comes back while a view click waits is dropped by that click', async () => {
+  const { ctx, T, start, click } = page(), g = start();
+  ctx.replies.type = { pick: [{ site: 'a', username: 'x' }, { site: 'b', username: 'y' }] }; ctx.replies.click = OK;
+  g.buf = 'secret'; click(); click(); await settle();
+  assert.deepEqual([ctx.calls, g.pick, g.steps.length], [['type', 'click'], null, 1]);
+});
+
 test('record: a replay that stops partway turns typing off, like a failed gesture', async () => {
   const { ctx, T, start } = page(), g = start();
   ctx.replies.replay = { ok: false, text: 'Step 2 failed' }; g.buf = 'hunter2';
