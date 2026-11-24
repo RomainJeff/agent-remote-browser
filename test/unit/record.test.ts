@@ -1,25 +1,21 @@
-// The admin page's record draft (admin.html, between `let rec` and renderRec), run in a vm with the DOM and api stubbed.
+// The admin page's record draft (src/admin/ui/lib/record.ts), with the API stubbed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
+import { canSave, createRecorder, recBody } from '../../src/admin/ui/lib/record.ts';
 
-const html = readFileSync(new URL('../../src/admin/admin.html', import.meta.url), 'utf8');
 function page() {
-  const ctx: Record<string, any> = {
-    toasts: [], calls: [], bodies: [], replies: {}, els: {}, $: (s: string) => ctx.els[s] ?? null, setText() {}, renderRec() {}, plural: (n: number) => n,
-    toast(m: string) { ctx.toasts.push(m); },
-    async api(url: string, _m: string, body: unknown) {
+  const ctx: Record<string, any> = { toasts: [], calls: [], bodies: [], replies: {} };
+  const R = createRecorder({
+    toast(m) { ctx.toasts.push(m); },
+    changed() {},
+    async api(url, _m, body) {
       const a = url.split('teach-')[1]; ctx.calls.push(a); ctx.bodies.push(body); await new Promise((r) => setTimeout(r, 5));
       const r = ctx.replies[a]; if (r instanceof Error) throw r; return structuredClone(r);
     },
-  };
-  vm.createContext(ctx);
-  const src = html.slice(html.indexOf('let rec = null;'), html.indexOf('function renderRec()'));
-  vm.runInContext(src + ';T = { get rec() { return rec }, set rec(v) { rec = v }, withBuf, addStep, addBuf, recBody, tcall, renderBuf };', ctx);
-  const T = ctx.T;
-  const start = (id = 'p') => (T.rec = { id, rid: 'r-' + id, steps: [] as any[], buf: '', q: Promise.resolve(), lost: false } as any);
-  const click = () => T.withBuf(async (g: any) => T.addStep(g, await T.tcall(g, 'click', { x: 1, y: 1 })));
+  });
+  const T = { get rec() { return R.rec; }, withBuf: R.withBuf, addStep: R.addStep, addBuf: R.addBuf, tcall: R.tcall, recBody };
+  const start = (id = 'p') => { R.start(id); return R.rec as any; };
+  const click = () => R.click({ x: 1, y: 1 });
   return { ctx, T, start, click };
 }
 const settle = () => new Promise((r) => setTimeout(r, 80));
@@ -80,9 +76,8 @@ test('record: several saved logins come back as a pick, the rest of that gesture
 
 test('record: Save and Replay wait for a pending login pick instead of dropping it', async () => {
   const { ctx, T, start } = page(), g = start();
-  ctx.els = { '#bRecReplay': {}, '#bRecSave': {} };
   g.steps.push(fill('Email', 'a')); g.pick = [{ site: 'a', username: 'x' }, { site: 'b', username: 'y' }];
-  T.renderBuf(); assert.deepEqual([ctx.els['#bRecReplay'].disabled, ctx.els['#bRecSave'].disabled], [true, true]);
+  assert.equal(canSave(g), false);
   let saved = false;
   T.withBuf(async () => { saved = true; }, true); await settle();
   assert.deepEqual([saved, g.pick.length, ctx.toasts], [false, 2, ['Pick the saved login to use first, or Cancel']]);
@@ -133,10 +128,9 @@ test('record: distinct default param names; one name for two different values is
 });
 
 test('record: Save and Replay are on as soon as there is a step or typing', () => {
-  const { ctx, T, start } = page(), g = start();
-  ctx.els = { '#bRecReplay': {}, '#bRecSave': {} };
-  T.renderBuf(); assert.deepEqual([ctx.els['#bRecReplay'].disabled, ctx.els['#bRecSave'].disabled], [true, true]);
-  g.buf = 'x'; T.renderBuf(); assert.deepEqual([ctx.els['#bRecReplay'].disabled, ctx.els['#bRecSave'].disabled], [false, false]);
+  const { start } = page(), g = start();
+  assert.equal(canSave(g), false);
+  g.buf = 'x'; assert.equal(canSave(g), true);
 });
 
 test('record: Save and Replay take the draft after the typing buffer went through', async () => {

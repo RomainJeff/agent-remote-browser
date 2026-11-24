@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { domains } from '@/lib/format';
+import { closeView } from '@/lib/live';
 import { detailsQuery, profilePath } from '@/lib/queries';
 import type { Computer } from '@/lib/types';
 
@@ -55,6 +56,7 @@ function AllowedDomains({ c }: { c: Computer }) {
       <div className="flex flex-wrap items-center gap-2">
         <ActionButton size="lg" done="Domains saved. The browser restarts on next use." action={async () => {
           if (!list.length) throw new Error('Keep at least one domain.');
+          closeView();
           try { await api(`${profilePath(c.id)}/config`, 'POST', { allow: list }); setDraft(null); }
           finally { await queryClient.invalidateQueries({ queryKey: ['computers'] }); }
         }}>Save domains</ActionButton>

@@ -12,7 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { ago, domains, message } from '@/lib/format';
-import { clientsQuery, computersQuery, profilePath } from '@/lib/queries';
+import { openView, takeControl } from '@/lib/live';
+import { clientsQuery, computersQuery } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 export function ProfilesPage() {
@@ -65,8 +66,8 @@ export function ProfilesPage() {
                   <TableCell>{c.lastCall ? <>{ago(c.lastCall.ts)}<Sub mono>{c.lastCall.tool}{c.lastCall.ok ? '' : ' · failed'}</Sub></> : <Hint>No calls</Hint>}</TableCell>
                   <TableCell className="w-px text-right whitespace-nowrap">
                     <ActionButton variant="outline" size="sm" action={async () => {
-                      if (c.state !== 'running') { await api(`${profilePath(c.id)}/start`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }
                       await navigate({ to: '/profiles/$id', params: { id: c.id } });
+                      if (c.state === 'running') openView(c.id, false); else await takeControl(queryClient, c.id, c.role !== 'viewer');
                     }}>{c.state === 'running' ? 'Watch' : 'Start'}</ActionButton>
                   </TableCell>
                 </TableRow>
