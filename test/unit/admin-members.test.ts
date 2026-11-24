@@ -17,7 +17,7 @@ let gatewayAdmin = true, role = 'admin', members = [{ email, role: 'admin' }];
 window.fetch = async (path, options = {}) => {
   const body = options.body && JSON.parse(options.body);
   if (body) writes.push([path, body]);
-  const json = (value, status = 200) => Response.json(value, { status });
+  const json = (value, status = 200) => ({ status, ok: status < 400, json: async () => value });
   switch (path) {
     case '/api/invite/start': return json({totpURI: 'otpauth://fixture'});
     case '/api/invite/finish': return body.code === '123456' ? json({backupCodes:['sample-backup']}) : json({error:'Invalid code'}, 401);
