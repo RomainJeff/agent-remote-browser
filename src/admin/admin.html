@@ -1138,19 +1138,24 @@ function wireControl() {
 }
 
 // ---- Record (teach mode) ----------------------------------------------------------
-// rec = { id, steps: [{ step, field?, typed?, user?, param?, pname? }], buf, q, lost }. Gestures run one at a time (q),
-// each bound to the recording it started in (g): a stop, or a new recording, mid-gesture drops the rest of it.
+// rec = { id, steps: [{ step, field?, typed?, user?, form?, param?, pname? }], buf, q, lost, seq?, pick? }.
+// Gestures run one at a time (q), each bound to the recording it started in (g): a stop, or a new recording,
+// mid-gesture drops the rest of it.
 // Typing is buffered here and sent as one fill on the next click or key: the page shows it only then.
-// lost: the last click or typing failed, so the focus stayed on the previous field; typing is off until a click
-// goes through (the gateway refuses it too), else a password could be filled there.
+// lost: the last gesture (other than a read) failed, so the focus stayed on the previous field; typing is off until a
+// click goes through (the gateway refuses it too), else a password could be filled there.
+// seq: the last gesture that may move the focus; typing names it (after), so the gateway refuses text that follows a
+// gesture it did not run. pick: the saved logins of the site to pick from, for a password field.
 // ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
 let rec = null;
+let SEQ = 0;
 const STALE = Symbol('stale');
 async function tcall(g, a, body) {
   if (rec !== g) throw STALE;
+  body = a === 'type' ? { ...body, after: g.seq } : a === 'read' ? body : { ...body, seq: g.seq = ++SEQ };
   let r;
   try { r = await api(`/api/computers/${encodeURIComponent(g.id)}/teach-${a}`, 'POST', body); }
-  catch (e) { if (a === 'click' || a === 'type') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } throw e; }
+  catch (e) { if (a !== 'read') { g.lost = true; g.buf = ''; if (rec === g) renderBuf(); } throw e; }
   if (a === 'click' || a === 'open') { g.lost = false; if (rec === g) renderBuf(); }
   if (rec !== g) throw STALE;
   return r;
@@ -1158,10 +1163,18 @@ async function tcall(g, a, body) {
 function gesture(fn) { const g = rec; g.q = g.q.then(() => rec === g && fn(g)).catch((e) => rec === g && e !== STALE && toast(e.message, 'error')); }
 /** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(g, fill or login step). */
 function withBuf(fn) {
-  const g = rec, text = g.buf; g.buf = ''; renderBuf();
+  const g = rec, text = g.buf; g.buf = ''; g.pick = null; renderBuf();
   gesture(async () => {
     let r = null;
-    if (text) { r = await tcall(g, 'type', { text }); if (r.step.fill) r.typed = text; addStep(g, r); }
+    if (text) {
+      // A gesture queued before this one failed: the focus is not where this text was typed.
+      if (g.lost) throw new Error('Typing dropped: the click before it did not go through. Click the field again');
+      r = await tcall(g, 'type', { text });
+      // Several saved logins for this password field: the admin picks one (renderBuf), the rest of this gesture is dropped.
+      if (r.pick) { g.pick = r.pick; return renderBuf(); }
+      if (r.step.fill) r.typed = text;
+      addStep(g, r);
+    }
     await fn(g, r);
   });
 }
@@ -1182,15 +1195,27 @@ function addStep(g, r) {
   if (rec !== g) return;
   const s = g.steps, last = s.at(-1);
   // One step per intent: a fill replaces the click that focused its field, or an earlier fill of the same field;
-  // a login replaces the field clicks (and Tabs) that led to it and the fill of its own username (r.user), nothing else.
+  // a login replaces the field clicks (and Tabs) that led to it and the fill of its own username (r.user) in its own form
+  // (r.form; none known: the fill is kept), nothing else.
   if (r.step.fill && last && ((last.field && same(last.step.click, r.step.fill)) || same(last.step.fill, r.step.fill))) s.pop();
   const nav = () => { while (s.at(-1)?.field || s.at(-1)?.step.press === 'Tab') s.pop(); };
-  if (r.step.login) { nav(); if (r.user && s.at(-1)?.typed === r.user) { s.pop(); nav(); } }
-  if (r.step.fill) r.pname = slug(r.step.fill);
+  if (r.step.login) { nav(); const u = s.at(-1); if (r.user && r.form !== undefined && u?.typed === r.user && u.form === r.form) { s.pop(); nav(); } }
+  if (r.step.fill) { const b = slug(r.step.fill); let n = b, i = 2; while (s.some((x) => x.pname === n)) n = `${b}_${i++}`; r.pname = n; }
   s.push(r); renderRec();
 }
 function renderBuf() {
-  setText($('#recBuf'), rec?.lost ? 'Typing is off until a click goes through: the focus may still be on the previous field'
+  // Pending typing counts: Replay and Save send it first.
+  for (const b of [$('#bRecReplay'), $('#bRecSave')]) if (b) b.disabled = !rec?.steps.length && !rec?.buf;
+  const el = $('#recBuf'); if (!el) return;
+  if (rec?.pick) {
+    el.innerHTML = `Several saved logins for this site, use: ${rec.pick.map((l, i) => `<button type="button" class="btn btn-sm" data-rpick="${i}">${esc(l.site)} (${esc(l.username)})</button>`).join(' ')}`;
+    for (const b of $$('[data-rpick]', el)) b.onclick = () => {
+      const g = rec, site = g.pick[+b.dataset.rpick].site; g.pick = null; renderBuf();
+      gesture(async () => addStep(g, await tcall(g, 'type', { login: site })));
+    };
+    return;
+  }
+  setText(el, rec?.lost ? 'Typing is off until a click goes through: the focus may still be on the previous field'
     : rec?.buf ? `Typing: ${plural(rec.buf.length, 'character')}, sent on the next click or Enter` : '');
 }
 /** The draft as a playbook body; ticked fills become {params}, their typed values the replay params. */
@@ -1199,6 +1224,7 @@ function recBody(g) {
   const steps = g.steps.map(({ step, param, pname, typed }) => {
     if (!param || !step.fill) return step;
     if (!/^[A-Za-z_]\w{0,39}$/.test(pname)) throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
+    if (Object.hasOwn(params, pname) && params[pname] !== typed) throw new Error(`Param "${pname}" is used for different values: rename one`);
     params[pname] = typed; return { ...step, value: `{${pname}}` };
   });
   const names = Object.keys(params);
@@ -1215,7 +1241,7 @@ function renderRec() {
       ${s.step.fill ? `<label class="hint"><input type="checkbox" data-rparam="${i}"${s.param ? ' checked' : ''}> Param</label><input class="in mono" style="width:140px;min-height:28px" data-rpname="${i}" value="${esc(s.pname)}" aria-label="Param name">` : ''}
       <button type="button" class="btn btn-sm btn-dl" data-rdel="${i}" style="margin-left:auto">Remove</button></li>`).join('')}</ol>` : '<p class="hint">No steps yet.</p>'}
     <form class="urlbar" id="recRead"><input class="in mono" name="selector" placeholder="Output: CSS selector (optional)" autocomplete="off"><input class="in" name="contains" placeholder="or text it contains" autocomplete="off"><button type="submit" class="btn btn-sm">Add output</button></form>
-    <div class="row"><button type="button" class="btn btn-sm" id="bRecReplay"${n ? '' : ' disabled'}>Replay</button><button type="button" class="btn btn-sm btn-p" id="bRecSave"${n ? '' : ' disabled'}>Save as playbook…</button></div>
+    <div class="row"><button type="button" class="btn btn-sm" id="bRecReplay">Replay</button><button type="button" class="btn btn-sm btn-p" id="bRecSave">Save as playbook…</button></div>
     <pre id="recOut" class="mono"></pre>`;
   renderBuf();
   for (const b of $$('[data-rdel]', el)) b.onclick = () => { rec.steps.splice(+b.dataset.rdel, 1); renderRec(); };
