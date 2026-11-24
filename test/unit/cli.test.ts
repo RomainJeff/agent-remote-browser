@@ -226,3 +226,21 @@ test('key create: profile-scoped key in a new 0600 file, never printed, works, e
   assertNoSecret(t.lines, [readFileSync(file, 'utf8')]);
   assert.equal(count(t, "SELECT count(*) n FROM apikey WHERE metadata LIKE '%\"global\"%'"), 1);
 });
+
+test('an unused invite reserves its email and pending admins cannot satisfy the last-admin guard', async () => {
+  const t = fresh(), email = 'pending@example.com', file = join(t.dir, 'key');
+  const ask = asker(t, randomBytes(12).toString('base64url'));
+  t.withStore((_, db) => db.prepare("INSERT INTO invites (id, token_hash, email, created, expires) VALUES ('i', 'h', ?, 0, 1)").run(email));
+  for (const cmd of ['user', 'admin']) await assert.rejects(t.run([cmd, 'create', email], ask), /revoke.*invite first/i);
+  t.withStore((_, db) => {
+    fixtureUser(db, 'pending');
+    fixtureUser(db, 'active');
+    db.exec("INSERT INTO admins VALUES ('pending'), ('active')");
+  });
+  for (const args of [['user', 'admin', email, 'on'], ['user', 'admin', email, 'off'], ['admin', 'reset-2fa', email],
+    ['user', 'remove', email], ['key', 'create', '--global', file, '--as', email]]) {
+    await assert.rejects(t.run(args, ask), /revoke.*invite first/i);
+  }
+  assert.equal(existsSync(file), false);
+  await assert.rejects(t.run(['user', 'admin', 'active@example.com', 'off']), /last gateway admin/);
+});

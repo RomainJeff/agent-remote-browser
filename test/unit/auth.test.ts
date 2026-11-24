@@ -88,5 +88,5 @@ test('an admin without TOTP gets a session but no admin rights', async () => {
   assert.equal(r.status, 200);
   const cookie = r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
   assert.ok((await auth.api.getSession({ headers: new Headers({ cookie }) }))?.session, 'Better Auth sees a session');
-  assert.equal(await requireAdmin(auth, { cookie }), null);
+  assert.equal(await requireAdmin(db, auth, { cookie }), null);
 });

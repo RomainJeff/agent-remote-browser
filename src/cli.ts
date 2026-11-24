@@ -20,6 +20,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDb, tx } from './store/db.ts';
 import { openStore } from './store/store.ts';
 import { createAuth, authOptions } from './auth/better-auth.ts';
+import { createCredential, deleteSessions, listUsers, normalizedEmail, passwordHash, requireAvailable, setAdmin, startTotp, userId, verifyTotp } from './auth/accounts.ts';
 import { parseProfileId } from './policy.ts';
 
 type Out = (line: string) => void;
@@ -77,66 +78,42 @@ function backupDb(cfg: Config, file: string, out: Out) {
   });
 }
 
-function normalizedEmail(email: string) {
-  if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw Error('Invalid email');
-  return email.toLowerCase();
-}
-
 /** Create or recover a credential account, verify TOTP and print the new backup codes once. */
 async function enroll(cfg: Config, email: string, mode: 'bootstrap' | 'admin' | 'member' | 'reset-2fa', ask: Ask, out: Out) {
   email = normalizedEmail(email);
   const db = openDb(join(cfg.dataDir, 'arb.db'));
   try {
     const { auth } = createAuth(db, authOptions(cfg));
-    const ctx = await auth.$context;
     const creatingAdmin = mode === 'bootstrap' || mode === 'admin';
-    let user = await ctx.internalAdapter.findUserByEmail(email).then((r) => r?.user ?? null);
-    const checkBootstrap = () => {
+    const check = () => {
+      requireAvailable(db, email);
       if (mode === 'bootstrap' && db.prepare('SELECT 1 FROM user').get()) throw Error('A user already exists: use user create');
+      if (mode !== 'reset-2fa' && db.prepare('SELECT 1 FROM user WHERE email = ?').get(email)) throw Error(`${email} exists: use admin reset-2fa`);
+      if (mode === 'reset-2fa') userId(db, email);
     };
-    checkBootstrap();
-    if (mode !== 'reset-2fa' && user) throw Error(`${email} exists: use admin reset-2fa`);
-    if (mode === 'reset-2fa' && !user) throw Error(`No user ${email}`);
+    check();
     const password = await ask('Password (12+ characters): ');
-    if (password.length < 12 || password.length > 128) throw Error('Password: 12 to 128 characters');
-    const hashed = await ctx.password.hash(password);
-    if (!user) {
-      // Keep the bootstrap check, credential and role in one write transaction. close() rolls back on failure.
-      db.exec('BEGIN IMMEDIATE');
-      checkBootstrap();
-      user = await ctx.internalAdapter.createUser({ email, name: creatingAdmin ? 'Admin' : 'User', emailVerified: true }, { method: 'admin' });
-      await ctx.internalAdapter.linkAccount({ userId: user.id, providerId: 'credential', accountId: user.id, password: hashed });
-      if (creatingAdmin) db.prepare('INSERT INTO admins VALUES (?)').run(user.id);
-      db.exec('COMMIT');
-    } else {
-      const id = user.id;
-      tx(db, () => {
-        db.prepare('DELETE FROM twoFactor WHERE userId = ?').run(id);
-        db.prepare('UPDATE user SET twoFactorEnabled = 0 WHERE id = ?').run(id);
-        db.prepare("UPDATE account SET password = ? WHERE userId = ? AND providerId = 'credential'").run(hashed, id);
-        db.prepare('DELETE FROM session WHERE userId = ?').run(id);
-      });
-    }
-    // Enroll through Better Auth itself (it encrypts the TOTP secret with BETTER_AUTH_SECRET).
-    const signIn = await auth.api.signInEmail({ body: { email, password }, returnHeaders: true });
-    const headers = new Headers({ cookie: signIn.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ') });
-    const enrolled = await auth.api.enableTwoFactor({ body: { password }, headers });
-    if (!('totpURI' in enrolled)) throw Error('TOTP enrollment failed');
+    const hashed = await passwordHash(auth, password);
+    const id = tx(db, () => {
+      check();
+      if (mode !== 'reset-2fa') return createCredential(db, email, hashed, creatingAdmin);
+      const id = userId(db, email);
+      db.prepare('DELETE FROM twoFactor WHERE userId = ?').run(id);
+      db.prepare('UPDATE user SET twoFactorEnabled = 0 WHERE id = ?').run(id);
+      db.prepare("UPDATE account SET password = ? WHERE userId = ? AND providerId = 'credential'").run(hashed, id);
+      deleteSessions(db, id);
+      return id;
+    });
+    const enrolled = await startTotp(auth, email, password);
     out('Add this to your authenticator app (shown once, do not share):');
     out(enrolled.totpURI);
-    try { await auth.api.verifyTOTP({ body: { code: (await ask('Code from the app: ')).trim() }, headers }); }
+    try { await verifyTotp(auth, enrolled.headers, (await ask('Code from the app: ')).trim()); }
     catch { throw Error(`Code rejected: run admin reset-2fa ${email}`); }
-    finally { db.prepare('DELETE FROM session WHERE userId = ?').run(user.id); }
+    finally { deleteSessions(db, id); }
     out('Backup codes, one use each (shown once, store them offline; reset-2fa makes new ones):');
     for (const c of enrolled.backupCodes) out(c);
     out(`${creatingAdmin ? 'Admin' : 'User'} ${email} ready: sign in with the password and a TOTP code.`);
   } finally { db.close(); }
-}
-
-function userId(db: DatabaseSync, email: string) {
-  const row = db.prepare('SELECT id FROM user WHERE email = ?').get(normalizedEmail(email));
-  if (!row) throw Error(`No user ${email}`);
-  return row.id as string;
 }
 
 function manageUsers(cfg: Config, args: string[], out: Out) {
@@ -144,22 +121,13 @@ function manageUsers(cfg: Config, args: string[], out: Out) {
   try {
     const [sub, email, setting] = args;
     if (sub === 'list') {
-      const rows = db.prepare(`SELECT email, admins.user_id AS admin, twoFactorEnabled, createdAt
-        FROM user LEFT JOIN admins ON admins.user_id = user.id ORDER BY email`).all();
-      for (const row of rows) {
+      for (const row of listUsers(db)) {
         out(`${row.email}\tadmin=${row.admin ? 'yes' : 'no'}\t2fa=${row.twoFactorEnabled ? 'yes' : 'no'}\tcreated=${row.createdAt}`);
       }
       return;
     }
     tx(db, () => {
-      const id = userId(db, email);
-      if (setting === 'on') {
-        db.prepare('INSERT INTO admins VALUES (?) ON CONFLICT DO NOTHING').run(id);
-        return;
-      }
-      if (db.prepare('DELETE FROM admins WHERE user_id = ?').run(id).changes && !db.prepare('SELECT 1 FROM admins').get()) {
-        throw Error('Cannot remove the last gateway admin');
-      }
+      const id = setAdmin(db, email, setting === 'on');
       if (sub === 'remove') {
         db.prepare('DELETE FROM apikey WHERE referenceId = ?').run(id);
         db.prepare('DELETE FROM user WHERE id = ?').run(id);
@@ -183,7 +151,7 @@ async function keyCmd(cfg: Config, args: string[], out: Out, as?: string) {
     if (!Number.isInteger(days) || days < 1 || days > 365) throw Error('Days: 1 to 365');
     db.exec('BEGIN IMMEDIATE'); // Serialize key creation with user removal (apikey.referenceId has no foreign key).
     const owner = as === undefined
-      ? db.prepare('SELECT user_id FROM admins ORDER BY rowid LIMIT 1').get()?.user_id as string | undefined
+      ? db.prepare('SELECT user_id FROM admins JOIN user ON user.id = admins.user_id WHERE email NOT IN pending_emails ORDER BY admins.rowid LIMIT 1').get()?.user_id as string | undefined
       : userId(db, as);
     if (!owner) throw Error('No gateway admin: specify --as <email> or create an admin');
     const { auth } = createAuth(db, authOptions(cfg));

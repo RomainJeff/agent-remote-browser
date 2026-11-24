@@ -61,7 +61,7 @@ Two services, one image (`Dockerfile.gateway`), both `node` (uid 1000), read-onl
 
 One SQLite file, `${DATA_DIR}/arb.db` (compose: volume `arb-data`, mounted at `/data`), mode 0600, WAL, foreign keys on. Tables: `admins` (gateway admins), `profiles` (allowlist), `profile_members` (one role per profile and user), `logins` (one AES-256-GCM envelope per saved login, with the `key_id` of the key that sealed it, and the last admin test: `last_tested_at`, `last_result`), `leases` (token hash, expiry: they survive a restart), `step_up` (per admin session: when a second factor was last proven, failed attempts since), `handoffs`, `playbooks` (admin notes per profile, see [Playbooks](#playbooks)), `profile_headers` (one AES-256-GCM envelope per custom header, see [Custom headers](#custom-headers)), and Better Auth's tables (`user`, `account`, `session`, `twoFactor`, `verification`, `apikey`, `oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `rateLimit`, ...). Every token is stored as its sha256 (OAuth access/refresh tokens, API keys, leases); TOTP secrets are encrypted with `BETTER_AUTH_SECRET`. Deleting a profile deletes its memberships, logins, headers, leases, handoffs and playbooks (foreign key cascade), and its OAuth tokens, consents, pending codes and API keys.
 
-Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one. Lot 7b: `003` (`apikey.lastIp`), `004` (`step_up`), `005` (`logins.last_tested_at`, `last_result`). Lot 9: `006` (`handoffs`; ended ones are purged after 30 days). Lot 10c: `007` (`playbooks`). `008` (`profile_headers`). Migration `009_users.sql` creates `admins` and grants the gateway admin role to every existing user. Migration `010_profile_members.sql` makes each existing gateway admin a profile admin on every existing profile. Better Auth's tables come from `002_better_auth.sql`, never from its own auto-migration; `002` also drops the Lot 3 `oauth_clients`, `oauth_tokens`, `settings` and `profiles.token_hash` (old tokens stop working, agents reconnect). Bumping `better-auth` = diff its schema (`npx @better-auth/cli generate`) and add a migration.
+Migrations: `src/store/migrations/NNN_name.sql`, applied at startup in order, one transaction each; `PRAGMA user_version` holds the last one applied. Add a file, never edit an applied one. Lot 7b: `003` (`apikey.lastIp`), `004` (`step_up`), `005` (`logins.last_tested_at`, `last_result`). Lot 9: `006` (`handoffs`; ended ones are purged after 30 days). Lot 10c: `007` (`playbooks`). `008` (`profile_headers`). Migration `009_users.sql` creates `admins` and grants the gateway admin role to every existing user. Migration `010_profile_members.sql` makes each existing gateway admin a profile admin on every existing profile. Migration `011_invites.sql` adds invite IDs, token hashes, recipient emails, gateway admin flags, creators, and creation, expiry and use times. Better Auth's tables come from `002_better_auth.sql`, never from its own auto-migration; `002` also drops the Lot 3 `oauth_clients`, `oauth_tokens`, `settings` and `profiles.token_hash` (old tokens stop working, agents reconnect). Bumping `better-auth` = diff its schema (`npx @better-auth/cli generate`) and add a migration.
 
 Database driver: `node:sqlite` (built into Node, no native dependency, no build stage). Evidence for Lot 4 (2026-11-21): `better-auth@1.7.27` (latest) depends on `@better-auth/kysely-adapter@1.7.27`, which ships a `NodeSqliteDialect` and picks it automatically when handed a `DatabaseSync`; `node:sqlite` runs without an experimental warning on Node 24.22.1 (SQLite 3.53.4) and Node 26.13.1 (SQLite 3.54.1). `better-sqlite3` would add a native build for nothing.
 
@@ -262,7 +262,21 @@ Run user management and login key rotation with the gateway stopped. Use `docker
 | `key revoke <id>` | Revoke the API key with this id. |
 | `backup-db <file>` | Write a consistent database snapshot to a new file. |
 
-Every enrolled user currently has full admin UI access, including users listed with `admin=no`.
+### Gateway users and invites
+
+Gateway admins manage accounts. Each user's profile memberships determine which profiles they can access. User management writes require a recent second-factor check.
+
+| Method and route | Request and result |
+| --- | --- |
+| `GET /api/users` | Lists email, gateway admin status, 2FA status, pending status and creation time. |
+| `POST /api/users/admin` | Send `{email, admin}` to change a gateway admin role. The last active gateway admin keeps the role. |
+| `POST /api/users/invite` | Send `{email, admin?}` for an unregistered email. Returns `{id, link, expiresAt}` once. Up to ten invites can be open. |
+| `GET /api/users/invites` | Lists unexpired unused invites with ID, email, role flag, creation and expiry times, and creator email. Times are Unix milliseconds. |
+| `POST /api/users/invites/:id/revoke` | Deletes the unused invite and any pending account for its email. |
+
+The gateway admin sends the link to the recipient outside the app. The token is in the URL fragment. Within 24 hours, post `{token, password}` to `/api/invite/start`, retain the response cookies, and add the returned `totpURI` to an authenticator. Starting again replaces an abandoned enrollment. Post `{token, code}` with the cookies to `/api/invite/finish`. Success consumes the invite, grants its specified role, returns the backup codes once, and ends all enrollment sessions. Sign in with the password and a TOTP code. Both acceptance routes enforce the listener's Host/Origin rules and share a per-IP attempt budget. Behind Cloudflare Access, the verified email must match the invite.
+
+An unused invite reserves the email even after expiry. While pending, the account cannot access the admin API, live view or OAuth consent. CLI account creation (including bootstrap), password and 2FA reset, user removal, key creation for the account, role toggles and profile membership changes refuse that email. Revoke the invite first, complete enrollment, or issue a replacement after expiry.
 
 ```sh
 docker compose stop gateway

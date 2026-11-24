@@ -200,13 +200,13 @@ ${choice}
     }
 
     if (path === '/consent' && req.method === 'GET') {
-      const s = await requireAdmin(auth, req.headers);
+      const s = await requireAdmin(db, auth, req.headers);
       if (!s) return res.writeHead(302, { location: '/login?' + q, 'cache-control': 'no-store' }).end(), true;
       return consentPage(res, q, s.user.id), true;
     }
     if (path === '/consent' && req.method === 'POST') {
       if (!sameOrigin(req)) return res.writeHead(403).end(), true;
-      const s = await requireAdmin(auth, req.headers);
+      const s = await requireAdmin(db, auth, req.headers);
       const b = await form(req);
       if (!s) return res.writeHead(302, { location: '/login?' + (b.oauth_query ?? '') }).end(), true;
       const scope = b.scope;
