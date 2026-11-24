@@ -214,6 +214,9 @@
   .linkbtn { border: 0; background: none; color: var(--primary); font: 600 14px/20px var(--sans); cursor: pointer; padding: 0; text-align: left; }
   .linkbtn:hover { text-decoration: underline; }
   .auth .chipsrow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .qr { width: 176px; height: 176px; align-self: center; image-rendering: pixelated; }
+  .alt > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); }
+  .alt > textarea { width: 100%; margin-top: 8px; }
   .codein { font: 600 22px/32px var(--mono) !important; letter-spacing: .3em; text-align: center; }
 
   /* Dialogs */
@@ -499,9 +502,10 @@ function showInvite(token) {
     $('input', form).focus();
   };
   step(0, 'Accept invitation', '<label class="f">New password<input class="in" type="password" name="password" autocomplete="new-password" required></label>', async (f) => {
-    const { totpURI } = await api('/api/invite/start', 'POST', { token, password: f.password.value });
+    const { totpURI, qrSVG } = await api('/api/invite/start', 'POST', { token, password: f.password.value });
     if (!f.isConnected) return;
-    step(1, 'Set up your authenticator', `<label class="f">Add this link to your authenticator app<textarea class="in mono" readonly>${esc(totpURI)}</textarea></label>
+    step(1, 'Set up your authenticator', `<div class="f">Scan with your authenticator app<img class="qr" alt="QR code" src="data:image/svg+xml,${encodeURIComponent(qrSVG)}"></div>
+      <details class="alt"><summary>Can't scan? Copy the link</summary><textarea class="in mono" aria-label="Authenticator link" readonly>${esc(totpURI)}</textarea></details>
       <label class="f">6-digit code shown in the app<input class="in codein" name="code" inputmode="numeric" autocomplete="one-time-code" required></label>`, async (form) => {
       const { backupCodes } = await api('/api/invite/finish', 'POST', { token, code: form.code.value.trim() });
       if (form.isConnected) box.innerHTML = `${progress(2)}<div class="stack"><h1>Save your backup codes</h1><pre>${esc(backupCodes.join('\n'))}</pre><a href="#/profiles">Sign in</a></div>`;

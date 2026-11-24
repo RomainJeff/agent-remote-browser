@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { renderSVG } from 'uqr';
 import { windowBudget, can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, type ProfileId } from '../policy.ts';
 import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
@@ -188,7 +189,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (path === '/api/invite/start') {
           const { totpURI, cookies } = await startInvite(db, authOf(pub), body.token, body.password, email);
           res.setHeader('set-cookie', cookies);
-          return send(res, 200, { totpURI });
+          return send(res, 200, { totpURI, qrSVG: renderSVG(totpURI) });
         }
         return send(res, 200, await finishInvite(db, authOf(pub), toHeaders(req.headers), body.token, body.code, email));
       }

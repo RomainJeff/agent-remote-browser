@@ -20,7 +20,7 @@ window.fetch = async (path, options = {}) => {
   if (body) writes.push([path, body]);
   const json = (value, status = 200) => ({ status, ok: status < 400, json: async () => value });
   switch (path) {
-    case '/api/invite/start': return json({totpURI: 'otpauth://fixture'});
+    case '/api/invite/start': return json({totpURI: 'otpauth://fixture', qrSVG: '<svg/>'});
     case '/api/invite/finish': return body.code === '123456' ? json({backupCodes:['sample-backup']}) : json({error:'Invalid code'}, 401);
     case '/api/auth/get-session': return json({user:{twoFactorEnabled:true}});
     case '/api/session': return json({ email, stepUpRemainingS: 60 });
