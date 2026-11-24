@@ -102,7 +102,7 @@ docker compose exec gateway node src/cli.ts admin create you@example.com
 Test key from the host, without the admin UI (e.g. for a bench or an agent the operator lets run it): the key goes to a 0600 file, never to the terminal, and expires after 1 day unless `[days]` says otherwise (up to 365). `--global` instead of `<profile>` makes a global key (all profiles, like the admin UI's). The gateway container is read-only, so write it to a fresh directory in its `/tmp` and copy it out; the key lands in a private temp file, moved into place only on success:
 
 ```bash
-f=$(mktemp ~/.arb-test-key.XXXXXX) && docker compose exec -T gateway sh -c 'd=$(mktemp -d) && node src/cli.ts key create <profile> "$d/k" >&2 && cat "$d/k"; s=$?; rm -rf "$d"; exit $s' > "$f" && mv "$f" ~/.arb-test-key || { rm -f "$f"; false; }
+f=$(mktemp ~/.arb-test-key.XXXXXX) && docker compose exec -T gateway sh -c 'd=$(mktemp -d) && node src/cli.ts key create <profile> "$d/k" >&2 && cat "$d/k"; s=$?; rm -rf "$d"; exit $s' > "$f" && mv "$f" ~/.arb-test-key || { s=$?; rm -f "$f"; (exit $s); }
 docker compose exec gateway node src/cli.ts key revoke <id>      # id printed by key create; also revocable in the admin UI
 ```
 

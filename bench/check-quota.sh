@@ -22,8 +22,8 @@ ARB_TOKEN="$ARB_TOKEN" jq -n --arg url "$ARB_MCP_URL" \
   '{mcpServers: {arb: {type: "http", url: $url, headers: {Authorization: ("Bearer " + env.ARB_TOKEN)}}}}' > "$tmp/mcp.json"
 unset ARB_TOKEN
 
-# The answer must hold two whole numbers ("1,234 / 2,500", "1234 of 2500").
-TWO='[0-9][0-9,.]*[^0-9,.]+[0-9][0-9,.]*'
+# The answer must hold two standalone numbers ("1,234 / 2,500", "1234 of 2500"; the 8 of "n8n" does not count).
+TWO='(?<![A-Za-z0-9.,])[0-9][0-9,.]*(?![A-Za-z0-9])'
 runs=()
 for i in $(seq "$N"); do
   # Empty cwd and no settings: no CLAUDE.md, hooks or other MCP servers in the measure. Only the arb tools are allowed.
@@ -44,7 +44,7 @@ for i in $(seq "$N"); do
     browser_ms: ($b | map(.ms // empty) | add),
     ms: $res.duration_ms,
     exit: $rc,
-    ok: ($rc == 0 and $res != null and ($res.is_error | not) and ($b | length > 0 and all(.ok == true)) and ($a | test($two))),
+    ok: ($rc == 0 and $res != null and ($res.is_error | not) and ($b | length > 0 and all(.ok == true)) and ($a | [scan($two)] | length >= 2)),
     answer: ($a | .[0:200])}' --arg two "$TWO" "$tmp/run$i.jsonl" 2> /dev/null) || r=$(jq -n --argjson rc "$rc" '{exit: $rc, ok: false, answer: "unparseable output"}')
   echo "run $i: $(jq -c . <<<"$r")"
   runs+=("$r")
