@@ -6,7 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { urlAllowed, localRequest, validId, cleanAllow, sitesOf, parseProfileId, type ProfileId } from '../policy.ts';
+import { can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, parseProfileId, type ProfileId } from '../policy.ts';
 import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import { requireAdmin } from '../auth/guards.ts';
@@ -19,7 +19,7 @@ import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import { teacher } from './teach.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-focus|teach-type|teach-press|teach-open|teach-read|teach-replay';
+const ACTIONS = 'members|start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail|teach-click|teach-focus|teach-type|teach-press|teach-open|teach-read|teach-replay';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -27,7 +27,7 @@ const AUTH_API = new Set(['/api/auth/sign-in/email', VERIFY.code, VERIFY.backupC
 // Step-up: these need a second factor proven in the last 15 minutes (sign-in TOTP counts, a trusted device does not).
 const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
 // Playbooks too: an agent follows them as trusted instructions.
-const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete']);
+const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete', 'members']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
 /** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
@@ -42,7 +42,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   const { profile, decryptLogin } = store;
   const teach = teacher({ computers: pc, driver, store });
   // A human may drive a leased browser only while handling the agent's request (paste, saved-login fill, live input).
-  const driving = (id: string) => !leases.of(id) || handoffs.open(id)?.state === 'taken';
+  const driving = (id: string, role: Role) => canDrive(role, !!leases.of(id), handoffs.open(id)?.state === 'taken');
   const pubUrl = new URL(cfg.publicUrl);
   // Public listener: the https instance. Admin port: the http one (server.ts), so its cookies work on localhost.
   const authOf = (pub: boolean) => pub ? pubAuth : adminAuth;
@@ -95,14 +95,14 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     if (fails >= STEP_UP_FAILS) db.prepare('DELETE FROM session WHERE id = ?').run(sid);
   }
 
-  async function listComputers() {
+  async function listComputers(userId: string) {
     const running = new Map((await driver.list()).map((c) => [c.id, c]));
     const log = audit.read();
-    return store.profiles().map((p) => {
+    return store.accessible(userId).map((p) => {
       const id = p.id;
       const c = running.get(id), last = log.findLast((l) => l.agent === id), l = leases.of(id), h = handoffs.open(id);
       return {
-        id, container: `${cfg.prefix}-${id}`,
+        id, role: p.role, container: `${cfg.prefix}-${id}`,
         state: c ? (c.running ? 'running' : 'exited') : 'none',
         status: c ? (c.running ? 'running' : 'exited') : 'never started',
         // ponytail: volume presence inferred from the container; a volume orphaned by hand shows as missing.
@@ -182,13 +182,13 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return send(res, 401, await requireAdmin(authOf(pub), req.headers) ? { stepUp: true, error: 'Invalid code' } : { error: 'Sign in first' });
       }
       const stale = () => stepUpLeft(sid) === 0 && (send(res, 401, { stepUp: true, error: 'Confirm with a 2FA code first' }), true);
-      if (path === '/api/computers') return send(res, 200, await listComputers());
+      if (path === '/api/computers') return send(res, 200, await listComputers(session.user.id));
       if (path === '/api/profiles' && post) {
         const { id, allow } = (await readJson(req)) || {}, a = cleanAllow(allow);
         if (!validId(id)) return send(res, 400, { error: 'Invalid id: lowercase letters, digits, dashes, max 40' });
         if (profile(id)) return send(res, 409, { error: 'This profile already exists' });
         if (!a) return send(res, 400, { error: 'Invalid allow list: plain domains like example.com' });
-        store.createProfile(id, a);
+        store.createProfile(id, a, session.user.id);
         audit({ by: session.user.email, agent: id, tool: 'admin:create', ok: true });
         return send(res, 201, { id });
       }
@@ -218,12 +218,26 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return send(res, 200, { revoked: target });
       }
       const m = path.match(new RegExp(`^/api/computers/([^/]+)(?:/(${ACTIONS}))?$`));
-      const raw = m && decodeURIComponent(m[1]), id = validId(raw) ? raw : null, p = id && profile(id);
-      if (!m || !id || !p) return send(res, 404, { error: 'unknown profile' });
-      if (!m[2] && req.method === 'GET') return send(res, 200, await computerDetails(id, p));
-      if (!m[2] || !post) return send(res, 405, { error: 'method not allowed' });
-      if (SENSITIVE.has(m[2]) && stale()) return;
-      const act = m[2], body = (await readJson(req)) || {};
+      const raw = m && decodeURIComponent(m[1]), id = validId(raw) ? raw : null;
+      if (!m || !id) return send(res, 404, { error: 'unknown profile' });
+      const act = m[2] ?? null, body = post && act ? (await readJson(req)) || {} : {};
+      const role = store.roleOf(id, session.user.id);
+      if (!role) return send(res, 404, { error: 'unknown profile' });
+      if (!can(role, post ? act : null)) return send(res, 403, { error: 'forbidden' });
+      if (req.method === 'GET' && act === 'members') return send(res, 200, store.members(id));
+      if (req.method === 'GET' && act === null) return send(res, 200, await computerDetails(id, profile(id)!));
+      if (!post || !act) return send(res, 405, { error: 'method not allowed' });
+      if (SENSITIVE.has(act) && stale()) return;
+      if (act === 'members') {
+        if (typeof body.email !== 'string' || !(body.role === null || isRole(body.role)))
+          return send(res, 400, { error: 'Provide an email and a role (viewer, editor, admin or null)' });
+        const user = db.prepare('SELECT id FROM user WHERE email = ?').get(body.email.trim().toLowerCase());
+        if (!user) return send(res, 404, { error: 'unknown user' });
+        if (!store.setRole(id, user.id as string, body.role)) return send(res, 409, { error: 'Profile needs at least one admin' });
+        audit({ by: session.user.email, agent: id, tool: 'admin:members', ok: true });
+        return send(res, 200, { role: body.role });
+      }
+      const p = profile(id)!;
       // Playbooks: one line once done, saying what happened (create or update), the name and body never in it.
       if (!act.startsWith('playbook-')) audit({ by: session.user.email, agent: id, tool: `admin:${act}`, ok: true });
 
@@ -236,7 +250,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (act === 'paste') {
         const t = body.text;
         if (typeof t !== 'string' || !t || t.length > 5000) return send(res, 400, { error: 'Text required, 5000 characters max' });
-        if (!driving(id)) return send(res, 409, { error: 'Leased by an agent: take over its request or force release' });
+        if (!driving(id, role)) return send(res, 409, { error: 'Leased by an agent: take over its request or force release' });
         const [, dashes, rest] = t.match(/^(-*)([\s\S]*)$/)!; // a leading dash would read as a flag
         await pc.serial(id, async () => { for (const s of [...dashes, rest]) if (s) await pc.ab(id, ['keyboard', 'inserttext', s]); });
         return send(res, 200, { pasted: true });
@@ -244,7 +258,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       // Record mode: each gesture becomes a semantic step, run instead of the raw input (teach.ts).
       if (act.startsWith('teach-')) {
         // Checked in the queue: an agent may lease the profile while this gesture waits behind another.
-        const [code, r] = await pc.serial(id, () => teach(act, id, p, body, driving(id)));
+        const [code, r] = await pc.serial(id, () => teach(act, id, p, body, driving(id, role)));
         return send(res, code, r);
       }
       if (act === 'copy') return send(res, 200, { text: String((await pc.serial(id, () => pc.ab(id, ['eval', SELECTION]))).result ?? '') });
@@ -283,7 +297,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!c) return send(res, 404, { error: 'unknown site' });
         if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return send(res, 400, { error: 'Login URL is outside the allowlist' });
         const here = act === 'login-fill';
-        if (here ? !driving(id) : leases.of(id)) return send(res, 409, { error: 'Leased by an agent: release it or wait' });
+        if (here ? !driving(id, role) : leases.of(id)) return send(res, 409, { error: 'Leased by an agent: release it or wait' });
         // ponytail: "ok" = the fill went through (form found, submitted); whether the site accepted it shows in the URL.
         const r = await pc.serial(id, async () => {
           try { return { ok: true, url: await fillLogin(pc, id, body.site, c, decryptLogin(id, body.site, c), here) }; }
@@ -348,10 +362,10 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   async function upgrade(req: IncomingMessage, sock: Duplex, head: Buffer, pub: boolean) {
     const m = req.url!.match(/^\/api\/computers\/([^/?]+)\/stream(\?[\w=&]*)?$/);
     const id = m && validId(m[1]) ? m[1] : null, key = req.headers['sec-websocket-key'];
-    if (!m || !id || !profile(id) || !/^[\w+/=]+$/.test(key || '')) return sock.destroy();
+    if (!m || !id || !/^[\w+/=]+$/.test(key || '')) return sock.destroy();
     // Browsers send the Origin on WebSocket upgrades: gate() refuses cross-site ones.
     const session = await gate(req, pub).catch(() => null);
-    if (!session) return sock.destroy();
+    if (!session || !can(store.roleOf(id, session.user.id), null)) return sock.destroy();
     let port: number, relay: Duplex;
     try {
       ({ port } = await pc.exec(id, ['stream', 'status']));
@@ -369,15 +383,17 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       leave();
       relay.destroy(); sock.destroy();
     };
-    // Client→browser: while an agent holds the lease and no handoff is taken, only acks and control frames pass
-    // (no input_mouse / input_keyboard, nor any other command). Checked per frame: taking over unlocks it live.
+    // Recheck membership and handoff state per frame so a role change or handoff takes effect mid-stream.
+    // A watcher can still acknowledge video and send connection control frames.
     const feed = frames();
     const pass = (chunk: Buffer) => {
       const fs = feed(chunk);
       if (!fs) return done();
       for (const f of fs) {
         if (!f.fin || f.op === 0) return done(); // ponytail: no fragmented frames; the admin page never sends any
-        if (f.op < 8 && !driving(id) && !(f.op === 1 && isAck(f.data))) continue;
+        const role = store.roleOf(id, session.user.id);
+        if (!role) return done();
+        if (f.op < 8 && !(f.op === 1 && isAck(f.data)) && !driving(id, role)) continue;
         relay.write(f.raw);
       }
     };

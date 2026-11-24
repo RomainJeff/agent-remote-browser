@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { fixtureUser } from '../fixture-user.ts';
 import { openDb, migrate } from '../../src/store/db.ts';
 import { openStore, describe } from '../../src/store/store.ts';
 import { keyId } from '../../src/store/logins-crypto.ts';
@@ -29,7 +30,7 @@ const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() a
 
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
-  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profile_members', 'profiles', 'step_up'].sort());
   assert.equal(version(db), LATEST);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
@@ -37,7 +38,7 @@ test('migrations: empty db gets every table, WAL, foreign keys; re-running is a 
   db.close();
   const again = openDb(f.db);
   assert.equal(version(again), LATEST);
-  assert.equal(tables(again).length, BA.length + 8);
+  assert.equal(tables(again).length, BA.length + 9);
   again.close();
 });
 
@@ -55,17 +56,54 @@ test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens
 
   const db = openDb(f.db);
   assert.equal(version(db), LATEST);
-  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'admins', 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profile_members', 'profiles', 'step_up'].sort());
   assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
   for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   db.close();
 });
 
+test('migration 010 grants every existing gateway admin access to each existing profile', () => {
+  const f = fresh(), db = new DatabaseSync(f.db);
+  const dir = new URL('../../src/store/migrations/', import.meta.url);
+  for (const file of readdirSync(dir).filter((name) => Number(name.slice(0, 3)) <= 9).sort())
+    db.exec(readFileSync(new URL(file, dir), 'utf8'));
+  db.exec('PRAGMA user_version = 9');
+  for (const id of ['first', 'second', 'member']) fixtureUser(db, id);
+  db.exec("INSERT INTO admins VALUES ('first'), ('second')");
+  db.exec("INSERT INTO profiles VALUES ('shop', '[]', 1), ('other', '[]', 2)");
+  migrate(db);
+  const s = openStore(db, f.key);
+  for (const id of ['first', 'second'])
+    assert.deepEqual(s.accessible(id).map((p) => [p.id, p.role]), [['shop', 'admin'], ['other', 'admin']]);
+  assert.deepEqual(s.accessible('member'), []);
+  db.close();
+});
+
+test('profile ownership is atomic and the last admin must transfer ownership before leaving', () => {
+  const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), id = pid('shop');
+  const owner = fixtureUser(db), next = fixtureUser(db, 'next');
+  assert.throws(() => s.createProfile(id, [], 'unknown'), /FOREIGN KEY/);
+  assert.equal(s.profile(id), null);
+  s.createProfile(id, [], owner);
+  assert.equal(s.roleOf(id, owner), 'admin');
+  assert.deepEqual(s.accessible(next), []);
+  assert.equal(s.setRole(id, next, 'viewer'), true);
+  assert.deepEqual(s.accessible(next).map((p) => [p.id, p.role]), [[id, 'viewer']]);
+  assert.equal(s.setRole(id, owner, 'editor'), false);
+  assert.equal(s.setRole(id, owner, null), false);
+  assert.equal(s.roleOf(id, owner), 'admin');
+  assert.equal(s.setRole(id, next, 'admin'), true);
+  assert.equal(s.setRole(id, owner, null), true);
+  assert.deepEqual(s.accessible(owner), []);
+  assert.deepEqual(s.members(id).map((m) => ({ ...m })), [{ email: 'next@example.com', role: 'admin' }]);
+  db.close();
+});
+
 test('playbooks: CRUD per profile, limits, gone with the profile', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key);
-  s.createProfile(pid('shop'), []);
-  s.createProfile(pid('other'), []);
+  s.createProfile(pid('shop'), [], fixtureUser(db));
+  s.createProfile(pid('other'), [], fixtureUser(db));
   assert.equal(s.savePlaybook(pid('shop'), 'check-quota', '# Check quota\nsteps'), 'created');
   assert.equal(s.savePlaybook(pid('shop'), 'check-quota', '## Check the quota\nv2'), 'updated');
   s.savePlaybook(pid('shop'), 'a-first', '\n\n  First line  \nrest');
@@ -94,7 +132,7 @@ test('playbooks: CRUD per profile, limits, gone with the profile', () => {
 test('profiles and logins: CRUD, key_id per envelope, cascade on delete', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key);
   const pw = randomBytes(8).toString('hex');
-  s.createProfile(pid('shop'), ['example.com']);
+  s.createProfile(pid('shop'), ['example.com'], fixtureUser(db));
   s.setAllow(pid('shop'), ['example.com', 'example.org']);
   s.saveLogin(pid('shop'), 'site', login, pw);
   const p = s.profile('shop')!;
@@ -115,7 +153,7 @@ test('profiles and logins: CRUD, key_id per envelope, cascade on delete', () => 
 test('custom headers: per https origin on the allowlist, name lowercased, value sealed, cascade on delete', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), id = pid('shop'), allow = ['example.com'];
   const secret = randomBytes(8).toString('hex');
-  s.createProfile(id, allow);
+  s.createProfile(id, allow, fixtureUser(db));
   assert.deepEqual(s.saveHeader(id, allow, 'https://example.com/', 'X-Bypass', secret), { origin: 'https://example.com', name: 'x-bypass' });
   s.saveHeader(id, allow, 'https://example.com', 'x-bypass', secret + '2');
   assert.deepEqual(s.headers('shop').map((h) => ({ ...h })), [{ origin: 'https://example.com', name: 'x-bypass' }], 'replaced, not duplicated');
@@ -144,7 +182,7 @@ test('custom headers: per https origin on the allowlist, name lowercased, value 
 
 test('saved headers alone also pin the login key; rotation re-encrypts them', () => {
   const f = fresh(), db = openDb(f.db), id = pid('p');
-  openStore(db, f.key).createProfile(id, ['example.com']);
+  openStore(db, f.key).createProfile(id, ['example.com'], fixtureUser(db));
   openStore(db, f.key).saveHeader(id, ['example.com'], 'https://example.com', 'x-a', 'v1');
   const key = readFileSync(f.key);
   writeFileSync(f.key, randomBytes(32));
@@ -159,7 +197,7 @@ test('saved headers alone also pin the login key; rotation re-encrypts them', ()
 
 test('saved logins without their key: refuse to start, never create a new key', () => {
   const f = fresh(), db = openDb(f.db);
-  openStore(db, f.key).createProfile(pid('p'), []);
+  openStore(db, f.key).createProfile(pid('p'), [], fixtureUser(db));
   openStore(db, f.key).saveLogin(pid('p'), 'site', login, 'x');
   rmSync(f.key);
   assert.throws(() => openStore(db, f.key), /Restore the existing login key/);
@@ -171,7 +209,7 @@ test('saved logins without their key: refuse to start, never create a new key', 
 
 test('leases: take, slide on use, release, expire', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), leases = createLeases(db);
-  s.createProfile(pid('p'), []);
+  s.createProfile(pid('p'), [], fixtureUser(db));
   const { token, exp } = leases.take('p', 1);
   assert.match(token, /^arb_l_/);
   assert.equal(leases.of('p')?.exp, exp);

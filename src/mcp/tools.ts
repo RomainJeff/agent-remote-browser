@@ -319,7 +319,8 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
       if (!validId(id)) return fail('Invalid id: lowercase letters, digits, dashes, max 40');
       if (profile(id)) return fail('This profile already exists');
       if (!a) return fail('Invalid allow list: plain domains like example.com');
-      store.createProfile(id, a);
+      // Slice 3 replaces the gateway admins with the token holder.
+      store.createProfile(id, a, null);
       return txt({ created: id, allow: a });
     });
 
