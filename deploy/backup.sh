@@ -13,7 +13,7 @@ set -eu
 P=${ARB_PREFIX:-arb}
 STAGE=${BACKUP_STAGE:-/var/tmp/$P-backup}
 # Throwaway image that tars each profile volume. Pinned by digest, like every image of the stack (Renovate updates it).
-COPY_IMAGE='alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f'
+COPY_IMAGE='alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf'
 umask 077
 rm -rf "$STAGE" && mkdir -p "$STAGE"
 trap 'rm -rf "$STAGE"' EXIT

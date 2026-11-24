@@ -1,5 +1,5 @@
 # One image = one agent "computer": headless Chromium + agent-browser, nothing else.
-FROM node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1
+FROM node:26-bookworm-slim@sha256:0042e17d232a87a2cd485be1da7900fca4d10a4ad11b29e9285da1d2e54798c9
 
 # ponytail: Debian chromium (works on arm64 + amd64); Chrome for Testing has no linux-arm64 build.
 RUN apt-get update \
