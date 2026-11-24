@@ -176,4 +176,10 @@ test('key create: profile-scoped key in a new 0600 file, never printed, works, e
   assert.equal(await t.run(['key', 'revoke', id[1]]), 0);
   assert.equal(count(t, 'SELECT count(*) n FROM apikey'), 0);
   await assert.rejects(t.run(['key', 'revoke', id[1]]), /No key/);
+  // --global: scope global, same file rules.
+  rmSync(file); t.lines.length = 0;
+  assert.equal(await t.run(['key', 'create', '--global', file]), 0);
+  assert.match(t.lines[0], /^Key \S+ for all profiles \(global\), expires /);
+  assertNoSecret(t.lines, [readFileSync(file, 'utf8')]);
+  assert.equal(count(t, "SELECT count(*) n FROM apikey WHERE metadata LIKE '%\"global\"%'"), 1);
 });

@@ -3,7 +3,7 @@
 //   node src/cli.ts admin create <email>      (password, then TOTP code, on stdin)
 //   node src/cli.ts admin reset-2fa <email>   (new password and new TOTP secret)
 //   node src/cli.ts backup-db <file>          (consistent snapshot of arb.db; safe while the gateway runs)
-//   node src/cli.ts key create <profile> <file> [days]   (profile-scoped API key written to <file>, 0600; default 1 day)
+//   node src/cli.ts key create <profile>|--global <file> [days]   (API key written to <file>, 0600; default 1 day)
 //   node src/cli.ts key revoke <id>
 //   (both safe while the gateway runs: an operator, or an agent the operator lets run them, gets a test key
 //    without the admin UI's password and TOTP. Docker access to the host already outranks that 2FA.)
@@ -25,7 +25,7 @@ type Out = (line: string) => void;
 /** Reads one line, without echo on a TTY. */
 type Ask = (prompt: string) => Promise<string>;
 
-const USAGE = 'Usage: node src/cli.ts rotate-login-key | admin create|reset-2fa <email> | backup-db <file> | key create <profile> <file> [days] | key revoke <id>';
+const USAGE = 'Usage: node src/cli.ts rotate-login-key | admin create|reset-2fa <email> | backup-db <file> | key create <profile>|--global <file> [days] | key revoke <id>';
 
 function withStore<T>(cfg: Config, fn: (store: ReturnType<typeof openStore>, db: ReturnType<typeof openDb>) => T): T {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
@@ -111,8 +111,8 @@ async function adminCmd(cfg: Config, sub: string, email: string, ask: Ask, out: 
   } finally { db.close(); }
 }
 
-/** Same key as the admin UI's (scope profile:<id>), owned by the admin, but written to a new 0600 file instead of
- *  being shown: the CLI never prints a key. Days: 1 to 365, default 1 (a test key should not outlive the test). */
+/** Same key as the admin UI's (scope profile:<id>, or global with --global), owned by the admin, but written to a new 0600 file
+ *  instead of being shown: the CLI never prints a key. Days: 1 to 365, default 1 (a test key should not outlive the test). */
 async function keyCmd(cfg: Config, args: string[], out: Out) {
   const db = openDb(join(cfg.dataDir, 'arb.db'));
   try {
@@ -121,17 +121,17 @@ async function keyCmd(cfg: Config, args: string[], out: Out) {
       out(`Key ${args[1]} revoked.`);
       return;
     }
-    const [, raw, file, d = '1'] = args, days = Number(d), id = parseProfileId(raw);
-    if (!id || !openStore(db, cfg.loginKeyFile).profile(id)) throw Error(`No profile ${raw}`);
+    const [, raw, file, d = '1'] = args, days = Number(d), global = raw === '--global', id = global ? null : parseProfileId(raw);
+    if (!global && !(id && openStore(db, cfg.loginKeyFile).profile(id))) throw Error(`No profile ${raw}`);
     if (!Number.isInteger(days) || days < 1 || days > 365) throw Error('Days: 1 to 365');
     const admin = db.prepare('SELECT id FROM user').get() as { id: string } | undefined;
     if (!admin) throw Error('No admin yet: run admin create first');
     writeFileSync(file, '', { flag: 'wx', mode: 0o600 }); // never overwrite: claim the file before the key exists
     const { auth } = createAuth(db, authOptions(cfg));
-    const k = await auth.api.createApiKey({ body: { name: `cli ${id}`, userId: admin.id, metadata: { scope: `profile:${id}` }, expiresIn: days * 86400 } })
+    const k = await auth.api.createApiKey({ body: { name: `cli ${id ?? 'global'}`, userId: admin.id, metadata: { scope: id ? `profile:${id}` : 'global' }, expiresIn: days * 86400 } })
       .catch((e) => { rmSync(file); throw e; });
     writeFileSync(file, k.key);
-    out(`Key ${k.id} for profile ${id}, expires ${new Date(k.expiresAt!).toISOString()}, written to ${file}. Revoke: key revoke ${k.id}`);
+    out(`Key ${k.id} for ${id ? `profile ${id}` : 'all profiles (global)'}, expires ${new Date(k.expiresAt!).toISOString()}, written to ${file}. Revoke: key revoke ${k.id}`);
   } finally { db.close(); }
 }
 
