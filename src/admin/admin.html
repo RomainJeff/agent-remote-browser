@@ -215,6 +215,32 @@
   .seg input:checked + span { background: var(--green-soft); border-color: var(--primary); color: var(--primary); }
   .seg input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+  /* Playbook editor: a form over the Markdown body, one shown at a time */
+  #bookForm.md-mode .pb-form, #bookForm:not(.md-mode) .pb-md { display: none; }
+  label.f .hint { font-weight: 400; }
+  fieldset.pb-form { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  fieldset.pb-form:disabled { opacity: .45; }
+  .pb-form textarea.in { padding: 10px 12px; resize: vertical; }
+  textarea.in.pb-md { min-height: 420px; padding: 12px; font: 400 13px/20px var(--mono); resize: vertical; }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .st { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border: 1px solid var(--line3); border-radius: 4px; background: #FAFBFB; }
+  .st .num { display: grid; place-items: center; width: 28px; height: 40px; font: 700 13px/1 var(--mono); color: var(--muted); }
+  .st .hint { margin-top: 6px; }
+  .sline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .sline select.in { width: auto; flex: none; font-family: var(--mono); font-size: 13px; }
+  .sline select.act { font-weight: 600; color: var(--primary); }
+  .sline input.in { flex: 1 1 140px; width: auto; font-family: var(--mono); font-size: 13px; }
+  .sline textarea.in { flex: 1 1 100%; padding: 8px 12px; font: 400 13px/18px var(--mono); }
+  .sline .check { font-size: 13px; align-items: center; }
+  .sline .check input { margin: 0; }
+  .ops { display: flex; gap: 2px; }
+  .ops .btn { min-width: 32px; padding: 0 8px; }
+  @media (max-width: 600px) { .st { grid-template-columns: 20px minmax(0, 1fr); gap: 8px; } .st .num { width: 20px; } .ops { grid-column: 2; } .sline select.in, .sline input.in { flex: 1 1 100%; } }
+  .params { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+  .ph { display: inline-flex; font: 500 12px/18px var(--mono); padding: 0 8px; border-radius: 999px; background: var(--agent-soft); color: var(--agent-ink); }
+  .pb-status { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .pb-status b { color: var(--ink); font-weight: 600; } .pb-status .ok { color: var(--ok); font-weight: 600; } .pb-status .ko { color: var(--danger-ink); font-weight: 600; }
+
   /* Toast */
   .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
   .toast { pointer-events: auto; max-width: min(440px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 4px; background: #1F2226; color: #fff; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2); animation: tin .18s ease-out; }
@@ -577,12 +603,25 @@ function showProfile(id, t) {
     </div>
 
     <div data-panel="playbooks" class="stack">
-      <div class="alert a-info"><p>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. The first line is the description it sees in the list. Put a <code>run_steps</code> recipe in a <code>json</code> block, with <code>{placeholders}</code> the agent fills.</p></div>
+      <div class="alert a-info"><p>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. Fill the form, or write the Markdown yourself: both stay in sync.</p></div>
       <section class="card" aria-labelledby="hBooks"><div class="tblhead"><h2 id="hBooks">Playbooks</h2><span class="hint">Saving or deleting asks for your 2FA code</span></div><div id="playbooks"></div></section>
       <section class="card pad" aria-labelledby="hBook"><h3 id="hBook">Add or replace</h3>
         <form class="grid-form" id="bookForm">
-          <label class="f wide">Name<input class="in mono" name="name" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." required autocomplete="off" spellcheck="false"></label>
-          <label class="f wide">Text (20 KB max)<textarea class="in mono" name="body" rows="14" required spellcheck="false" placeholder="# Check the n8n quota of a workspace"></textarea></label>
+          <label class="f wide">Name<input class="in mono" name="name" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." required autocomplete="off" spellcheck="false"><span class="hint">Lowercase, digits and dashes. Becomes the tool <code id="pbTool">pb_…</code></span></label>
+          <fieldset class="wide seg" aria-label="Edit as"><label><input type="radio" name="mode" value="form" checked><span>Form</span></label><label><input type="radio" name="mode" value="md"><span>Markdown</span></label></fieldset>
+          <div class="wide alert a-warn" id="pbPaused" hidden><p>The Markdown has an error, so the form is paused: <span id="pbErr"></span></p></div>
+          <fieldset class="wide pb-form" id="pbForm">
+            <label class="f">Description<input class="in" data-top="desc" maxlength="200" autocomplete="off" placeholder="Check the executions quota of an n8n Cloud workspace"><span class="hint">Line 1. The agent picks the playbook from it: say the task, not the site.</span></label>
+            <label class="f">Notes for the agent<textarea class="in" data-top="notes" rows="3" placeholder="What to fill in, what the result means."></textarea></label>
+            <div class="stack" style="gap:8px">
+              <div class="row" style="justify-content:space-between"><span class="lbl" id="pbCount">Steps</span><span class="hint">Run in one call, 18 s at most</span></div>
+              <ol class="steps" id="pbSteps"></ol>
+              <div class="row"><button type="button" class="btn btn-sm" id="pbAdd">+ Add step</button><span class="hint">Write <code>{word}</code> in a field: the agent fills it in.</span></div>
+              <div class="params" id="pbParams"></div></div>
+            <label class="f">If it fails<textarea class="in" data-top="fallback" rows="2" placeholder="If step 3 fails, call request_human."></textarea><span class="hint">Sent back with the error and the failed step number.</span></label>
+          </fieldset>
+          <textarea class="in wide pb-md" name="body" spellcheck="false" aria-label="Playbook Markdown" placeholder="# Check the n8n quota of a workspace"></textarea>
+          <div class="wide pb-status" id="pbStatus"></div>
           <div class="wide row"><button type="submit" class="btn btn-p">Save</button><p class="msg" id="bookErr" aria-live="polite"></p></div>
         </form></section>
     </div>
@@ -656,6 +695,7 @@ function showProfile(id, t) {
       f.reset(); flash($('#headerErr'), 'Saved. Applies from the next page opened on that origin.'); refreshDetail();
     } catch (err) { flash($('#headerErr'), err.message, true); }
   });
+  wireBook($('#bookForm'));
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
     const cur = allowDraft ?? computers.find((x) => x.id === id)?.allow ?? [], add = domains($('#newDomain').value.toLowerCase());
@@ -825,7 +865,7 @@ async function refreshDetail() {
     for (const b of $$('[data-bdel]')) b.onclick = () => deletePlaybook(b, b.dataset.bdel);
     for (const b of $$('[data-bedit]')) b.onclick = () => {
       const f = $('#bookForm'), x = d.playbooks.find((y) => y.name === b.dataset.bedit);
-      f.name.value = x.name; f.body.value = x.body; f.body.focus();
+      f.name.value = x.name; f.body.value = x.body; f.body.dispatchEvent(new Event('input')); f.name.focus();
     };
   }
   patch('activity', d.audit.slice(0, 6), () => d.audit.length
@@ -856,6 +896,124 @@ function deleteHeader(btn, origin, name) {
     if (!await confirmSensitive({ title: `Delete header "${name}"?`, desc: `No longer sent to ${origin}. A page already open there keeps it until the browser restarts.`, label: 'Delete', danger: true })) return false;
     await api(`/api/computers/${encodeURIComponent(selected)}/header-delete`, 'POST', { origin, name }); refreshDetail();
   }, `Header ${name} deleted.`);
+}
+// pb-editor:start. Playbook body <-> form model, no DOM (test/unit/playbook-editor.test.ts runs it against the server parse).
+// Same split as the server: first non-empty line = description (store.describe), first ```json block = recipe (steps.recipe).
+const PB_ACT = { open: 'Go to a URL (allowed domains only)', login: 'Fill a saved login', click: 'Click an element', fill: 'Type into a field', press: 'Press a key', wait: 'Wait for the page', get_text: 'Read the page text', snapshot: 'List the interactive elements, with refs', back: 'Previous page' };
+const PB_LOC = ['text', 'label', 'role', 'placeholder', 'testid', 'css', 'ref'];
+const PB_WAIT = ['load', 'text', 'url', 'selector', 'ms'];
+const PB_DEF = { open: { v: 'https://' }, login: { v: '', if_needed: true }, click: { kind: 'text', v: '' }, fill: { kind: 'label', v: '', value: '' }, press: { v: 'Enter' }, back: {}, wait: { kind: 'load', v: 'networkidle' }, get_text: { v: '', keep: true }, snapshot: { v: '', keep: true } };
+// Step JSON <-> form row {a, f}. A step the form can't show round-trip (exact, get_text by selector...) stays a JSON row.
+function pbFrom(s) {
+  const a = Object.keys(PB_ACT).find((k) => k in s), x = s[a];
+  if (a === 'click' || a === 'fill') { const kind = PB_LOC.find((k) => k in x); return { a, f: { kind, v: x[kind], name: x.name, value: s.value } }; }
+  if (a === 'wait') { const kind = PB_WAIT.find((k) => k in x); return { a, f: { kind, v: x[kind] } }; }
+  if (a === 'get_text') return { a, f: { v: x.contains, keep: s.keep } };
+  if (a === 'snapshot') return { a, f: { v: x.scope, keep: s.keep } };
+  if (a === 'login') return { a, f: { v: x, if_needed: s.if_needed } };
+  return { a, f: { v: x } };
+}
+function pbTo({ a, f }) {
+  const loc = () => ({ [f.kind]: f.v ?? '', ...(f.kind === 'role' && f.name && { name: f.name }) }), keep = f.keep ? { keep: true } : {};
+  return { open: () => ({ open: f.v }), login: () => ({ login: f.v, ...(f.if_needed && { if_needed: true }) }), click: () => ({ click: loc() }),
+    fill: () => ({ fill: loc(), value: f.value ?? '' }), press: () => ({ press: f.v }), back: () => ({ back: true }),
+    wait: () => ({ wait: { [f.kind]: f.kind === 'ms' ? Number(f.v) : f.v } }),
+    get_text: () => ({ get_text: f.v ? { contains: f.v } : {}, ...keep }), snapshot: () => ({ snapshot: f.v ? { scope: f.v } : {}, ...keep }) }[a]();
+}
+const pbRow = (s) => { try { const r = pbFrom(s); if (JSON.stringify(pbTo(r)) === JSON.stringify(s)) return r; } catch {} return { raw: JSON.stringify(s) }; };
+const pbFmt = (v) => v && typeof v === 'object' ? (Array.isArray(v) ? `[${v.map(pbFmt).join(', ')}]` : `{${Object.entries(v).map(([k, x]) => JSON.stringify(k) + ': ' + pbFmt(x)).join(', ')}}`) : JSON.stringify(v);
+/** {desc, notes, steps, fallback}, or {err} when the recipe can't be read. */
+function pbParse(body) {
+  const lines = body.split('\n'), i = lines.findIndex((l) => l.trim());
+  const desc = i < 0 ? '' : lines[i].replace(/^\s*#+\s*/, '').trim(), rest = i < 0 ? '' : lines.slice(i + 1).join('\n');
+  const m = rest.match(/```json[^\n]*\n([\s\S]*?)\n```/);
+  if (!m) return { desc, notes: rest.trim(), steps: [], fallback: '' };
+  let j; try { j = JSON.parse(m[1]); } catch (e) { return { err: 'invalid JSON in the recipe (' + e.message + ').' }; }
+  const s = Array.isArray(j) ? j : j?.steps;
+  if (!Array.isArray(s) || s.some((x) => !x || typeof x !== 'object')) return { err: 'the recipe needs {"steps": [...]}, one object per step.' };
+  return { desc, notes: rest.slice(0, m.index).trim(), steps: s.map(pbRow), fallback: rest.slice(m.index + m[0].length).trim() };
+}
+// ponytail: the form rewrites the json block one step per line; hand formatting inside it is lost, the text around is kept.
+function pbSerialize(m) {
+  const out = [m.desc || m.notes || m.steps.length || m.fallback ? '# ' + m.desc : ''];
+  if (m.notes) out.push(m.notes);
+  if (m.steps.length) out.push('```json\n{"steps": [\n' + m.steps.map((r) => '  ' + (r.raw ?? pbFmt(pbTo(r)))).join(',\n') + '\n]}\n```');
+  if (m.fallback) out.push(m.fallback);
+  return out.join('\n\n');
+}
+// pb-editor:end
+const PB_TIP = { click: 'Prefer text, label or role: refs go stale after a navigation, CSS breaks.', fill: 'Prefer label or placeholder. Put a {param} in the value.', wait: 'text is case-sensitive. url is a glob over the whole URL, e.g. **/manage*.', login: 'Wait for networkidle first. No-op when the page has no password field.', get_text: 'Empty = the whole page. Otherwise the lines containing this word, case-insensitive.', snapshot: 'Empty = the whole page. A CSS selector, e.g. main.' };
+const pbOpt = (arr, v) => arr.map((x) => `<option${x === v ? ' selected' : ''}>${x}</option>`).join('');
+const pbInp = (k, v, ph) => `<input class="in" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" aria-label="${esc(ph)}" autocomplete="off" spellcheck="false">`;
+const pbChk = (k, v, l) => `<label class="check"><input type="checkbox" data-k="${k}"${v ? ' checked' : ''}>${l}</label>`;
+function pbFields({ a, f }) {
+  const loc = () => `<select class="in" data-k="kind" aria-label="Find by">${pbOpt(PB_LOC, f.kind)}</select>${pbInp('v', f.v, { role: 'button', ref: '@e3', css: '#usage .total' }[f.kind] ?? 'Text on the page')}${f.kind === 'role' ? pbInp('name', f.name, 'Accessible name') : ''}`;
+  switch (a) {
+    case 'open': return pbInp('v', f.v, 'https://…');
+    case 'login': return pbInp('v', f.v, 'Saved login, e.g. n8n-cloud') + pbChk('if_needed', f.if_needed, 'Skip if signed in');
+    case 'click': return loc();
+    case 'fill': return loc() + pbInp('value', f.value, 'Value, e.g. {email}');
+    case 'press': return pbInp('v', f.v, 'Enter, Tab, Escape…');
+    case 'wait': return `<select class="in" data-k="kind" aria-label="Wait for">${pbOpt(PB_WAIT, f.kind)}</select>` + (f.kind === 'load'
+      ? `<select class="in" data-k="v" aria-label="State">${pbOpt(['load', 'domcontentloaded', 'networkidle'], f.v)}</select>`
+      : pbInp('v', f.v, { text: 'Executions', url: '**/manage*', selector: '#usage', ms: '1000 (5000 max)' }[f.kind]));
+    case 'get_text': return pbInp('v', f.v, 'Lines containing… (optional)') + pbChk('keep', f.keep, 'Return it');
+    case 'snapshot': return pbInp('v', f.v, 'Scope, CSS (optional)') + pbChk('keep', f.keep, 'Return it');
+    default: return '';
+  }
+}
+const pbStep = (r, i, n) => `<li class="st" data-i="${i}"><span class="num">${i + 1}</span><div>
+  <div class="sline">${r.raw !== undefined ? `<textarea class="in" data-k="raw" rows="2" spellcheck="false" aria-label="Step ${i + 1} as JSON">${esc(r.raw)}</textarea>` : `<select class="in act" data-k="a" aria-label="Action">${pbOpt(Object.keys(PB_ACT), r.a)}</select>${pbFields(r)}`}</div>
+  <p class="hint">${r.raw !== undefined ? 'Shown as JSON: the form has no field for some of its options.' : esc(PB_ACT[r.a] + (PB_TIP[r.a] ? '. ' + PB_TIP[r.a] : ''))}</p></div>
+  <div class="ops"><button type="button" class="btn btn-sm btn-g" data-op="up" aria-label="Move step ${i + 1} up"${i ? '' : ' disabled'}>↑</button><button type="button" class="btn btn-sm btn-g" data-op="down" aria-label="Move step ${i + 1} down"${i < n - 1 ? '' : ' disabled'}>↓</button><button type="button" class="btn btn-sm btn-g btn-dl" data-op="del" aria-label="Delete step ${i + 1}">✕</button></div></li>`;
+/** The form edits the model and rewrites the Markdown (name=body, what is saved); editing the Markdown redraws the form. */
+function wireBook(f) {
+  const md = f.body, list = $('#pbSteps'), top = (k) => $(`[data-top="${k}"]`, f);
+  let m = pbParse('');
+  const status = () => {
+    const name = f.name.value.trim() || 'name', tool = 'pb_' + name.replaceAll('-', '_'), pr = pbParse(md.value), n = pr.steps?.length ?? 0;
+    const ph = [...new Set([...(md.value.match(/```json[^\n]*\n([\s\S]*?)\n```/)?.[1] ?? '').matchAll(/\{([A-Za-z_]\w*)\}/g)].map((x) => x[1]))];
+    const kb = new Blob([md.value]).size / 1024;
+    setText($('#pbTool'), tool);
+    setText($('#pbCount'), `Steps · ${n} of 20`);
+    $('#pbParams').innerHTML = ph.length ? `<span class="lbl">The agent fills</span>${ph.map((p) => `<span class="ph">{${esc(p)}}</span>`).join('')}<span class="hint">→ <code>${esc(tool)}(${ph.map(esc).join(', ')})</code></span>` : '';
+    $('#pbStatus').innerHTML = md.value.trim() ? `<span>Agent sees <b>${esc(name)}</b>: ${pr.desc ? esc(pr.desc) : pr.err ? '' : '<span class="ko">no description</span>'}</span>
+      <span>${pr.err ? '<span class="ko">Recipe not readable</span>' : n > 20 ? `<span class="ko">${n} steps, 20 max</span>` : n ? `<span class="ok">✓ Recipe</span> ${n} steps` : 'No recipe: the agent reads it and acts step by step'}</span>
+      <span class="${kb > 20 ? 'ko' : ''}">${kb.toFixed(1)} KB of 20</span>` : '';
+  };
+  const drawSteps = () => { list.innerHTML = m.steps.map((r, i, s) => pbStep(r, i, s.length)).join(''); };
+  const toMd = () => { md.value = pbSerialize(m); status(); };
+  for (const k of ['desc', 'notes', 'fallback']) top(k).oninput = (e) => { m[k] = e.target.value; toMd(); };
+  f.name.addEventListener('input', status);
+  list.oninput = (e) => {
+    const k = e.target.dataset.k, i = +e.target.closest('.st').dataset.i, r = m.steps[i];
+    if (k === 'a') { m.steps[i] = { a: e.target.value, f: { ...PB_DEF[e.target.value] } }; drawSteps(); }
+    else if (k === 'kind') { r.f.kind = e.target.value; r.f.v = r.a === 'wait' && r.f.kind === 'load' ? 'networkidle' : ''; drawSteps(); }
+    else if (k === 'raw') { try { r.raw = JSON.stringify(JSON.parse(e.target.value)); } catch { r.raw = e.target.value; } }
+    else r.f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    toMd();
+  };
+  list.onclick = (e) => {
+    const op = e.target.closest('[data-op]')?.dataset.op; if (!op) return;
+    const i = +e.target.closest('.st').dataset.i, s = m.steps;
+    if (op === 'del') s.splice(i, 1); else { const j = op === 'up' ? i - 1 : i + 1; [s[i], s[j]] = [s[j], s[i]]; }
+    drawSteps(); toMd();
+  };
+  $('#pbAdd').onclick = () => {
+    const a = m.steps.length ? 'click' : 'open';
+    m.steps.push({ a, f: { ...PB_DEF[a] } }); drawSteps(); toMd(); list.lastElementChild.querySelector('input')?.focus();
+  };
+  md.oninput = () => {
+    const p = pbParse(md.value);
+    $('#pbPaused').hidden = !p.err; $('#pbForm').disabled = !!p.err;
+    if (p.err) setText($('#pbErr'), p.err);
+    else { m = p; for (const k of ['desc', 'notes', 'fallback']) top(k).value = m[k]; drawSteps(); }
+    status();
+  };
+  const mode = () => f.classList.toggle('md-mode', f.mode.value === 'md');
+  for (const r of f.mode) r.onchange = mode;
+  f.onreset = () => setTimeout(() => { md.oninput(); mode(); });
+  md.oninput();
 }
 function deletePlaybook(btn, name) {
   act(btn, async () => {
