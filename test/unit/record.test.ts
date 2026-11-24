@@ -18,7 +18,7 @@ function page() {
   const src = html.slice(html.indexOf('let rec = null;'), html.indexOf('function renderRec()'));
   vm.runInContext(src + ';T = { get rec() { return rec }, set rec(v) { rec = v }, withBuf, addStep, recBody, tcall, renderBuf };', ctx);
   const T = ctx.T;
-  const start = (id = 'p') => (T.rec = { id, steps: [] as any[], buf: '', q: Promise.resolve(), lost: false } as any);
+  const start = (id = 'p') => (T.rec = { id, rid: 'r-' + id, steps: [] as any[], buf: '', q: Promise.resolve(), lost: false } as any);
   const click = () => T.withBuf(async (g: any) => T.addStep(g, await T.tcall(g, 'click', { x: 1, y: 1 })));
   return { ctx, T, start, click };
 }
@@ -26,7 +26,7 @@ const settle = () => new Promise((r) => setTimeout(r, 80));
 const OK = { step: { click: { role: 'button', name: 'OK' } }, field: false };
 const field = (name: string) => ({ step: { click: { role: 'textbox', name } }, field: true });
 const fill = (name: string, v: string) => ({ step: { fill: { role: 'textbox', name }, value: v }, typed: v });
-const LOGIN = { step: { login: 'main', if_needed: true }, user: 'fixture', form: 7 };
+const LOGIN = { step: { login: 'main', if_needed: true } };
 
 test('record: a failed click drops what was typed after it and turns typing off until a click goes through', async () => {
   const { ctx, start, click } = page(), g = start();
@@ -45,23 +45,13 @@ test('record: a gesture still running when the recording stops or another starts
   assert.deepEqual([g.steps.length, g2.steps.length, ctx.toasts], [0, 0, []]);
 });
 
-test('record: a login replaces its own username fill and the clicks and Tabs leading to it, nothing else', () => {
-  const { T, start } = page();
-  let g = start();
-  g.steps.push(fill('Search', 'shoes'), field('Username'));
-  T.addStep(g, { ...fill('Username', 'fixture'), form: 7 }); // replaces the field click
+test('record: a login replaces the clicks and Tabs leading to it, nothing else (fills stay, username included)', () => {
+  const { T, start } = page(), g = start();
+  g.steps.push(fill('Tenant', 'fixture'), field('Username'));
+  T.addStep(g, fill('Username', 'fixture')); // replaces the field click
   g.steps.push({ step: { press: 'Tab' } }, field('Password'));
   T.addStep(g, LOGIN);
-  assert.deepEqual(g.steps.map((x: any) => x.step), [fill('Search', 'shoes').step, LOGIN.step]);
-  g = start(); g.steps.push(fill('Coupon', 'X1'), field('Password'));
-  T.addStep(g, LOGIN);
-  assert.deepEqual(g.steps.map((x: any) => x.step), [fill('Coupon', 'X1').step, LOGIN.step]);
-  // The same text in another form's field, or in no form (identity unknown): kept.
-  for (const form of [3, undefined]) {
-    g = start(); g.steps.push({ ...fill('Search', 'fixture'), form });
-    T.addStep(g, LOGIN);
-    assert.deepEqual(g.steps.map((x: any) => x.step), [fill('Search', 'fixture').step, LOGIN.step]);
-  }
+  assert.deepEqual(g.steps.map((x: any) => x.step), [fill('Tenant', 'fixture').step, fill('Username', 'fixture').step, LOGIN.step]);
 });
 
 test('record: typing names the gesture it follows; text queued behind a gesture that fails is dropped, never sent', async () => {
@@ -73,6 +63,7 @@ test('record: typing names the gesture it follows; text queued behind a gesture 
   ctx.replies.type = fill('Email', 'a'); await settle();
   assert.deepEqual(ctx.calls, ['click', 'type', 'press']);
   assert.deepEqual([ctx.bodies[0].seq, ctx.bodies[1].after, ctx.bodies[2].seq], [1, 1, 2]);
+  assert.ok(ctx.bodies.every((b: any) => b.rec === g.rid), 'every call names its recording');
   assert.deepEqual([g.lost, ctx.toasts.length], [true, 2]);
   assert.ok(!JSON.stringify(ctx.bodies).includes('hunter2'));
 });
@@ -84,7 +75,26 @@ test('record: several saved logins come back as a pick, the rest of that gesture
   assert.deepEqual([ctx.calls, g.pick.map((l: any) => l.site), g.steps.length], [['type'], ['a', 'b'], 0]);
   ctx.replies.type = { ...LOGIN, step: { login: 'b', if_needed: true } };
   await T.tcall(g, 'type', { login: 'b' }).then((r: any) => T.addStep(g, r));
-  assert.deepEqual([{ ...ctx.bodies.at(-1) }, g.steps[0].step.login], [{ login: 'b', after: undefined }, 'b']);
+  assert.deepEqual([{ ...ctx.bodies.at(-1) }, g.steps[0].step.login], [{ login: 'b', rec: g.rid, after: undefined }, 'b']);
+});
+
+test('record: Save and Replay wait for a pending login pick instead of dropping it', async () => {
+  const { ctx, T, start } = page(), g = start();
+  ctx.els = { '#bRecReplay': {}, '#bRecSave': {} };
+  g.steps.push(fill('Email', 'a')); g.pick = [{ site: 'a', username: 'x' }, { site: 'b', username: 'y' }];
+  T.renderBuf(); assert.deepEqual([ctx.els['#bRecReplay'].disabled, ctx.els['#bRecSave'].disabled], [true, true]);
+  let saved = false;
+  T.withBuf(async () => { saved = true; }, true); await settle();
+  assert.deepEqual([saved, g.pick.length, ctx.toasts], [false, 2, ['Pick the saved login to use first, or Cancel']]);
+  T.withBuf(async () => {}); await settle(); // a gesture in the view: the pick is dropped
+  assert.equal(g.pick, null);
+});
+
+test('record: a replay that stops partway turns typing off, like a failed gesture', async () => {
+  const { ctx, T, start } = page(), g = start();
+  ctx.replies.replay = { ok: false, text: 'Step 2 failed' }; g.buf = 'hunter2';
+  const r = await T.tcall(g, 'replay', { body: '' });
+  assert.deepEqual([r.ok, g.lost, g.buf], [false, true, '']);
 });
 
 test('record: distinct default param names; one name for two different values is refused', () => {
@@ -97,6 +107,8 @@ test('record: distinct default param names; one name for two different values is
   assert.deepEqual({ ...T.recBody(g).params }, { email: 'a', email_2: 'b' }, 'same name, same value: one param');
   g.steps[2].pname = 'email';
   assert.throws(() => T.recBody(g), /Param "email" is used for different values/);
+  g.steps[2].pname = '__proto__';
+  assert.throws(() => T.recBody(g), /Param name "__proto__"/);
 });
 
 test('record: Save and Replay are on as soon as there is a step or typing', () => {
