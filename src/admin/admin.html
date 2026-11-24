@@ -170,6 +170,8 @@
   .activity li { display: flex; gap: 8px; align-items: baseline; }
   .activity .t { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .activity .ko { color: var(--danger-ink); }
+  .recsteps code { overflow-wrap: anywhere; } .recsteps li { flex-wrap: wrap; }
+  #recOut { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; font-size: 12px; margin: 0; }
 
   /* Chips */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -581,6 +583,7 @@ function showProfile(id, t) {
         <div class="vfoot"><span id="vViewers"></span><span class="pt" id="pageinfo"></span></div>
       </section>
       <div class="stack">
+        <section class="card pad" id="rec" aria-labelledby="hRec" hidden></section>
         <section class="card pad" aria-labelledby="hLease"><h3 id="hLease">Agent lease</h3><div id="lease"></div></section>
         <section class="card pad" aria-labelledby="hAct"><h3 id="hAct">Agent activity</h3><div id="activity"></div></section>
         <section class="card pad" aria-labelledby="hConn"><h3 id="hConn">Connect an agent</h3>${mcpField()}
@@ -604,7 +607,7 @@ function showProfile(id, t) {
 
     <div data-panel="playbooks" class="stack">
       <div class="alert a-info"><p>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. Fill the form, or write the Markdown yourself: both stay in sync.</p></div>
-      <section class="card" aria-labelledby="hBooks"><div class="tblhead"><h2 id="hBooks">Playbooks</h2><span class="hint">Saving or deleting asks for your 2FA code</span></div><div id="playbooks"></div></section>
+      <section class="card" aria-labelledby="hBooks"><div class="tblhead"><h2 id="hBooks">Playbooks</h2><span class="hint">Saving or deleting asks for your 2FA code</span><span class="grow"></span><button type="button" class="btn btn-sm" id="bRec">Record</button></div><div id="playbooks"></div></section>
       <section class="card pad" aria-labelledby="hBook"><h3 id="hBook">Add or replace</h3>
         <form class="grid-form" id="bookForm">
           <label class="f wide">Name<input class="in mono" name="name" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\\-]{0,39}" title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." required autocomplete="off" spellcheck="false"><span class="hint">Lowercase, digits and dashes. Becomes the tool <code id="pbTool">pb_…</code></span></label>
@@ -671,6 +674,7 @@ function showProfile(id, t) {
     act(e.submitter, async () => {
       let url = $('#vurl').value.trim(); if (!url) return false;
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+      if (rec?.id === id) return void withBuf(async () => addStep(await tcall('open', { url })));
       setVstate('Opening…');
       try { await api(`${p}/open`, 'POST', { url }); if (!view) openView(id, false); }
       catch (err) { setVstate(err.message); return false; }
@@ -696,6 +700,12 @@ function showProfile(id, t) {
     } catch (err) { flash($('#headerErr'), err.message, true); }
   });
   wireBook($('#bookForm'));
+  // Record: the gateway runs each gesture of the live view as a run_steps step; the draft stays in this page.
+  $('#bRec').onclick = (e) => act(e.currentTarget, async () => {
+    location.hash = `#/p/${encodeURIComponent(id)}/session`;
+    await takeOver(id);
+    rec = { id, steps: [], buf: '', q: Promise.resolve() }; renderRec();
+  });
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
     const cur = allowDraft ?? computers.find((x) => x.id === id)?.allow ?? [], add = domains($('#newDomain').value.toLowerCase());
@@ -1066,7 +1076,7 @@ function openView(id, control) {
   wireControl();
   renderLiveBar();
 }
-function closeView() { if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
+function closeView() { if (rec) { rec = null; renderRec(); } if (view) { const v = view; view = null; v.ws.close(); } const s = $('#screen'); if (s) s.classList.remove('control'); setText($('#vfps'), ''); }
 
 // Human input -> agent-browser stream protocol (same fields as its own dashboard).
 // The remote Chrome runs on Linux: on a Mac, Cmd is sent as Ctrl so Cmd+A, Cmd+Z... behave as expected.
@@ -1087,9 +1097,14 @@ function wireControl() {
     return { x: Math.round((e.clientX - r.left) * w / r.width * css), y: Math.round((e.clientY - r.top) * h / r.height * css) }; };
   const btn = (b) => ['left', 'middle', 'right'][b] || 'none';
   let lastMove = 0;
-  img.onmousedown = (e) => { if (!on) return; e.preventDefault(); img.focus(); send({ type: 'input_mouse', eventType: 'mousePressed', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) }); };
-  img.onmouseup = (e) => send({ type: 'input_mouse', eventType: 'mouseReleased', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) });
-  img.onmousemove = (e) => { if (Date.now() - lastMove < 40 && !e.buttons) return; lastMove = Date.now(); send({ type: 'input_mouse', eventType: 'mouseMoved', ...pos(e), button: e.buttons ? 'left' : 'none', clickCount: 0, modifiers: mods(e) }); };
+  // Recording: clicks and keys go to the gateway as steps (recKey), not as raw input. The wheel still scrolls.
+  const recording = () => on && rec?.id === view?.id;
+  img.onmousedown = (e) => { if (!on) return; e.preventDefault(); img.focus(); if (recording()) return; send({ type: 'input_mouse', eventType: 'mousePressed', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) }); };
+  img.onmouseup = (e) => {
+    if (recording()) { const p = pos(e); if (e.button === 0) withBuf(async () => addStep(await tcall('click', p))); return; }
+    send({ type: 'input_mouse', eventType: 'mouseReleased', ...pos(e), button: btn(e.button), clickCount: e.detail || 1, modifiers: mods(e) });
+  };
+  img.onmousemove = (e) => { if (recording() || Date.now() - lastMove < 40 && !e.buttons) return; lastMove = Date.now(); send({ type: 'input_mouse', eventType: 'mouseMoved', ...pos(e), button: e.buttons ? 'left' : 'none', clickCount: 0, modifiers: mods(e) }); };
   img.oncontextmenu = (e) => on && e.preventDefault();
   img.onwheel = (e) => { if (!on) return; e.preventDefault(); send({ type: 'input_mouse', eventType: 'mouseWheel', ...pos(e), button: 'none', clickCount: 0, deltaX: e.deltaX, deltaY: e.deltaY, modifiers: mods(e) }); };
   const kb = (type, e) => {
@@ -1107,6 +1122,7 @@ function wireControl() {
     const sc = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase();
     if (sc === 'v') return; // no preventDefault: the browser fires `paste` below with the local clipboard
     e.preventDefault();
+    if (recording()) return type === 'keyDown' && recKey(e);
     if (sc === 'c' || sc === 'x') { if (type === 'keyDown') copyRemote().then(() => { if (sc === 'x') { kb('keyDown', e); kb('keyUp', e); } }); return; }
     kb(type, e);
   };
@@ -1114,10 +1130,97 @@ function wireControl() {
   img.onpaste = (e) => {
     if (!on) return; e.preventDefault();
     const t = e.clipboardData.getData('text/plain');
+    if (recording()) { rec.buf = (rec.buf + t).slice(0, 500); return renderBuf(); }
     if (t.length > 5000) return toast('Text too long (5000 characters max).', 'error');
     if (t) api(ep('paste'), 'POST', { text: t }).catch((err) => toast(`Paste failed: ${err.message}`, 'error'));
   };
   if (on) img.focus();
+}
+
+// ---- Record (teach mode) ----------------------------------------------------------
+// rec = { id, steps: [{ step, matches?, field?, typed?, param?, pname? }], buf, q }. Gestures run one at a time (q).
+// Typing is buffered here and sent as one fill on the next click or key: the page shows it only then.
+// ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
+let rec = null;
+const tcall = (a, body) => api(`/api/computers/${encodeURIComponent(rec.id)}/teach-${a}`, 'POST', body);
+function gesture(fn) { const r = rec; r.q = r.q.then(() => rec === r && fn()).catch((e) => toast(e.message, 'error')); }
+/** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(fill or login step). */
+function withBuf(fn) {
+  const text = rec.buf; rec.buf = ''; renderBuf();
+  gesture(async () => {
+    let r = null;
+    if (text) { r = await tcall('type', { text }); if (r.step.fill) r.typed = text; addStep(r); }
+    await fn(r);
+  });
+}
+const REC_KEYS = ['Enter', 'Tab', 'Escape'];
+function recKey(e) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) return; // shortcuts are not recorded
+  // A login step submits the form itself: no Enter after it.
+  if (REC_KEYS.includes(e.key)) return withBuf(async (r) => { if (!r?.step.login) addStep(await tcall('press', { key: e.key })); });
+  if (e.key === 'Backspace') rec.buf = rec.buf.slice(0, -1);
+  else if ([...e.key].length === 1) rec.buf = (rec.buf + e.key).slice(0, 500);
+  else return;
+  renderBuf();
+}
+const same = (a, b) => a !== undefined && JSON.stringify(a) === JSON.stringify(b);
+const slug = (l) => { const s = String(l.name || l.placeholder || l.label || l.text || 'value').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30); return /^[a-z_]/.test(s) ? s : 'p_' + s; };
+function addStep(r) {
+  if (!rec) return;
+  const s = rec.steps, last = s.at(-1);
+  // One step per intent: a fill replaces the click that focused its field, or an earlier fill of the same field;
+  // a login replaces the username fill and the field clicks before it.
+  if (r.step.fill && last && ((last.field && same(last.step.click, r.step.fill)) || same(last.step.fill, r.step.fill))) s.pop();
+  if (r.step.login) while (s.length && (s.at(-1).step.fill || s.at(-1).field)) s.pop();
+  if (r.step.fill) r.pname = slug(r.step.fill);
+  s.push(r); renderRec();
+}
+function renderBuf() { setText($('#recBuf'), rec?.buf ? `Typing: ${plural(rec.buf.length, 'character')}, sent on the next click or Enter` : ''); }
+/** The draft as a playbook body; ticked fills become {params}, their typed values the replay params. */
+function recBody() {
+  const params = {};
+  const steps = rec.steps.map(({ step, param, pname, typed }) => {
+    if (!param || !step.fill) return step;
+    if (!/^[A-Za-z_]\w{0,39}$/.test(pname)) throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
+    params[pname] = typed; return { ...step, value: `{${pname}}` };
+  });
+  const names = Object.keys(params);
+  return { params, body: `# Describe this playbook: the agent sees this line\n\n${names.length ? `Params: ${names.map((k) => `{${k}}`).join(', ')}.\n\n` : ''}\`\`\`json\n${JSON.stringify({ steps }, null, 2)}\n\`\`\`\n` };
+}
+function renderRec() {
+  const el = $('#rec'); if (!el) return;
+  el.hidden = !rec; if (!rec) return void (el.innerHTML = '');
+  const n = rec.steps.length;
+  el.innerHTML = `<div class="row"><h3 id="hRec">Recording</h3><span class="grow"></span><button type="button" class="btn btn-sm" id="bRecStop">Stop</button></div>
+    <p class="hint">Click, type and press Enter in the view: each gesture runs as a playbook step. Typing is sent on the next click, or on Enter, Tab or Escape. In a password field, the site's saved login is used instead.</p>
+    <p class="hint" id="recBuf" aria-live="polite"></p>
+    ${n ? `<ol class="activity recsteps">${rec.steps.map((s, i) => `<li><code class="mono">${esc(JSON.stringify(s.step))}</code>
+      ${s.matches > 1 ? `<span class="ko">${s.matches} elements match: the first one is used</span>` : ''}
+      ${s.step.fill ? `<label class="hint"><input type="checkbox" data-rparam="${i}"${s.param ? ' checked' : ''}> Param</label><input class="in mono" style="width:140px;min-height:28px" data-rpname="${i}" value="${esc(s.pname)}" aria-label="Param name">` : ''}
+      <button type="button" class="btn btn-sm btn-dl" data-rdel="${i}" style="margin-left:auto">Remove</button></li>`).join('')}</ol>` : '<p class="hint">No steps yet.</p>'}
+    <form class="urlbar" id="recRead"><input class="in mono" name="selector" placeholder="Output: CSS selector (optional)" autocomplete="off"><input class="in" name="contains" placeholder="or text it contains" autocomplete="off"><button type="submit" class="btn btn-sm">Add output</button></form>
+    <div class="row"><button type="button" class="btn btn-sm" id="bRecReplay"${n ? '' : ' disabled'}>Replay</button><button type="button" class="btn btn-sm btn-p" id="bRecSave"${n ? '' : ' disabled'}>Save as playbook…</button></div>
+    <pre id="recOut" class="mono"></pre>`;
+  renderBuf();
+  for (const b of $$('[data-rdel]', el)) b.onclick = () => { rec.steps.splice(+b.dataset.rdel, 1); renderRec(); };
+  for (const b of $$('[data-rparam]', el)) b.onchange = () => { rec.steps[+b.dataset.rparam].param = b.checked; };
+  for (const b of $$('[data-rpname]', el)) b.onchange = () => { rec.steps[+b.dataset.rpname].pname = b.value.trim(); };
+  $('#bRecStop').onclick = () => { rec = null; renderRec(); };
+  $('#recRead').onsubmit = (e) => {
+    e.preventDefault();
+    const f = e.currentTarget, selector = f.selector.value.trim(), contains = f.contains.value.trim();
+    gesture(async () => { const r = await tcall('read', { ...(selector && { selector }), ...(contains && { contains }) }); addStep(r); setText($('#recOut'), r.text); });
+  };
+  // Replay runs the draft through run_playbook's path, the typed values as params.
+  $('#bRecReplay').onclick = () => act(null, () => {
+    const b = recBody();
+    gesture(async () => { setText($('#recOut'), 'Replaying…'); const r = await tcall('replay', b); setText($('#recOut'), `${r.ok ? 'OK' : 'Failed'}\n${r.text}`); });
+  });
+  // Saving goes through the playbook form: same playbook-save, same 2FA step-up.
+  $('#bRecSave').onclick = () => act(null, () => {
+    const f = $('#bookForm'); f.body.value = recBody().body;
+    location.hash = `#/p/${encodeURIComponent(rec.id)}/playbooks`; f.name.focus();
+  });
 }
 
 // ---- Agent access: OAuth clients (scope picked at consent) and API keys -----------------
