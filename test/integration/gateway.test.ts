@@ -903,16 +903,17 @@ test('admin refuses cross-origin, cross-site, foreign Host and non-JSON writes, 
   assert.equal((await admin('GET', '/api/computers', { headers: { origin: `http://127.0.0.1:${ADMIN}`, 'sec-fetch-site': 'same-origin' } })).status, 200);
 });
 
+const upgrade = (headers: Record<string, string>, profile = 'shop') => new Promise<string>((resolve) => {
+  const req = http.request({ host: '127.0.0.1', port: ADMIN, path: `/api/computers/${profile}/stream`, headers: {
+    host: `127.0.0.1:${ADMIN}`, cookie: session, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13',
+    'sec-websocket-key': randomBytes(16).toString('base64'), ...headers } });
+  req.on('upgrade', () => resolve('upgraded'));
+  req.on('response', (r) => resolve('http ' + r.statusCode));
+  req.on('error', () => resolve('dropped'));
+  req.end();
+});
+
 test('live view WebSocket: cross-origin upgrade dropped before touching the computer', async () => {
-  const upgrade = (headers: Record<string, string>) => new Promise<string>((resolve) => {
-    const req = http.request({ host: '127.0.0.1', port: ADMIN, path: '/api/computers/shop/stream', headers: {
-      host: `127.0.0.1:${ADMIN}`, cookie: session, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13',
-      'sec-websocket-key': randomBytes(16).toString('base64'), ...headers } });
-    req.on('upgrade', () => resolve('upgraded'));
-    req.on('response', (r) => resolve('http ' + r.statusCode));
-    req.on('error', () => resolve('dropped'));
-    req.end();
-  });
   const streams = () => agentBrowser('stream').length;
   const n = streams();
   assert.equal(await upgrade({ origin: 'http://evil.test' }), 'dropped');
@@ -1265,6 +1266,7 @@ test('step-up: sensitive admin actions need a 2FA code from the last 15 minutes;
   const sensitive: [string, unknown][] = [
     ['/api/keys', { name: 'k', scope: 'global', expiresIn: '30d' }], ['/api/keys/x/revoke', {}], ['/api/clients/x/revoke', {}],
     ['/api/computers/shop3/config', { allow: ['example.com'] }], ['/api/computers/shop3/login-save', { site: 's', url: 'https://example.com/', username: 'u', password: 'synthetic' }],
+    ['/api/computers/shop3/members', { email: owner.email, role: null }],
     ['/api/computers/shop3/login-delete', { site: 's' }], ['/api/computers/shop3/delete', {}],
     ['/api/computers/shop3/playbook-save', { name: 'p', body: 'x' }], ['/api/computers/shop3/playbook-delete', { name: 'p' }],
   ];
@@ -1345,4 +1347,58 @@ test('handoff url: PUBLIC_URL base with ADMIN_PUBLIC=1', async () => {
   assert.equal((await admin('POST', '/api/computers/shop2/handoff-fail', { body: { note: 'n' } })).status, 200);
   assert.equal(JSON.parse((await call(tokens.global, 'handoff_status', { lease, wait_s: 0 })).text).url, undefined);
   await call(tokens.global, 'release_profile', { lease });
+});
+
+test('profile members control API access, including for a gateway admin', async () => {
+  sql((db) => db.exec('DELETE FROM rateLimit'));
+  const email = 'member@example.com', password = randomBytes(12).toString('base64url');
+  let uri = '';
+  const answers = [() => password, () => totp(uri)];
+  assert.equal(await main(['user', 'create', email], env(), (line) => {
+    if (line.startsWith('otpauth://')) uri = line;
+  }, async () => answers.shift()!()), 0);
+  const half = await admin('POST', '/api/auth/sign-in/email', { body: { email, password }, headers: adminOrigin() });
+  assert.equal(half.status, 200);
+  const ok = await admin('POST', '/api/auth/two-factor/verify-totp', {
+    body: { code: totp(uri) }, headers: { ...adminOrigin(), cookie: jar(half.cookies) },
+  });
+  assert.equal(ok.status, 200);
+  const headers = { cookie: jar(ok.cookies, jar(half.cookies)) };
+  const id = 'private', path = '/api/computers/' + id, roster = path + '/members';
+  const setRole = (role: string | null, target = owner.email) => admin('POST', roster, { headers, body: { email: target, role } });
+  const listed = async () => (await admin('GET', '/api/computers')).json.find((item: any) => item.id === id);
+  assert.equal((await admin('POST', '/api/profiles', { headers, body: { id, allow: ['example.com'] } })).status, 201);
+  assert.equal(await listed(), undefined);
+  for (const route of [path, roster, '/api/computers/does-not-exist']) {
+    const r = await admin('GET', route);
+    assert.deepEqual([r.status, r.json], [404, { error: 'unknown profile' }]);
+  }
+  const relays = calls('stream').length;
+  assert.equal(await upgrade({}, id), 'dropped');
+  assert.equal(calls('stream').length, relays);
+
+  assert.equal((await setRole(null, email)).status, 409);
+  assert.equal((await setRole('invalid')).status, 400);
+  assert.equal((await setRole('editor', 'missing@example.com')).status, 404);
+  assert.equal((await setRole('viewer')).status, 200);
+  assert.equal((await listed()).role, 'viewer');
+  assert.equal((await admin('GET', path)).json.id, id);
+  assert.deepEqual((await admin('GET', roster)).json, [{ email: owner.email, role: 'viewer' }, { email, role: 'admin' }]);
+  await upgrade({}, id);
+  assert.equal(calls('stream').length, relays + 1);
+  assert.equal((await admin('POST', path + '/start', { body: {} })).status, 403);
+
+  assert.equal((await setRole('editor')).status, 200);
+  assert.equal((await admin('POST', path + '/start', { body: {} })).json.started, true);
+  assert.equal((await admin('POST', path + '/delete', { body: {} })).status, 403);
+  assert.equal((await admin('POST', roster, { body: { email: owner.email, role: 'admin' } })).status, 403);
+  assert.equal((await setRole(null)).status, 200);
+  assert.equal(await listed(), undefined);
+  const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.ok(audit.some((entry) => entry.agent === id && entry.tool === 'admin:members' && entry.by === email && entry.ok));
+
+  const created = await call(tokens.global, 'create_profile', { id: 'global-acl', allow: ['example.com'] });
+  assert.equal(created.error, false);
+  assert.deepEqual((await admin('GET', '/api/computers/global-acl/members')).json, [{ email: owner.email, role: 'admin' }]);
+  assert.equal((await admin('GET', '/api/computers/global-acl', { headers })).status, 404);
 });

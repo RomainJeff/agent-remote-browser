@@ -1,7 +1,7 @@
 // App state in SQLite, behind small typed functions: profiles, saved logins, custom headers, playbooks.
 // Leases: mcp/leases.ts. Identity, OAuth and API keys: Better Auth (auth/), same database.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { validId, urlAllowed, type ProfileId } from '../policy.ts';
+import { validId, urlAllowed, type ProfileId, type Role } from '../policy.ts';
 import { tx } from './db.ts';
 import { loadLoginKey, keyId, encryptLogin, decryptLogin, seal, unseal, type Envelope, type LoginRef } from './logins-crypto.ts';
 
@@ -76,8 +76,26 @@ export function openStore(db: DatabaseSync, keyFile: string) {
   return {
     profile,
     profiles: () => all('SELECT * FROM profiles ORDER BY created_at, id').map(toProfile),
-    createProfile: (id: ProfileId, allow: string[], createdAt = Date.now()) =>
-      run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), createdAt),
+    accessible: (userId: string) => all(`SELECT p.*, m.role FROM profile_members m JOIN profiles p ON p.id = m.profile
+      WHERE m.user_id = ? ORDER BY p.created_at, p.id`, userId).map((r) => ({ ...toProfile(r), role: r.role as Role })),
+    roleOf: (id: string, userId: string): Role | null =>
+      one('SELECT role FROM profile_members WHERE profile = ? AND user_id = ?', id, userId)?.role ?? null,
+    members: (id: string) => all(`SELECT u.email, m.role FROM profile_members m JOIN user u ON u.id = m.user_id
+      WHERE m.profile = ? ORDER BY u.email`, id) as { email: string; role: Role }[],
+    createProfile: (id: ProfileId, allow: string[], userId: string | null) => tx(db, () => {
+      run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), Date.now());
+      if (userId !== null) run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);
+      else if (!run("INSERT INTO profile_members SELECT ?, user_id, 'admin' FROM admins", id).changes)
+        throw Error('No gateway admin');
+    }),
+    setRole: (id: ProfileId, userId: string, role: Role | null) => tx(db, () => {
+      if (role !== 'admin' && !one("SELECT 1 FROM profile_members WHERE profile = ? AND role = 'admin' AND user_id <> ?", id, userId))
+        return false;
+      if (role === null) run('DELETE FROM profile_members WHERE profile = ? AND user_id = ?', id, userId);
+      else run(`INSERT INTO profile_members VALUES (?, ?, ?)
+        ON CONFLICT (profile, user_id) DO UPDATE SET role = excluded.role`, id, userId, role);
+      return true;
+    }),
     setAllow: (id: ProfileId, allow: string[]) => run('UPDATE profiles SET allow_json = ? WHERE id = ?', JSON.stringify(allow), id),
     /** Logins, leases, handoffs and playbooks go with it (ON DELETE CASCADE), and so do the OAuth grants and API keys scoped to it:
      *  a later profile with the same id must not inherit them. */

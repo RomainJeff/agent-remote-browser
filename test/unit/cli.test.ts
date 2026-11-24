@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { main } from '../../src/cli.ts';
+import { fixtureUser } from '../fixture-user.ts';
+import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../src/store/db.ts';
 import { openStore } from '../../src/store/store.ts';
 import { parseProfileId } from '../../src/policy.ts';
@@ -20,9 +22,9 @@ function fresh() {
   const env = { DATA_DIR: join(dir, 'data'), LOGIN_KEY_FILE: join(dir, 'login.key'), ALLOW_NO_SANDBOX: '1', BETTER_AUTH_SECRET: randomBytes(32).toString('hex') };
   const lines: string[] = [];
   const run = (args: string[], ask?: Parameters<typeof main>[3]) => main(args, env, (l) => lines.push(l), ask);
-  const withStore = <T>(fn: (s: ReturnType<typeof openStore>) => T) => {
+  const withStore = <T>(fn: (s: ReturnType<typeof openStore>, db: DatabaseSync) => T) => {
     const db = openDb(join(env.DATA_DIR, 'arb.db'));
-    try { return fn(openStore(db, env.LOGIN_KEY_FILE)); } finally { db.close(); }
+    try { return fn(openStore(db, env.LOGIN_KEY_FILE), db); } finally { db.close(); }
   };
   return { dir, env, lines, run, withStore };
 }
@@ -36,7 +38,7 @@ const login = { url: 'https://example.com/login', username: 'fixture' };
 
 test('rotate-login-key: every login re-encrypted, new key in place, old key kept', async () => {
   const t = fresh(), pw = randomBytes(12).toString('hex');
-  t.withStore((s) => { s.createProfile(parseProfileId('shop')!, ['example.com']); s.saveLogin(parseProfileId('shop')!, 'main', login, pw); });
+  t.withStore((s, db) => { s.createProfile(parseProfileId('shop')!, ['example.com'], fixtureUser(db)); s.saveLogin(parseProfileId('shop')!, 'main', login, pw); });
   const oldKey = readFileSync(t.env.LOGIN_KEY_FILE);
   assert.equal(await t.run(['rotate-login-key']), 0);
   const newKey = readFileSync(t.env.LOGIN_KEY_FILE);
@@ -60,11 +62,11 @@ test('rotate-login-key refuses to clobber an earlier .old key', async () => {
 
 test('backup-db: consistent copy while the database is open and written, 0600, never overwrites', async () => {
   const t = fresh(), pw = randomBytes(12).toString('hex'), shop = parseProfileId('shop')!;
-  t.withStore((s) => { s.createProfile(shop, ['example.com']); s.saveLogin(shop, 'main', login, pw); });
+  t.withStore((s, db) => { s.createProfile(shop, ['example.com'], fixtureUser(db)); s.saveLogin(shop, 'main', login, pw); });
   // The gateway's connection: open, WAL mode, a commit still in the -wal file (no checkpoint yet).
   const live = openDb(join(t.env.DATA_DIR, 'arb.db'));
   live.exec('PRAGMA wal_autocheckpoint = 0');
-  openStore(live, t.env.LOGIN_KEY_FILE).createProfile(parseProfileId('news')!, ['example.org']);
+  openStore(live, t.env.LOGIN_KEY_FILE).createProfile(parseProfileId('news')!, ['example.org'], fixtureUser(live));
   const file = join(t.dir, 'backup.db');
   try {
     assert.equal(await t.run(['backup-db', file]), 0);
@@ -190,10 +192,10 @@ test('unknown command prints usage, exit code 2', async () => {
 
 test('key create: profile-scoped key in a new 0600 file, never printed, works, expires, revocable', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url'), file = join(t.dir, 'key');
-  t.withStore((s) => s.createProfile(parseProfileId('shop')!, ['example.com']));
-  await assert.rejects(t.run(['key', 'create', 'shop', file]), /No gateway admin/);
+  await assert.rejects(t.run(['key', 'create', '--global', file]), /No gateway admin/);
   assert.equal(existsSync(file), false);
   assert.equal(await t.run(['admin', 'create', 'a@example.com'], asker(t, password)), 0);
+  t.withStore((s, db) => s.createProfile(parseProfileId('shop')!, ['example.com'], fixtureUser(db)));
   await assert.rejects(t.run(['key', 'create', 'nope', file]), /No profile nope/);
   await assert.rejects(t.run(['key', 'create', 'shop', file, '400']), /Days: 1 to 365/);
   t.lines.length = 0;

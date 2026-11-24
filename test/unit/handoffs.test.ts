@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fixtureUser } from '../fixture-user.ts';
 import { openDb } from '../../src/store/db.ts';
 import { openStore } from '../../src/store/store.ts';
 import { createLeases } from '../../src/mcp/leases.ts';
@@ -16,7 +17,7 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 let n = 0;
 function setup() {
   const db = openDb(join(scratch, `${++n}.db`)), store = openStore(db, join(scratch, `${n}.key`)), lines: AuditEntry[] = [];
-  store.createProfile(parseProfileId('p')!, ['example.com']);
+  store.createProfile(parseProfileId('p')!, ['example.com'], fixtureUser(db));
   const audit = Object.assign((e: AuditEntry) => { lines.push(e); }, { read: () => [] });
   return { db, leases: createLeases(db), h: createHandoffs(db, audit), lines };
 }
