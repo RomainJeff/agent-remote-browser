@@ -120,7 +120,7 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
       if (l) throw new PolicyError(`This browser is leased until ${new Date(l.exp).toISOString()}. Retry later.`);
       return principal.profile!;
     }
-    const l = leases.use(a.lease ?? '');
+    const l = leases.use(a.lease ?? '', principal.user);
     if (!l) throw new PolicyError('Unknown or expired lease. Call lease_profile first.');
     return l.profile as ProfileId;
   };
@@ -158,7 +158,7 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
       return fail(e instanceof PolicyError || msg.startsWith('Too many computers') ? msg : 'Browser operation failed');
     } finally {
       const agent = id || principal.profile || 'global', ms = Date.now() - t0;
-      audit({ agent, ...(g && { via: 'global' as const }), tool: name, ok, ms, ...extra });
+      audit({ agent, by: principal.email, ...(g && { via: 'global' as const }), tool: name, ok, ms, ...extra });
       count('arb_tool_calls_total', { tool: name, outcome: ok ? 'ok' : 'error' });
       log(ok ? 'info' : 'warn', 'tool call', { profile: agent, tool: name, ms, ok });
     }
@@ -307,7 +307,7 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
 
   // Global scope only: manage and lease profiles.
   gtool('list_profiles', 'List browser profiles: allowed domains, login sites, lease state.', {}, async () =>
-    txt(store.profiles().map(({ id, ...p }) => {
+    txt(store.accessible(principal.user).map(({ id, ...p }) => {
       const l = leases.of(id);
       return { id, allow: p.allow, logins: sitesOf(p), leasedUntil: l ? new Date(l.exp).toISOString() : null };
     })));
@@ -319,8 +319,7 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
       if (!validId(id)) return fail('Invalid id: lowercase letters, digits, dashes, max 40');
       if (profile(id)) return fail('This profile already exists');
       if (!a) return fail('Invalid allow list: plain domains like example.com');
-      // Slice 3 replaces the gateway admins with the token holder.
-      store.createProfile(id, a, null);
+      store.createProfile(id, a, principal.user);
       return txt({ created: id, allow: a });
     });
 
@@ -328,16 +327,16 @@ export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
     'Pick a profile by id, or let the gateway pick a free one that allows a domain.',
     { profile: z.string().optional(), domain: z.string().max(253).optional(), minutes: z.number().int().min(1).max(120).default(15).describe('Idle minutes before the lease expires') },
     async ({ profile: want, domain, minutes }) => {
-      const id = (want ? [want] : store.profiles().map((p) => p.id))
-        .find((i) => profile(i) && !leases.of(i) && !handoffs.open(i) && (!domain || urlAllowed(`https://${domain}/`, profile(i)!.allow)));
-      if (!id) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
-      const { token: lease, exp } = leases.take(id, minutes), p = profile(id)!;
+      const candidates = want ? [store.roleOf(want, principal.user) && profile(want)] : store.accessible(principal.user);
+      const p = candidates.find((p) => p && !leases.of(p.id) && !handoffs.open(p.id) && (!domain || urlAllowed(`https://${domain}/`, p.allow)));
+      if (!p) return fail(want ? 'Profile unknown or already leased' : 'No free profile allows this domain');
+      const id = p.id, { token: lease, exp } = leases.take(id, minutes);
       return txt({ lease, profile: id, allow: p.allow, logins: sitesOf(p), playbooks: index(id), expiresAt: new Date(exp).toISOString(),
         note: 'Expiry slides with each call. Call release_profile when done.' });
     });
 
   gtool('release_profile', 'Give a leased profile back.', { lease: LEASE }, async ({ lease }) =>
-    txt({ released: leases.release(lease) }));
+    txt({ released: leases.release(lease, principal.user) }));
 
   return server;
 }

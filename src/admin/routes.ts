@@ -6,10 +6,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, parseProfileId, type ProfileId } from '../policy.ts';
+import { can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, type ProfileId } from '../policy.ts';
 import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
-import { requireAdmin } from '../auth/guards.ts';
+import { tx } from '../store/db.ts';
+import { requireAdmin, scopedProfile } from '../auth/guards.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
 import { log, errCode } from '../audit.ts';
@@ -68,12 +69,14 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   }
 
   // Keys created before expiry became mandatory (Lot 7b) keep working; noExpiry flags them for rotation.
-  const listKeys = () => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest, lastIp, expiresAt
-    FROM apikey ORDER BY createdAt DESC`).all() as { expiresAt: string | null }[]).map((k) => ({ ...k, noExpiry: k.expiresAt === null }));
-  const listClients = () => (db.prepare(`SELECT c.clientId id, c.name, c.createdAt,
-    (SELECT group_concat(DISTINCT referenceId) FROM oauthConsent WHERE clientId = c.clientId) scopes,
-    (SELECT max(createdAt) FROM oauthAccessToken WHERE clientId = c.clientId) lastToken
-    FROM oauthClient c ORDER BY c.createdAt DESC`).all());
+  const listKeys = (user: string) => (db.prepare(`SELECT id, name, start, json_extract(metadata, '$.scope') scope, createdAt, lastRequest, lastIp, expiresAt
+    FROM apikey WHERE referenceId = ? ORDER BY createdAt DESC`).all(user) as { expiresAt: string | null }[]).map((k) => ({ ...k, noExpiry: k.expiresAt === null }));
+  const listClients = (user: string) => db.prepare(`WITH grants AS (
+    SELECT clientId, referenceId, createdAt AS tokenAt FROM oauthAccessToken WHERE userId = $user
+    UNION ALL SELECT clientId, referenceId, NULL FROM oauthRefreshToken WHERE userId = $user
+    UNION ALL SELECT clientId, referenceId, NULL FROM oauthConsent WHERE userId = $user
+  ) SELECT c.clientId id, c.name, c.createdAt, group_concat(DISTINCT grants.referenceId) scopes, max(grants.tokenAt) lastToken
+    FROM oauthClient c JOIN grants ON grants.clientId = c.clientId GROUP BY c.clientId ORDER BY c.createdAt DESC`).all({ user });
 
   const stepUpLeft = (sid: string) => {
     const r = db.prepare('SELECT verified_at v FROM step_up WHERE session_id = ?').get(sid) as { v: number } | undefined;
@@ -193,13 +196,13 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         return send(res, 201, { id });
       }
       // Connected clients: OAuth clients (with the scopes granted) and API keys. A key is shown once, at creation.
-      if (path === '/api/clients' && !post) return send(res, 200, { oauth: listClients(), keys: listKeys() });
+      if (path === '/api/clients' && !post) return send(res, 200, { oauth: listClients(session.user.id), keys: listKeys(session.user.id) });
       if (path === '/api/keys' && post) {
         if (stale()) return;
         const { name, scope, expiresIn, expiresAt } = (await readJson(req)) || {};
         if (typeof name !== 'string' || !/^[\w .-]{1,60}$/.test(name)) return send(res, 400, { error: 'Name: letters, digits, spaces, dots, dashes (max 60)' });
-        const pid = typeof scope === 'string' && scope.startsWith('profile:') ? parseProfileId(scope.slice(8)) : null;
-        if (scope !== 'global' && !(pid && profile(pid))) return send(res, 400, { error: 'Scope: global or an existing profile' });
+        const pid = scopedProfile(store, scope, session.user.id);
+        if (scope !== 'global' && !pid) return send(res, 400, { error: 'Scope: global or an existing profile' });
         const ttl = keyTtl(expiresIn, expiresAt);
         if (!ttl) return send(res, 400, { error: 'Expiry required: expiresIn 30d, 90d or 1y, or expiresAt 1 to 365 days ahead' });
         const k = await pubAuth.api.createApiKey({ body: { name, userId: session.user.id, metadata: { scope }, expiresIn: ttl } });
@@ -210,9 +213,14 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (rv && post) {
         if (stale()) return;
         const target = decodeURIComponent(rv[2]);
-        // Deleting the client cascades to its tokens and consents (foreign keys).
-        const n = rv[1] === 'keys' ? db.prepare('DELETE FROM apikey WHERE id = ?').run(target).changes
-          : db.prepare('DELETE FROM oauthClient WHERE clientId = ?').run(target).changes;
+        const user = session.user.id;
+        const n = rv[1] === 'keys' ? db.prepare('DELETE FROM apikey WHERE id = ? AND referenceId = ?').run(target, user).changes
+          : tx(db, () => {
+            let removed = 0;
+            for (const table of ['oauthAccessToken', 'oauthRefreshToken', 'oauthConsent'])
+              removed += Number(db.prepare(`DELETE FROM ${table} WHERE clientId = ? AND userId = ?`).run(target, user).changes);
+            return removed;
+          });
         if (!n) return send(res, 404, { error: 'not found' });
         audit({ by: session.user.email, agent: 'admin', tool: `admin:revoke-${rv[1] === 'keys' ? 'key' : 'client'}`, ok: true });
         return send(res, 200, { revoked: target });

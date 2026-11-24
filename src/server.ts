@@ -66,7 +66,7 @@ export async function start(cfg: Config, driver: HostDriver) {
   const handoffs = createHandoffs(db, audit);
   const computers = createComputers(driver, store, { egressDir: cfg.egressDir, idleMs: cfg.idleMs, busy: (id) => !!handoffs.open(id) });
   const ctx: Ctx = { cfg, db, store, auth, adminAuth, audit, leases, handoffs, computers, driver };
-  const authRoutes = createAuthRoutes(db, auth, pending, cfg.publicUrl);
+  const authRoutes = createAuthRoutes(ctx, pending, cfg.publicUrl);
   const admin = createAdmin(ctx);
   // The header tells MCP clients where to start OAuth (protected resource metadata -> DCR -> authorize).
   const challenge = { 'www-authenticate': `Bearer resource_metadata="${cfg.publicUrl}/.well-known/oauth-protected-resource"` };
@@ -95,7 +95,7 @@ export async function start(cfg: Config, driver: HostDriver) {
         return send(res, 404, { error: 'not found' });
       }
       const key = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.headers['x-api-key'];
-      const who = await principal(db, auth, key, req.headers['cf-connecting-ip'] as string);
+      const who = await principal(ctx, key, req.headers['cf-connecting-ip'] as string);
       if (!who) {
         if (key) count('arb_auth_failures_total', { kind: 'token' }); // no credential at all = OAuth discovery, not a failure
         return send(res, 401, { error: 'unauthorized' }, challenge);

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
+import { openStore } from '../../src/store/store.ts';
 import { openDb, tx } from '../../src/store/db.ts';
 import { createAuth } from '../../src/auth/better-auth.ts';
 import { createAuthRoutes } from '../../src/auth/routes.ts';
@@ -23,7 +24,7 @@ after(() => { for (const s of servers) s.close(); db.close(); rmSync(dir, { recu
 
 /** The public routes on a real socket; a fresh instance = fresh in-process DCR budget. */
 async function serve() {
-  const routes = createAuthRoutes(db, auth, pending, base);
+  const routes = createAuthRoutes({ db, auth, store: openStore(db, join(dir, 'login.key')) }, pending, base);
   const server = http.createServer((req, res) => routes.handle(req, res).then((done) => { if (!done) res.writeHead(404).end(); }));
   servers.push(server);
   server.listen(0, '127.0.0.1');
