@@ -2,7 +2,9 @@
 # Lot 10 token bench: runs the n8n check_quota prompt N times through `claude -p` on one ARB profile, prints the median
 # input tokens and tool calls, and appends one summary line to bench/results.jsonl.
 #   ARB_MCP_URL=https://arb.example/mcp ARB_TOKEN=arb_k_... bench/check-quota.sh <label>   # label: baseline, 10a, ...
-# ARB_TOKEN is a profile-scoped key (profile:<n8n>); it only goes into a 0600 temp file, never argv or output.
+# ARB_TOKEN is a profile-scoped or global key (cli.ts key create <profile>|--global); it only goes into a 0600 temp file, never argv or output.
+# COMMIT overrides the recorded commit (the stack's, when the script runs from another branch).
+# Per run: the tools called, and browser_ms = the "ms" of the run_steps / run_playbook / pb_ replies (time spent in the browser).
 # Input tokens = input + cache creation + cache read, summed over the run (what the model actually read).
 # ponytail: stream-json, not --output-format json: only the stream shows each tool_use.
 set -euo pipefail
@@ -24,6 +26,9 @@ for i in $(seq "$N"); do
   r=$(jq -s '{
     input_tokens: (last(.[] | select(.type == "result")).usage | .input_tokens + .cache_creation_input_tokens + .cache_read_input_tokens),
     tool_use: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use")] | length,
+    tools: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use") | .name | sub("^mcp__arb__"; "")],
+    browser_ms: [.[] | select(.type == "user") | .message.content[]? | select(.type == "tool_result")
+      | (.content | if type == "array" then map(.text? // "") | join("") else . end) | split("\n")[0] | fromjson? | .ms? // empty] | add,
     ms: last(.[] | select(.type == "result")).duration_ms,
     ok: (last(.[] | select(.type == "result")).is_error | not),
     answer: (last(.[] | select(.type == "result")).result // "" | .[0:200])}' "$tmp/run$i.jsonl")
@@ -31,8 +36,9 @@ for i in $(seq "$N"); do
   runs+=("$r")
 done
 
-printf '%s\n' "${runs[@]}" | jq -s -c --arg label "$label" --arg at "$(date -u +%FT%TZ)" --arg commit "$(git -C "$here" rev-parse --short HEAD)" '
+printf '%s\n' "${runs[@]}" | jq -s -c --arg label "$label" --arg at "$(date -u +%FT%TZ)" --arg commit "${COMMIT:-$(git -C "$here" rev-parse --short HEAD)}" '
   def median: sort | .[length / 2 | floor];
   {label: $label, at: $at, commit: $commit, n: length, ok: (map(select(.ok)) | length),
    median_input_tokens: (map(.input_tokens) | median), median_tool_use: (map(.tool_use) | median), median_ms: (map(.ms) | median),
-   runs: map({input_tokens, tool_use, ms, ok})}' | tee -a "$here/results.jsonl"
+   median_browser_ms: (map(.browser_ms // empty) | if length > 0 then median else null end),
+   runs: map({input_tokens, tool_use, ms, browser_ms, tools, ok})}' | tee -a "$here/results.jsonl"
