@@ -21,17 +21,20 @@ export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selection
 /** Admin teach mode, read-only: the accessibility chain (self, then ancestors) of the element at x,y (`at x y`) or of the
  *  focused one (`focus`), over CDP (DevToolsActivePort). Each entry: role, name, tag, type, id, attr (name attribute),
  *  placeholder, and how many elements each locator would match: for named ARIA roles `count` (same role, name contains it,
- *  case-insensitive) and `exact` (same name); `ids` (same id), `names` (same tag and name attribute), `ph` (placeholder
- *  contains it, case-insensitive). Names are cut at 300. Prints { url, chain } as JSON. Refuses unless exactly one page
- *  target exists: agent-browser may drive another tab than the one hit-tested.
+ *  case-insensitive) and `exact` (same name); `ids` and `names`: the page's own count for the css `#id` and
+ *  `tag[name="…"]` teach.ts emits (quirks mode matches ids case-insensitively); `ph` (placeholder contains it,
+ *  case-insensitive). Names are cut at 300. `focus` adds `live` (the focused element, through shadow roots: "password"
+ *  by its type property, "frame", else "") and `form` (its form's node id, if any). Prints { url, chain, live?, form? }
+ *  as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
  *  ponytail: iframes and shadow DOM are not looked into. */
 export const HIT = `const [mode, x, y] = process.argv.slice(1);
-// Run in the page: elements a #id, tag[name=…] or placeholder locator would match (attributes, not properties).
+// Run in the page: elements the #id, tag[name="…"] (the selectors teach.ts emits) or placeholder locator would match.
 const COUNT = (id, tag, name, ph) => {
-  const n = (a, f) => [...document.querySelectorAll('[' + a + ']')].filter((x) => f(x.getAttribute(a), x)).length;
-  return { ids: id ? n('id', (v) => v === id) : undefined, names: name ? n('name', (v, x) => v === name && x.localName === tag) : undefined,
-    ph: ph ? n('placeholder', (v) => v.toLowerCase().includes(ph.toLowerCase())) : undefined };
+  const q = (s) => { try { return document.querySelectorAll(s).length; } catch { return undefined; } };
+  return { ids: id ? q('#' + id) : undefined, names: name ? q(tag + '[name="' + name + '"]') : undefined,
+    ph: ph ? [...document.querySelectorAll('[placeholder]')].filter((x) => x.getAttribute('placeholder').toLowerCase().includes(ph.toLowerCase())).length : undefined };
 };
+const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;return !e?'':e.type==='password'?'password':/^i?frame$/.test(e.localName)?'frame':''})(document.activeElement)";
 (async () => {
   const port = require('fs').readFileSync('${PROFILE}/DevToolsActivePort', 'utf8').split('\\n')[0];
   const pages = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).filter((t) => t.type === 'page'), page = pages[0];
@@ -45,8 +48,14 @@ const COUNT = (id, tag, name, ph) => {
   const node = mode === 'at'
     ? (await call('DOM.getNodeForLocation', { x: +x, y: +y, ignorePointerEventsNone: true })).backendNodeId
     : (await call('DOM.describeNode', { objectId: (await call('Runtime.evaluate', { expression: 'document.activeElement' })).result.objectId })).node.backendNodeId;
+  const out = { url: page.url, chain: [] };
+  if (mode === 'focus') {
+    out.live = (await call('Runtime.evaluate', { expression: LIVE, returnByValue: true })).result.value;
+    const f = (await call('Runtime.evaluate', { expression: 'document.activeElement.form' })).result.objectId;
+    if (f) out.form = (await call('DOM.describeNode', { objectId: f })).node.backendNodeId;
+  }
   const { nodes } = await call('Accessibility.getPartialAXTree', { backendNodeId: node, fetchRelatives: true });
-  const root = (await call('DOM.getDocument', { depth: 0 })).root.backendNodeId, byId = new Map(nodes.map((a) => [a.nodeId, a])), names = {}, chain = [];
+  const root = (await call('DOM.getDocument', { depth: 0 })).root.backendNodeId, byId = new Map(nodes.map((a) => [a.nodeId, a])), names = {}, chain = out.chain;
   for (let a = nodes.find((b) => b.backendDOMNodeId === node) || nodes[0]; a && chain.length < 12; a = byId.get(a.parentId)) {
     const role = a.role?.value;
     if (a.ignored || !role) continue;
@@ -66,7 +75,7 @@ const COUNT = (id, tag, name, ph) => {
     chain.push(e);
     if (role === 'RootWebArea') break;
   }
-  console.log(JSON.stringify({ url: page.url, chain }));
+  console.log(JSON.stringify(out));
   process.exit(0);
 })().catch((e) => { console.error(String(e.message)); process.exit(1); });`;
 /** Request line limit: the largest legitimate request is a 5000-character fill plus a password on stdin. */
