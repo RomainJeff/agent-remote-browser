@@ -103,7 +103,7 @@ export async function start(cfg: Config, driver: HostDriver) {
       // Stateless MCP: no SSE stream, no session; the browser state lives in the computer.
       if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
       const body = await readJson(req);
-      const server = buildServer(who, ctx);
+      const server = buildServer(who, ctx, body?.method === 'tools/call' ? body.params?.name : undefined);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => { transport.close(); server.close(); });
       await server.connect(transport);

@@ -50,7 +50,8 @@ export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: strin
   return (await pc.ab(id, ['get', 'url'])).url as string;
 }
 
-export function buildServer(principal: Principal, { cfg, store, audit, leases, handoffs, computers: pc, driver }: Ctx) {
+// called: the tool a tools/call request names (server.ts reads it from the body), so a stale pb_ name gets a clear error.
+export function buildServer(principal: Principal, { cfg, store, audit, leases, handoffs, computers: pc, driver }: Ctx, called?: string) {
   const server = new McpServer({ name: 'agent-remote-browser', version: '0.2.0' });
   const { profile, decryptLogin } = store;
   const g = !!principal.global;
@@ -291,12 +292,8 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
         wrap('run_playbook', (a, id, p) => runPlaybook(b.name, a, id, p), 'browser') as any);
     }
     // A client may call a pb_ tool from a tools/list taken before its playbook was deleted: this request's server has none.
-    // ponytail: overrides the SDK's private error builder (its "Tool x not found"); the gateway test fails if a bump renames it.
-    const sdkError = (server as any).createToolError.bind(server);
-    (server as any).createToolError = (msg: string) => {
-      const m = msg.match(/Tool (pb_\w+) not found$/);
-      return m ? fail(`${m[1]}: no such playbook any more (deleted, renamed or without a recipe). Call playbook for the list.`) : sdkError(msg);
-    };
+    if (called && /^pb_\w{1,60}$/.test(called) && !pb.has(called)) server.registerTool(called, { description: 'Gone.' },
+      async () => fail(`${called}: no such playbook any more (deleted, renamed or without a recipe). Call playbook for the list.`) as any);
   }
 
   if (!g) return server;
