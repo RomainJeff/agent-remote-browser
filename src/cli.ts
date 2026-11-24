@@ -44,7 +44,7 @@ function rotateLoginKey(cfg: Config, out: Out) {
     // ponytail: a crash between commit and these renames leaves the live key in <key>.new; boot then names the key id it needs.
     renameSync(file, old);
     renameSync(next, file);
-    out(`Re-encrypted ${n} login(s): key ${from} -> ${store.keyId()}.`);
+    out(`Re-encrypted ${n} login(s) and header(s): key ${from} -> ${store.keyId()}.`);
     out(`Previous key kept at ${old}: delete it once no backup of arb.db needs it.`);
   });
 }

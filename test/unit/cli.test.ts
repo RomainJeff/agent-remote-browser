@@ -43,7 +43,7 @@ test('rotate-login-key: every login re-encrypted, new key in place, old key kept
   assert.notDeepEqual(newKey, oldKey);
   assert.deepEqual(readFileSync(t.env.LOGIN_KEY_FILE + '.old'), oldKey);
   assert.equal(existsSync(t.env.LOGIN_KEY_FILE + '.new'), false);
-  assert.match(t.lines[0], /^Re-encrypted 1 login\(s\): key [0-9a-f]{16} -> [0-9a-f]{16}\.$/);
+  assert.match(t.lines[0], /^Re-encrypted 1 login\(s\) and header\(s\): key [0-9a-f]{16} -> [0-9a-f]{16}\.$/);
   assert.equal(t.withStore((s) => s.decryptLogin('shop', 'main', s.profile('shop')!.logins.main)), pw);
   assertNoSecret(t.lines, [pw, oldKey, newKey]);
   // The old key no longer opens the database.
