@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { ActionButton } from '@/components/action-button';
 import { confirmSensitive } from '@/components/confirm';
 import { Alert, Empty, Hint, Panel } from '@/components/page';
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { ago, message } from '@/lib/format';
 import { ACTIONS, DEFAULTS, LOCATORS, WAITS, parse, placeholders, serialize, toolName, type Action, type Fields, type Model, type Row } from '@/lib/playbook';
+import { startRecording } from '@/lib/live';
 import { detailsQuery, profilePath } from '@/lib/queries';
 import type { Login } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -19,6 +21,10 @@ const TIPS: Partial<Record<Action, string>> = {
   wait: 'text is case-sensitive. url is a glob over the whole URL, e.g. **/manage*.', login: 'Wait for networkidle first. No-op when the page has no password field.',
   get_text: 'Empty = the whole page. Otherwise the lines containing this word, case-insensitive.', snapshot: 'Empty = the whole page. A CSS selector, e.g. main.',
 };
+// A recording saved from the session tab: the editor of the next playbooks tab starts from it.
+let incoming: string | null = null;
+export const openInEditor = (body: string) => { incoming = body; };
+
 const EMPTY: Model = { desc: '', notes: '', steps: [], fallback: '' };
 const control = 'h-8 rounded-lg border border-input bg-card px-2.5 font-mono text-[13px]';
 
@@ -26,13 +32,20 @@ export function PlaybooksTab({ id }: { id: string }) {
   const { data } = useQuery(detailsQuery(id));
   const queryClient = useQueryClient(), p = profilePath(id);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['computers', id] });
-  const [draft, setDraft] = useState({ name: '', body: '', key: 0, notice: '' });
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState(() => { const body = incoming ?? ''; incoming = null; return { name: '', body, key: 0, notice: '', focus: !!body }; });
   const books = data?.playbooks ?? [];
 
   return (
     <div className="flex flex-col gap-4">
       <Alert>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. Fill the form, or write the Markdown yourself: both stay in sync.</Alert>
-      <Panel title="Playbooks" aside={<Hint>Saving or deleting asks for your 2FA code</Hint>}>
+      <Panel title="Playbooks" aside={<>
+        <Hint>Saving or deleting asks for your 2FA code</Hint>
+        <ActionButton variant="outline" size="sm" action={async () => {
+          await navigate({ to: '/profiles/$id', params: { id } });
+          await startRecording(queryClient, id);
+        }}>Record</ActionButton>
+      </>}>
         {!books.length ? <Empty>No playbooks. Write one below: how to do a known task on a site, step by step.</Empty> : (
           <Table>
             <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
@@ -42,7 +55,7 @@ export function PlaybooksTab({ id }: { id: string }) {
                 <TableCell>{b.description}</TableCell>
                 <TableCell className="whitespace-nowrap">{ago(b.updated)}</TableCell>
                 <TableCell className="w-px text-right whitespace-nowrap">
-                  <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ name: b.name, body: b.body, key: d.key + 1, notice: '' }))}>Edit</Button>{' '}
+                  <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ name: b.name, body: b.body, key: d.key + 1, notice: '', focus: true }))}>Edit</Button>{' '}
                   <ActionButton variant="danger-outline" size="sm" done={`Playbook ${b.name} deleted.`} action={async () => {
                     if (!await confirmSensitive({ title: `Delete playbook "${b.name}"?`, desc: 'The agent no longer sees it.', label: 'Delete', danger: true })) return false;
                     await api(`${p}/playbook-delete`, 'POST', { name: b.name });
@@ -59,7 +72,7 @@ export function PlaybooksTab({ id }: { id: string }) {
         <Editor key={draft.key} initial={draft} logins={data?.logins ?? []} onSave={async (name, body) => {
           const r = await api<{ created: boolean }>(`${p}/playbook-save`, 'POST', { name, body });
           await refresh();
-          setDraft((d) => ({ name: '', body: '', key: d.key + 1, notice: r.created ? 'Created.' : 'Updated.' }));
+          setDraft((d) => ({ name: '', body: '', key: d.key + 1, notice: r.created ? 'Created.' : 'Updated.', focus: false }));
         }} />
       </Panel>
     </div>
@@ -68,7 +81,7 @@ export function PlaybooksTab({ id }: { id: string }) {
 
 /** The form edits the model and rewrites the Markdown (what is saved); editing the Markdown redraws the form. */
 /** initial.notice: the outcome of the save that reset the editor, shown for 3 s. */
-function Editor({ initial, logins, onSave }: { initial: { name: string; body: string; notice: string }; logins: Login[]; onSave: (name: string, body: string) => Promise<void> }) {
+function Editor({ initial, logins, onSave }: { initial: { name: string; body: string; notice: string; focus: boolean }; logins: Login[]; onSave: (name: string, body: string) => Promise<void> }) {
   const [name, setName] = useState(initial.name);
   const [body, setBody] = useState(initial.body);
   const [model, setModel] = useState<Model>(() => { const m = parse(initial.body); return 'err' in m ? EMPTY : m; });
@@ -96,7 +109,7 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
       <Field>
         <FieldLabel htmlFor="bname">Name</FieldLabel>
         <Input id="bname" name="name" className="font-mono" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\-]{0,39}" required autoComplete="off" spellCheck={false}
-          title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." value={name} onChange={(e) => setName(e.target.value)} />
+          title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." autoFocus={initial.focus} value={name} onChange={(e) => setName(e.target.value)} />
         <FieldDescription>Lowercase, digits and dashes. Becomes the tool <code className="font-mono">{tool}</code></FieldDescription>
       </Field>
       <fieldset className="flex flex-wrap gap-1.5" aria-label="Edit as">

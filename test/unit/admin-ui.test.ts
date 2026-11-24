@@ -38,6 +38,9 @@ window.fetch = async (path, options = {}) => {
     if (act === 'delete') { computers = computers.filter(c => c.id !== id); return json({ deleted: true }); }
     if (act === 'start') return json({});
     if (act === 'playbook-save') return json({ created: false });
+    if (act === 'handoff-take') { computers = computers.map(c => c.id === id ? { ...c, handoff: { ...c.handoff, state: 'taken' } } : c); return json({ state: 'taken' }); }
+    if (act === 'handoff-done') { computers = computers.map(c => c.id === id ? { ...c, handoff: null } : c); return json({}); }
+    if (act === 'teach-click') return json({ step: { click: { text: 'OK' } }, field: false });
     throw Error(path);
   }
   switch (path) {
@@ -70,7 +73,15 @@ const choose = (el, value) => {
   Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, value);
   el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
 };
-const sent = () => JSON.stringify(writes);`;
+const sent = () => JSON.stringify(writes);
+// The stream: a socket the scenario drives, frames drawn on a canvas so the image really loads.
+const sockets = [];
+window.WebSocket = class { constructor(url) { this.url = url; this.sent = []; this.readyState = 1; sockets.push(this); } send(m) { this.sent.push(JSON.parse(m)); } close() { this.readyState = 3; } };
+const frame = (seq) => {
+  const c = document.createElement('canvas'); c.width = 40; c.height = 30;
+  sockets.at(-1).onmessage({ data: JSON.stringify({ type: 'frame', seq, data: c.toDataURL('image/jpeg').split(',')[1], metadata: { deviceWidth: 40 } }) });
+};
+const mouse = (type, el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); };`;
 
 /** Serves the build with the fixture (then `setup`) first in <head>, runs the scenario once the page loaded; PASS or
  *  the failure comes back as data-result on <html>. */
@@ -252,3 +263,52 @@ browserCase('playbook editor: edit in the form, check the Markdown, pause on an 
   check(field('name').value === '' && document.querySelector('#bdesc')?.value === '', 'editor reset to the form, empty');
   check(sent() === JSON.stringify([['/api/computers/sample/playbook-save', { name: 'check-quota', body }]]), 'save request ' + sent());
 `, 'signedIn = true; stepUpLeft = 900');
+
+browserCase('live view: watch a running browser, take over, send a click, hand back', '#/profiles/sample', `
+  (await until(() => button('Watch'), 'Watch button')).click();
+  await until(() => sockets.length === 1, 'stream opened');
+  check(sockets[0].url.endsWith('/api/computers/sample/stream?pacing=ack&maxFps=20'), 'stream URL ' + sockets[0].url);
+  check(text().includes('Connecting…'), 'waiting for the first frame');
+  frame(1);
+  const img = await until(() => document.querySelector('#frame:not([hidden])'), 'first frame shown');
+  await until(() => sockets[0].sent.some(m => m.type === 'ack' && m.seq === 1), 'frame acknowledged');
+  mouse('mousedown', img);
+  check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'no input while watching');
+  button('Take over').click();
+  await until(() => text().includes('You have control.'), 'control banner');
+  check(sockets.length === 1, 'same stream');
+  mouse('mousedown', img); mouse('mouseup', img);
+  const input = sockets[0].sent.filter(m => m.type === 'input_mouse').map(m => m.eventType + ' ' + m.x + ',' + m.y).join();
+  check(input === 'mousePressed 20,15,mouseReleased 20,15', 'mouse input ' + input);
+  button('Hand back').click();
+  await until(() => !text().includes('You have control.'), 'control handed back');
+  check(sent() === JSON.stringify([['/api/computers/sample/start', {}]]), 'requests ' + sent());
+`, 'signedIn = true');
+
+browserCase('handoff link: Take over focused, takes the request, Done sends the note', '#/handoff/h1', `
+  await until(() => document.activeElement?.textContent === 'Take over', 'Take over focused');
+  check(text().includes('The agent needs you') && text().includes('Agent says: Solve the captcha'), 'request banner');
+  button('Take over').click();
+  await until(() => text().includes("You are handling the agent's request."), 'request taken');
+  button('Done').click();
+  await until(dialog, 'note dialog');
+  field('note', dialog()).value = 'Solved it'; dialog().requestSubmit();
+  await until(() => text().includes('The agent can continue.'), 'handed back');
+  check(sent() === JSON.stringify([['/api/computers/sample/handoff-take', {}], ['/api/computers/sample/start', {}],
+    ['/api/computers/sample/handoff-done', { note: 'Solved it' }]]), 'requests ' + sent());
+`, "signedIn = true; computers[0].handoff = { id: 'h1', state: 'pending', reason: 'Solve the captcha', created: new Date().toISOString(), deadline: new Date(Date.now() + 600000).toISOString() }");
+
+browserCase('recording: a click in the view becomes a step, saved through the playbook editor', '#/profiles/sample', `
+  (await until(() => button('Record playbook'), 'Record button')).click();
+  await until(() => text().includes('No steps yet.'), 'recording panel');
+  frame(1);
+  const img = await until(() => document.querySelector('#frame:not([hidden])'), 'frame');
+  mouse('mousedown', img); mouse('mouseup', img);
+  await until(() => text().includes('{"click":{"text":"OK"}}'), 'step listed');
+  check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'the click went to the gateway, not the stream');
+  button('Save as playbook…').click();
+  await until(() => document.activeElement === field('name'), 'playbook editor, name focused');
+  check(document.querySelector('ol li [aria-label="Text on the page"]').value === 'OK', 'recorded step in the form');
+  const click = writes.find(w => w[0].endsWith('/teach-click'))[1];
+  check(click.x === 20 && click.y === 15 && click.seq === 1 && click.rec, 'teach-click ' + JSON.stringify(click));
+`, 'signedIn = true');

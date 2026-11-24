@@ -1,6 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createHashHistory, createRootRouteWithContext, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
 import { Shell } from '@/components/shell';
+import { toast } from 'sonner';
+import { live } from '@/lib/live';
+import { computersQuery } from '@/lib/queries';
 import { sessionQuery } from '@/lib/session';
 import { InvitePage } from '@/pages/invite';
 import { LoginPage } from '@/pages/login';
@@ -38,10 +41,21 @@ const profile = createRoute({
   component: function Profile() { return <ProfilePage id={profile.useParams().id} tab={profile.useSearch().tab} />; },
 });
 
+// Handoff link given to the agent's user: its profile, Take over focused. No automatic takeover.
+const handoff = createRoute({
+  getParentRoute: () => app, path: '/handoff/$id',
+  beforeLoad: async ({ context, params }) => {
+    const c = (await context.queryClient.fetchQuery(computersQuery)).find((x) => x.handoff?.id === params.id);
+    if (!c) { toast.error('This request is already closed'); throw redirect({ to: '/profiles', replace: true }); }
+    live.focusTakeOver = true;
+    throw redirect({ to: '/profiles/$id', params: { id: c.id }, replace: true });
+  },
+});
+
 const index = createRoute({ getParentRoute: () => app, path: '/', beforeLoad: () => { throw redirect({ to: '/profiles' }); } });
 
 const tree = root.addChildren([login, invite, app.addChildren([
-  index, profiles, profile, page('/access', 'Agent access'), page('/members', 'Members'), page('/security', 'Account security'),
+  index, profiles, profile, handoff, page('/access', 'Agent access'), page('/members', 'Members'), page('/security', 'Account security'),
 ])]);
 
 export const createAppRouter = (queryClient: QueryClient) => createRouter({ routeTree: tree, history: createHashHistory(), context: { queryClient } });

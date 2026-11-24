@@ -10,17 +10,23 @@ import { detailsQuery, profilePath } from '@/lib/queries';
 import { sessionQuery } from '@/lib/session';
 import type { Computer } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { LiveView } from './live-view';
+import { Recorder } from './recorder';
 
 export function SessionTab({ c }: { c: Computer }) {
   return (
-    <div className="flex max-w-[340px] min-w-0 flex-col gap-4 max-[1180px]:max-w-none">
-      <Panel pad title="Agent lease"><Lease c={c} /></Panel>
-      <Panel pad title="Agent activity"><Activity id={c.id} /></Panel>
-      <Panel pad title="Connect an agent">
-        <McpUrl />
-        <p className="text-[13px] text-muted-foreground">OAuth is recommended: add the URL to your MCP client, sign in, then pick this profile. Otherwise, use an API key scoped to this profile.</p>
-        <Link to="/access" className="font-semibold text-primary">Agent access →</Link>
-      </Panel>
+    <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-6 max-[1180px]:grid-cols-1">
+      <LiveView c={c} />
+      <div className="flex min-w-0 flex-col gap-4">
+        <Recorder id={c.id} />
+        <Panel pad title="Agent lease"><Lease c={c} /></Panel>
+        <Panel pad title="Agent activity"><Activity id={c.id} /></Panel>
+        <Panel pad title="Connect an agent">
+          <McpUrl />
+          <p className="text-[13px] text-muted-foreground">OAuth is recommended: add the URL to your MCP client, sign in, then pick this profile. Otherwise, use an API key scoped to this profile.</p>
+          <Link to="/access" className="font-semibold text-primary">Agent access →</Link>
+        </Panel>
+      </div>
     </div>
   );
 }

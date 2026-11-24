@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { ActionButton } from '@/components/action-button';
@@ -5,6 +6,7 @@ import { PageHead } from '@/components/page';
 import { StatePill } from '@/components/state';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { closeView } from '@/lib/live';
 import { computersQuery, detailsQuery, profilePath } from '@/lib/queries';
 import type { Computer } from '@/lib/types';
 import { DiagnosticsTab } from './diagnostics';
@@ -26,6 +28,8 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   const queryClient = useQueryClient();
   const c = computers?.find((x) => x.id === id);
   const { data: details } = useQuery({ ...detailsQuery(id), enabled: !!c });
+  // Leaving the profile (or opening another) closes its view and ends a recording.
+  useEffect(() => () => closeView(), [id]);
   const crumb = (rest: React.ReactNode) => <><Link to="/profiles" className="font-semibold text-primary">Profiles</Link> › {rest}</>;
   if (isPending) return null;
   if (!c) return <PageHead crumb={crumb(id)} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
@@ -41,7 +45,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
         title={<span className="flex flex-wrap items-center gap-3">{id}<span className="flex gap-2 font-sans"><StatePill c={c} />{c.leasedUntil && <Badge dot variant="agent">Agent lease</Badge>}</span></span>}
         actions={c.role !== 'viewer' && (
           <ActionButton variant="outline" size="lg" disabled={c.state !== 'running'} done="Browser stopped. The profile is kept."
-            action={async () => { await api(`${profilePath(id)}/stop`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }}>Stop browser</ActionButton>
+            action={async () => { closeView(); await api(`${profilePath(id)}/stop`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }}>Stop browser</ActionButton>
         )} />
       <nav className="-mb-2 flex gap-1 overflow-x-auto border-b" aria-label="Profile sections">
         {tabs.map((t) => (
