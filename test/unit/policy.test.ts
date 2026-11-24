@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { urlAllowed, slug, validId, parseProfileId, validDomain, localRequest, windowBudget } from '../../src/policy.ts';
+import { can, canDrive, needs, type Role, urlAllowed, slug, validId, parseProfileId, validDomain, localRequest, windowBudget } from '../../src/policy.ts';
 
 test('urlAllowed: exact domain or subdomain, http(s) only, no credentials or port', () => {
   const allow = ['example.com'];
@@ -44,4 +44,27 @@ test('localRequest: loopback Host on the admin port, same-origin only', () => {
 test('windowBudget: fixed window counter', () => {
   const take = windowBudget(2, 1000);
   assert.deepEqual([take(1), take(2), take(3), take(1000), take(1001), take(1002), take(1003)], [true, true, false, false, true, true, false]);
+});
+
+test('profile actions require the specified role or higher', () => {
+  const matrix: [Role, (string | null)[], (Role | null)[]][] = [
+    ['viewer', [null, 'handoff-take', 'handoff-done', 'handoff-fail'], ['viewer', 'editor', 'admin']],
+    ['editor', ['start', 'stop', 'open', 'paste', 'copy', 'config', 'login-save', 'login-test', 'login-fill', 'login-delete',
+      'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'release', 'extend',
+      'teach-click', 'teach-focus', 'teach-type', 'teach-press', 'teach-open', 'teach-read', 'teach-replay'], ['editor', 'admin']],
+    ['admin', ['delete', 'members'], ['admin']],
+  ];
+  for (const [required, actions, allowed] of matrix) for (const action of actions) {
+    assert.equal(needs(action), required, String(action));
+    for (const role of [null, 'viewer', 'editor', 'admin'] as const)
+      assert.equal(can(role, action), allowed.includes(role), `${role} / ${action}`);
+  }
+});
+
+test('live input follows the current profile role, lease and handoff', () => {
+  for (const leased of [true, false]) for (const taken of [true, false]) {
+    assert.equal(canDrive(null, leased, taken), false);
+    assert.equal(canDrive('viewer', leased, taken), taken);
+    for (const role of ['editor', 'admin'] as const) assert.equal(canDrive(role, leased, taken), !leased || taken);
+  }
 });

@@ -7,6 +7,24 @@ export type ProfileId = string & { readonly __brand: 'ProfileId' };
 /** Who is calling /mcp: one profile, or global (manage + lease profiles). From the OAuth grant or API key scope. */
 export type Principal = { global: true; profile?: never } | { profile: ProfileId; global?: never };
 
+const roles = ['viewer', 'editor', 'admin'] as const;
+export type Role = typeof roles[number];
+export const isRole = (value: unknown): value is Role => roles.some((role) => role === value);
+
+export function needs(act: string | null): Role {
+  if (act === null || act === 'handoff-take' || act === 'handoff-done' || act === 'handoff-fail') return 'viewer';
+  if (act === 'delete' || act === 'members') return 'admin';
+  return 'editor';
+}
+
+export function can(role: Role | null, act: string | null): boolean {
+  return role !== null && roles.indexOf(role) >= roles.indexOf(needs(act));
+}
+
+export function canDrive(role: Role | null, leased: boolean, handoffTaken: boolean): boolean {
+  return role !== null && (handoffTaken || (!leased && can(role, 'input')));
+}
+
 /** Tokens are stored as sha256 hex, never in clear. Lookup by hash: no timing oracle on a 256-bit random secret. */
 export const hash = (s: unknown) => createHash('sha256').update(String(s)).digest('hex');
 
