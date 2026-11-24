@@ -958,11 +958,17 @@ const PB_TIP = { click: 'Prefer text, label or role: refs go stale after a navig
 const pbOpt = (arr, v) => arr.map((x) => `<option${x === v ? ' selected' : ''}>${x}</option>`).join('');
 const pbInp = (k, v, ph) => `<input class="in" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" aria-label="${esc(ph)}" autocomplete="off" spellcheck="false">`;
 const pbChk = (k, v, l) => `<label class="check"><input type="checkbox" data-k="${k}"${v ? ' checked' : ''}>${l}</label>`;
+// The profile's saved logins; a name not (or no longer) saved stays selectable, marked, so editing never drops it.
+const pbLogin = (v) => {
+  const sites = logins.map((l) => l.site), o = (x, l) => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${esc(l)}</option>`;
+  return `<select class="in" data-k="v" aria-label="Saved login">${o('', sites.length ? 'Pick a saved login' : 'No saved login: add one in Logins')}${
+    v && !sites.includes(v) ? o(v, v + ' (not saved)') : ''}${logins.map((l) => o(l.site, `${l.site} · ${l.username}`)).join('')}</select>`;
+};
 function pbFields({ a, f }) {
   const loc = () => `<select class="in" data-k="kind" aria-label="Find by">${pbOpt(PB_LOC, f.kind)}</select>${pbInp('v', f.v, { role: 'button', ref: '@e3', css: '#usage .total' }[f.kind] ?? 'Text on the page')}${f.kind === 'role' ? pbInp('name', f.name, 'Accessible name') : ''}`;
   switch (a) {
     case 'open': return pbInp('v', f.v, 'https://…');
-    case 'login': return pbInp('v', f.v, 'Saved login, e.g. n8n-cloud') + pbChk('if_needed', f.if_needed, 'Skip if signed in');
+    case 'login': return pbLogin(f.v) + pbChk('if_needed', f.if_needed, 'Skip if signed in');
     case 'click': return loc();
     case 'fill': return loc() + pbInp('value', f.value, 'Value, e.g. {email}');
     case 'press': return pbInp('v', f.v, 'Enter, Tab, Escape…');
