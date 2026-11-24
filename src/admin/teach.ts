@@ -135,10 +135,13 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
     try { return r = !driving ? LEASED : await act(a, id, p, b); }
     catch (e) { if (e instanceof BrowserError) return r = [422, { error: e.message.slice(0, 300) }]; throw e; }
     finally {
-      // A replay that stopped partway (ok: false) failed too: the focus is wherever it stopped.
-      const ok = r[0] === 200 && r[1].ok !== false;
-      if (a !== 'teach-read' && !ok) last.set(id, {});
-      else if (a !== 'teach-type' && a !== 'teach-read') last.set(id, { rec: b.rec, seq: b.seq, target: r[1].field ? JSON.stringify((r[1].step as { click: Locator }).click) : undefined });
+      // LOST refuses before any input (another tab's recording, a gesture not run here): the state stays the active tab's.
+      if (r !== LOST && a !== 'teach-read') {
+        // A replay that stopped partway (ok: false) failed too: the focus is wherever it stopped.
+        const ok = r[0] === 200 && r[1].ok !== false;
+        if (!ok) last.set(id, {});
+        else if (a !== 'teach-type') last.set(id, { rec: b.rec, seq: b.seq, target: r[1].field ? JSON.stringify((r[1].step as { click: Locator }).click) : undefined });
+      }
     }
   };
 }
