@@ -2,11 +2,11 @@
 # Usage: watch-prs.sh <since ISO-8601 UTC, e.g. 2026-10-10T10:00:00Z> <deadline epoch seconds> <pr>:<head sha>...
 # Polls every 60 s for human activity on the PRs after <since>: issue comments, review comments,
 # submitted reviews, and new commits (head SHA differs from the one given). Ignores bots and
-# anything carrying the tangow-auto-review marker.
+# anything carrying the arb-auto-review marker.
 # Exit 0: new activity, printed as one JSON object per line. Exit 2: no news in this
 # 9-minute slice, call again with the same arguments. Exit 3: deadline reached.
 set -euo pipefail
-repo=${PR_REVIEW_REPO:-tangow-ai/tangow-bot}
+repo=${PR_REVIEW_REPO:-RomainJeff/agent-remote-browser}
 since=$1 deadline=$2; shift 2
 slice_end=$(( $(date +%s) + 540 ))
 filter='.[]
@@ -14,7 +14,7 @@ filter='.[]
   | select(.state != "COMMENTED" or ((.body // "") != ""))
   | select(((.created_at // .submitted_at) // "") > $since)
   | select(.user.type != "Bot")
-  | select((.body // "") | contains("<!-- tangow-auto-review -->") | not)
+  | select((.body // "") | contains("<!-- arb-auto-review -->") | not)
   | {kind: "comment", pr: ($pr | tonumber), author: .user.login, at: (.created_at // .submitted_at),
      state, path, line, in_reply_to_id, url: .html_url, body}'
 while :; do
