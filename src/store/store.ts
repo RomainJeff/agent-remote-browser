@@ -82,7 +82,7 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       one('SELECT role FROM profile_members WHERE profile = ? AND user_id = ?', id, userId)?.role ?? null,
     members: (id: string) => all(`SELECT u.email, m.role FROM profile_members m JOIN user u ON u.id = m.user_id
       WHERE m.profile = ? ORDER BY u.email`, id) as { email: string; role: Role }[],
-    createProfile: (id: ProfileId, allow: string[], userId: string | null) => tx(db, () => {
+    createProfile: (id: ProfileId, allow: string[], userId: string | null = null) => tx(db, () => {
       run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), Date.now());
       if (userId !== null) run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);
       else if (!run("INSERT INTO profile_members SELECT ?, user_id, 'admin' FROM admins", id).changes)
