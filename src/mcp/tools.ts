@@ -52,10 +52,65 @@ export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: strin
   return (await pc.ab(id, ['get', 'url'])).url as string;
 }
 
+type Steppers = Pick<Ctx, 'computers' | 'store'>;
+/** A saved login of this profile, filled by fillLogin. */
+function signIn({ computers: pc, store }: Steppers, id: ProfileId, p: Profile, site: string) {
+  const c = Object.hasOwn(p.logins || {}, site) ? p.logins[site] : null;
+  if (!c) throw new PolicyError(`Unknown site. Available: ${sitesOf(p).join(', ') || 'none'}`);
+  if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) throw new PolicyError('Login URL is outside the allowlist');
+  return fillLogin(pc, id, site, c, store.decryptLogin(id, site, c));
+}
+
+/** run_steps, run_playbook and the admin's teach replay: raw steps checked against the full Steps union, then run within the budget. */
+export async function runSteps(ctx: Steppers, raw: unknown, id: ProfileId, p: Profile): Promise<Result> {
+  const pc = ctx.computers;
+  const parsed = Steps.safeParse(raw);
+  if (!parsed.success) return fail('Invalid steps: ' + parsed.error.issues.slice(0, 3).map((e) => `${e.path.join('.') || 'steps'}: ${e.message}`).join('; '));
+  const steps: Step[] = parsed.data;
+  const t0 = Date.now(), end = t0 + limits.budgetMs, outs: { step: number; keep?: boolean; origin: unknown; text: string; meta: object }[] = [];
+  // Each exec gets what is left of the budget (the runner takes 1 s at least).
+  const exec = (argv: string[]) => pc.ab(id, argv, { timeoutMs: Math.max(1000, Math.min(90_000, end - Date.now())) });
+  let i = 0;
+  try {
+    for (; i < steps.length; i++) {
+      const s = steps[i];
+      if (end - Date.now() < 1000) throw new PolicyError(BUDGET);
+      if ('open' in s && !urlAllowed(s.open, p.allow)) throw new PolicyError(`Domain not allowed. Allowed: ${p.allow.join(', ')}`);
+      if ('login' in s) {
+        if (s.if_needed && (await exec(['get', 'count', 'input[type=password]'])).count === 0) continue;
+        // ponytail: fillLogin keeps its own 90 s exec timeouts; the budget is checked again at the next step.
+        await signIn(ctx, id, p, s.login);
+        continue;
+      }
+      const argv = stepArgv(s)!;
+      // agent-browser ends its own wait: a client killed mid-wait leaves the daemon waiting (25 s) and the next command queued.
+      if ('wait' in s && !('ms' in s.wait)) argv.push('--timeout', String(end - Date.now() - 500));
+      const d = await exec(argv);
+      if ('get_text' in s || 'snapshot' in s) outs.push({ step: i, keep: s.keep, ...readOut(s, d) });
+    }
+  } catch (e) {
+    // ponytail: "budget" = failed with under 1 s left (a wait capped by the budget ends ~0.5 s early); a step that fails
+    // on its own in that last second is reported as budget too.
+    const error = e instanceof PolicyError ? e.message : Date.now() >= end - 1000 ? BUDGET : 'step failed';
+    // agent-browser's own message may quote the page: it goes in the envelope, with a snapshot to resume by hand.
+    // ponytail: the snapshot gets 5 s on top of the budget.
+    const snap = await pc.exec(id, ['snapshot', '-i', '-c'], { timeoutMs: 5000 }).catch(() => null);
+    const detail = e instanceof BrowserError && error !== BUDGET ? `Error: ${e.message.slice(0, 300)}\n\n` : '';
+    const shown = snap ? clip(snap.snapshot || '(no interactive elements)', 2000) : null;
+    return { isError: true, audit: { steps: steps.length, failed_at: i }, content: [{ type: 'text', text:
+      JSON.stringify({ ok: false, failed_at: i, error, ms: Date.now() - t0 }) +
+      (shown || detail ? '\n' + enveloped(snap?.origin, detail + (shown?.text ?? ''), { step: i, ...(shown && { ...shown, text: undefined }) }) : '') }] };
+  }
+  const last = outs.at(-1);
+  return { audit: { steps: steps.length }, content: [{ type: 'text', text: [JSON.stringify({ ok: true, ms: Date.now() - t0 }),
+    ...outs.filter((o) => o.keep || o === last).map((o) => enveloped(o.origin, o.text, { step: o.step, ...o.meta }))].join('\n') }] };
+}
+
 // called: the tool a tools/call request names (server.ts reads it from the body), so a stale pb_ name gets a clear error.
-export function buildServer(principal: Principal, { cfg, store, audit, leases, handoffs, computers: pc, driver }: Ctx, called?: string) {
+export function buildServer(principal: Principal, ctx: Ctx, called?: string) {
+  const { cfg, store, audit, leases, handoffs, computers: pc, driver } = ctx;
   const server = new McpServer({ name: 'agent-remote-browser', version: '0.2.0' });
-  const { profile, decryptLogin } = store;
+  const { profile } = store;
   const g = !!principal.global;
 
   // Which profile this call drives: the token's own, or the one behind the lease.
@@ -151,15 +206,9 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     ({ content: [{ type: 'image', data: await pc.screenshot(id), mimeType: 'image/png' }] }));
 
   const sites = own ? sitesOf(own).join(', ') || 'none' : 'those returned by lease_profile';
-  const signIn = (id: ProfileId, p: Profile, site: string) => {
-    const c = Object.hasOwn(p.logins || {}, site) ? p.logins[site] : null;
-    if (!c) throw new PolicyError(`Unknown site. Available: ${sitesOf(p).join(', ') || 'none'}`);
-    if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) throw new PolicyError('Login URL is outside the allowlist');
-    return fillLogin(pc, id, site, c, decryptLogin(id, site, c));
-  };
   tool('login', `Log in to a site with credentials held server-side (you never see them). Sites: ${sites}.`,
     { site: z.string() }, async ({ site }, id, p) =>
-      txt({ submitted: true, url: await signIn(id, p, site), hint: 'Check with snapshot that you are logged in.' }));
+      txt({ submitted: true, url: await signIn(ctx, id, p, site), hint: 'Check with snapshot that you are logged in.' }));
 
   tool('run_steps', 'Run a known path in one call: up to 20 steps, 18 s in all, stops at the first failure. Steps (one key each): ' +
     '{open: url}, {login: site, if_needed?} (skipped when the page has no password field), {click: L}, {fill: L, value}, ' +
@@ -170,51 +219,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     'each tagged with its step index (0-based). On failure: failed_at (step index), error, and a snapshot of the page.',
   // ponytail: advertised as plain objects, checked against the full Steps union here. The union as JSON Schema
   // weighed 7 KB, re-read by the model every turn (lot 10 bench: +3k input tokens per turn); the description has the grammar.
-  { steps: z.array(z.object({}).passthrough()).min(1).max(20) }, ({ steps }, id, p) => runSteps(steps, id, p));
-
-  // run_steps and run_playbook: raw steps checked against the full Steps union, then run within the budget.
-  async function runSteps(raw: unknown, id: ProfileId, p: Profile): Promise<Result> {
-    const parsed = Steps.safeParse(raw);
-    if (!parsed.success) return fail('Invalid steps: ' + parsed.error.issues.slice(0, 3).map((e) => `${e.path.join('.') || 'steps'}: ${e.message}`).join('; '));
-    const steps: Step[] = parsed.data;
-    const t0 = Date.now(), end = t0 + limits.budgetMs, outs: { step: number; keep?: boolean; origin: unknown; text: string; meta: object }[] = [];
-    // Each exec gets what is left of the budget (the runner takes 1 s at least).
-    const exec = (argv: string[]) => pc.ab(id, argv, { timeoutMs: Math.max(1000, Math.min(90_000, end - Date.now())) });
-    let i = 0;
-    try {
-      for (; i < steps.length; i++) {
-        const s = steps[i];
-        if (end - Date.now() < 1000) throw new PolicyError(BUDGET);
-        if ('open' in s && !urlAllowed(s.open, p.allow)) throw new PolicyError(`Domain not allowed. Allowed: ${p.allow.join(', ')}`);
-        if ('login' in s) {
-          if (s.if_needed && (await exec(['get', 'count', 'input[type=password]'])).count === 0) continue;
-          // ponytail: fillLogin keeps its own 90 s exec timeouts; the budget is checked again at the next step.
-          await signIn(id, p, s.login);
-          continue;
-        }
-        const argv = stepArgv(s)!;
-        // agent-browser ends its own wait: a client killed mid-wait leaves the daemon waiting (25 s) and the next command queued.
-        if ('wait' in s && !('ms' in s.wait)) argv.push('--timeout', String(end - Date.now() - 500));
-        const d = await exec(argv);
-        if ('get_text' in s || 'snapshot' in s) outs.push({ step: i, keep: s.keep, ...readOut(s, d) });
-      }
-    } catch (e) {
-      // ponytail: "budget" = failed with under 1 s left (a wait capped by the budget ends ~0.5 s early); a step that fails
-      // on its own in that last second is reported as budget too.
-      const error = e instanceof PolicyError ? e.message : Date.now() >= end - 1000 ? BUDGET : 'step failed';
-      // agent-browser's own message may quote the page: it goes in the envelope, with a snapshot to resume by hand.
-      // ponytail: the snapshot gets 5 s on top of the budget.
-      const snap = await pc.exec(id, ['snapshot', '-i', '-c'], { timeoutMs: 5000 }).catch(() => null);
-      const detail = e instanceof BrowserError && error !== BUDGET ? `Error: ${e.message.slice(0, 300)}\n\n` : '';
-      const shown = snap ? clip(snap.snapshot || '(no interactive elements)', 2000) : null;
-      return { isError: true, audit: { steps: steps.length, failed_at: i }, content: [{ type: 'text', text:
-        JSON.stringify({ ok: false, failed_at: i, error, ms: Date.now() - t0 }) +
-        (shown || detail ? '\n' + enveloped(snap?.origin, detail + (shown?.text ?? ''), { step: i, ...(shown && { ...shown, text: undefined }) }) : '') }] };
-    }
-    const last = outs.at(-1);
-    return { audit: { steps: steps.length }, content: [{ type: 'text', text: [JSON.stringify({ ok: true, ms: Date.now() - t0 }),
-      ...outs.filter((o) => o.keep || o === last).map((o) => enveloped(o.origin, o.text, { step: o.step, ...o.meta }))].join('\n') }] };
-  }
+  { steps: z.array(z.object({}).passthrough()).min(1).max(20) }, ({ steps }, id, p) => runSteps(ctx, steps, id, p));
 
   // Handoff: the agent asks a human to act in this browser, and waits.
   const link = (h: Handoff) => `${cfg.adminPublic ? cfg.publicUrl : `http://localhost:${cfg.adminPort}`}/#/handoff/${h.id}`;
@@ -274,7 +279,7 @@ export function buildServer(principal: Principal, { cfg, store, audit, leases, h
     if (!b) return fail(`Unknown playbook. Available: ${index(id).map((x) => x.name).join(', ') || 'none'}`);
     const steps = recipe(b.body, params);
     if (typeof steps === 'string') return fail(steps);
-    const r = await runSteps(steps, id, p);
+    const r = await runSteps(ctx, steps, id, p);
     // ponytail: appended to the one text item; some clients only show the first.
     return !r.isError ? r : { ...r, content: [{ type: 'text', text: `${(r.content[0] as { text: string }).text}\n\nPlaybook ${name}:\n${b.body}` }] };
   }
