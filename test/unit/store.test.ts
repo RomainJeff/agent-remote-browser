@@ -29,7 +29,7 @@ const version = (db: DatabaseSync) => (db.prepare('PRAGMA user_version').get() a
 
 test('migrations: empty db gets every table, WAL, foreign keys; re-running is a no-op', () => {
   const f = fresh(), db = openDb(f.db);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
   assert.equal(version(db), LATEST);
   assert.equal((db.prepare('PRAGMA journal_mode').get() as any).journal_mode, 'wal');
   assert.equal((db.prepare('PRAGMA foreign_keys').get() as any).foreign_keys, 1);
@@ -37,7 +37,7 @@ test('migrations: empty db gets every table, WAL, foreign keys; re-running is a 
   db.close();
   const again = openDb(f.db);
   assert.equal(version(again), LATEST);
-  assert.equal(tables(again).length, BA.length + 6);
+  assert.equal(tables(again).length, BA.length + 7);
   again.close();
 });
 
@@ -55,7 +55,7 @@ test('migration 002 on a Lot 3 database: profiles and logins kept, static tokens
 
   const db = openDb(f.db);
   assert.equal(version(db), LATEST);
-  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profiles', 'step_up'].sort());
+  assert.deepEqual(tables(db), [...BA, 'handoffs', 'leases', 'logins', 'playbooks', 'profile_headers', 'profiles', 'step_up'].sort());
   assert.deepEqual(db.prepare('SELECT * FROM profiles').all().map((r) => ({ ...r })), [{ id: 'shop', allow_json: '["example.com"]', created_at: 1 }]);
   for (const t of ['logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 1, t);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
@@ -109,6 +109,51 @@ test('profiles and logins: CRUD, key_id per envelope, cascade on delete', () => 
   // OAuth grants and API keys scoped to the profile: covered end to end in test/integration/gateway.test.ts.
   s.deleteProfile(pid('shop'));
   for (const t of ['profiles', 'logins', 'leases']) assert.equal((db.prepare(`SELECT count(*) n FROM ${t}`).get() as any).n, 0, t);
+  db.close();
+});
+
+test('custom headers: per https origin on the allowlist, name lowercased, value sealed, cascade on delete', () => {
+  const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), id = pid('shop'), allow = ['example.com'];
+  const secret = randomBytes(8).toString('hex');
+  s.createProfile(id, allow);
+  assert.deepEqual(s.saveHeader(id, allow, 'https://example.com/', 'X-Bypass', secret), { origin: 'https://example.com', name: 'x-bypass' });
+  s.saveHeader(id, allow, 'https://example.com', 'x-bypass', secret + '2');
+  assert.deepEqual(s.headers('shop').map((h) => ({ ...h })), [{ origin: 'https://example.com', name: 'x-bypass' }], 'replaced, not duplicated');
+  assert.deepEqual(s.headerValues('shop', 'https://example.com'), { 'x-bypass': secret + '2' });
+  assert.deepEqual(s.headerValues('shop', 'https://other.example.com'), {});
+  const row = db.prepare('SELECT envelope, key_id FROM profile_headers').get() as any;
+  assert.ok(!row.envelope.includes(secret));
+  assert.equal(row.key_id, keyId(readFileSync(f.key)));
+  for (const [origin, name, value, err] of [
+    ['http://example.com', 'x-a', 'v', /Origin/], ['https://example.com/path', 'x-a', 'v', /Origin/],
+    ['https://example.org', 'x-a', 'v', /Origin/], ['https://example.com', 'Host', 'v', /set by the browser/],
+    ['https://example.com', 'proxy-authorization', 'v', /set by the browser/], ['https://example.com', 'bad name', 'v', /Name/],
+    ['https://example.com', 'x-a', 'line\nbreak', /Value/], ['https://example.com', 'x-a', ' padded', /Value/],
+    ['https://example.com', 'x-a', 'x'.repeat(2001), /Value/], ['https://example.com', 'x-a', 'x'.repeat(1970), null],
+    ['https://example.com', 'x-b', 'x'.repeat(1970), null], ['https://example.com', 'x-c', 'x'.repeat(100), /over 4000/],
+  ] as [string, string, string, RegExp | null][]) {
+    if (err) assert.throws(() => s.saveHeader(id, allow, origin, name, value), err, `${origin} ${name}`);
+    else s.saveHeader(id, allow, origin, name, value);
+  }
+  assert.equal(s.deleteHeader(id, 'https://example.com', 'X-B'), true);
+  assert.equal(s.deleteHeader(id, 'https://example.com', 'x-b'), false);
+  s.deleteProfile(id);
+  assert.equal((db.prepare('SELECT count(*) n FROM profile_headers').get() as any).n, 0);
+  db.close();
+});
+
+test('saved headers alone also pin the login key; rotation re-encrypts them', () => {
+  const f = fresh(), db = openDb(f.db), id = pid('p');
+  openStore(db, f.key).createProfile(id, ['example.com']);
+  openStore(db, f.key).saveHeader(id, ['example.com'], 'https://example.com', 'x-a', 'v1');
+  const key = readFileSync(f.key);
+  writeFileSync(f.key, randomBytes(32));
+  assert.throws(() => openStore(db, f.key), /does not match saved logins or headers/);
+  writeFileSync(f.key, key);
+  const s = openStore(db, f.key), next = randomBytes(32);
+  assert.equal(s.rotateLoginKey(next), 1);
+  writeFileSync(f.key, next);
+  assert.deepEqual(openStore(db, f.key).headerValues('p', 'https://example.com'), { 'x-a': 'v1' });
   db.close();
 });
 

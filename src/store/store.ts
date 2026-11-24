@@ -1,9 +1,9 @@
-// App state in SQLite, behind small typed functions: profiles and saved logins.
+// App state in SQLite, behind small typed functions: profiles, saved logins, custom headers, playbooks.
 // Leases: mcp/leases.ts. Identity, OAuth and API keys: Better Auth (auth/), same database.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { validId, type ProfileId } from '../policy.ts';
+import { validId, urlAllowed, type ProfileId } from '../policy.ts';
 import { tx } from './db.ts';
-import { loadLoginKey, keyId, encryptLogin, decryptLogin, type Envelope, type LoginRef } from './logins-crypto.ts';
+import { loadLoginKey, keyId, encryptLogin, decryptLogin, seal, unseal, type Envelope, type LoginRef } from './logins-crypto.ts';
 
 export interface Login extends LoginRef { password: Envelope; lastTestedAt?: number | null; lastResult?: string | null }
 export interface Profile { id: ProfileId; allow: string[]; logins: Record<string, Login>; createdAt: number }
@@ -22,6 +22,24 @@ export function badPlaybook(name: unknown, body: unknown): string | null {
 /** First non-empty line, without its Markdown heading marks. */
 export const describe = (body: string) => (body.split('\n').find((l) => l.trim()) ?? '').replace(/^\s*#+\s*/, '').trim().slice(0, 200);
 
+/** Header names the browser or the egress proxy own: never set by a profile. */
+const RESERVED = /^(host|content-length|connection|keep-alive|transfer-encoding|te|trailer|upgrade|expect|proxy-.*)$/;
+/** The JSON object agent-browser gets for one origin stays under this (the runner caps an argv element at 5000). */
+export const HEADERS_MAX = 4000;
+/** Why this header cannot be saved, or null. `origin` must already be normalized (see headerOrigin). */
+export function badHeader(origin: string | null, name: unknown, value: unknown, allow: readonly string[]): string | null {
+  if (!origin || !urlAllowed(origin, allow)) return 'Origin: https://host of an allowed domain, no path';
+  if (typeof name !== 'string' || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/.test(name)) return 'Name: a header name like X-Bypass-Token';
+  if (RESERVED.test(name.toLowerCase())) return `${name} is set by the browser`;
+  if (typeof value !== 'string' || !/^[\x21-\x7e]([\x20-\x7e]*[\x21-\x7e])?$/.test(value) || value.length > 2000) return 'Value: printable ASCII, no leading or trailing space, 2000 characters max';
+  return null;
+}
+/** "https://host" or "https://host/" -> "https://host"; anything else (path, query, port, http) -> null. */
+export function headerOrigin(raw: unknown) {
+  try { const u = new URL(String(raw)); return u.protocol === 'https:' && [u.origin, u.origin + '/'].includes(String(raw)) ? u.origin : null; }
+  catch { return null; }
+}
+
 export type Store = ReturnType<typeof openStore>;
 
 /** Loads the login key for this database. Throws (fail fast) when saved logins need a missing or different key. */
@@ -30,9 +48,9 @@ export function openStore(db: DatabaseSync, keyFile: string) {
   const one = (sql: string, ...p: SQLInputValue[]) => db.prepare(sql).get(...p) as Row | undefined;
   const run = (sql: string, ...p: SQLInputValue[]) => db.prepare(sql).run(...p);
 
-  const kids = all('SELECT DISTINCT key_id FROM logins').map((r) => r.key_id as string);
+  const kids = all('SELECT key_id FROM logins UNION SELECT key_id FROM profile_headers').map((r) => r.key_id as string);
   let key = loadLoginKey(keyFile, kids.length > 0), kid = keyId(key);
-  if (kids.some((k) => k !== kid)) throw Error(`The login key at ${keyFile} (id ${kid}) does not match saved logins (${kids.join(', ')})`);
+  if (kids.some((k) => k !== kid)) throw Error(`The login key at ${keyFile} (id ${kid}) does not match saved logins or headers (${kids.join(', ')})`);
 
   const toProfile = (r: Row): Profile => ({
     id: r.id, allow: JSON.parse(r.allow_json), createdAt: r.created_at,
@@ -45,6 +63,15 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       ON CONFLICT (profile, site) DO UPDATE SET url = excluded.url, username = excluded.username, envelope = excluded.envelope, key_id = excluded.key_id
       ${clearTest ? ', last_tested_at = NULL, last_result = NULL' : ''}`,
       id, site, c.url, c.username, JSON.stringify(encryptLogin(k, id, site, c, password)), keyId(k));
+  const hAad = (id: string, origin: string, name: string) => ({ header: [id, origin, name] }); // an object: never a login's AAD
+  const putHeader = (k: Buffer, id: string, origin: string, name: string, value: string) =>
+    run(`INSERT INTO profile_headers (profile, origin, name, envelope, key_id) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (profile, origin, name) DO UPDATE SET envelope = excluded.envelope, key_id = excluded.key_id`,
+      id, origin, name, JSON.stringify(seal(k, hAad(id, origin, name), value)), keyId(k));
+  /** Decrypted headers of one origin, {} when none. */
+  const headerValues = (id: string, origin: string) => Object.fromEntries(
+    all('SELECT name, envelope FROM profile_headers WHERE profile = ? AND origin = ? ORDER BY name', id, origin)
+      .map((h) => [h.name, unseal(key, hAad(id, origin, h.name), JSON.parse(h.envelope))]));
 
   return {
     profile,
@@ -70,7 +97,22 @@ export function openStore(db: DatabaseSync, keyFile: string) {
     deleteLogin: (id: ProfileId, site: string) => run('DELETE FROM logins WHERE profile = ? AND site = ?', id, site),
     decryptLogin: (id: string, site: string, c: Login) => decryptLogin(key, id, site, c),
 
-    /** Re-encrypts every login with newKey in one transaction (any failure = nothing changed). The store then uses newKey. */
+    /** Names only, never values. */
+    headers: (id: string) => all('SELECT origin, name FROM profile_headers WHERE profile = ? ORDER BY origin, name', id) as { origin: string; name: string }[],
+    headerValues,
+    /** Throws on a bad header, or when the origin's headers would no longer fit in one agent-browser argument. */
+    saveHeader(id: ProfileId, allow: readonly string[], rawOrigin: string, name: string, value: string) {
+      const origin = headerOrigin(rawOrigin), bad = badHeader(origin, name, value, allow);
+      if (bad) throw Error(bad);
+      const n = name.toLowerCase();
+      if (JSON.stringify({ ...headerValues(id, origin!), [n]: value }).length > HEADERS_MAX) throw Error(`Headers of ${origin} are over ${HEADERS_MAX} characters`);
+      putHeader(key, id, origin!, n, value);
+      return { origin: origin!, name: n };
+    },
+    deleteHeader: (id: ProfileId, origin: string, name: string) =>
+      Number(run('DELETE FROM profile_headers WHERE profile = ? AND origin = ? AND name = ?', id, origin, String(name).toLowerCase()).changes) > 0,
+
+    /** Re-encrypts every login and header with newKey in one transaction (any failure = nothing changed). The store then uses newKey. */
     rotateLoginKey(newKey: Buffer) {
       const n = tx(db, () => {
         const rows = all('SELECT profile, site, url, username, envelope FROM logins');
@@ -78,7 +120,9 @@ export function openStore(db: DatabaseSync, keyFile: string) {
           const c = { url: l.url, username: l.username, password: JSON.parse(l.envelope) };
           putLogin(newKey, l.profile, l.site, c, decryptLogin(key, l.profile, l.site, c));
         }
-        return rows.length;
+        const hs = all('SELECT profile, origin, name, envelope FROM profile_headers');
+        for (const h of hs) putHeader(newKey, h.profile, h.origin, h.name, unseal(key, hAad(h.profile, h.origin, h.name), JSON.parse(h.envelope)));
+        return rows.length + hs.length;
       });
       key = newKey; kid = keyId(newKey);
       return n;
