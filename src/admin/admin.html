@@ -1625,7 +1625,7 @@ function showSecurity() {
         <div class="stack" style="gap:4px"><span class="lbl">On the host machine</span><div class="urlbar"><pre class="term grow" id="resetCmd"></pre><button type="button" class="btn" id="bCopyReset">Copy</button></div></div>
         <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px">
           <li>Asks for a new password (12 characters minimum)</li>
-          <li>Shows the otpauth:// link to add to your authenticator app, once</li>
+          <li>Shows a QR code to scan with your authenticator app, once</li>
           <li>Checks a first code, then shows 10 new backup codes</li>
           <li>Ends all admin sessions: <strong>you will be signed out here</strong></li>
         </ol></section>
@@ -1636,7 +1636,7 @@ function showSecurity() {
         <p style="margin:0">Sensitive actions (domains, saved logins, keys, deletion) ask for a code again every 15 min. Five wrong codes end the session.</p>
         <details style="border-top:1px solid var(--line3);padding-top:8px"><summary style="cursor:pointer;font-weight:600;color:var(--primary)">Fresh install: create the admin</summary>
           <pre class="term" style="margin-top:10px">docker compose exec gateway node src/cli.ts admin create you@example.com</pre>
-          <p class="hint" style="margin-top:6px">One admin per gateway. Same steps: password, otpauth:// link, first code, backup codes.</p></details>
+          <p class="hint" style="margin-top:6px">One admin per gateway. Same steps: password, QR code, first code, backup codes.</p></details>
       </aside>
     </div>`);
   setText($('#resetCmd'), reset);

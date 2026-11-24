@@ -9,12 +9,13 @@
 //   node src/cli.ts key revoke <id>
 //   (both safe while the gateway runs: an operator, or an agent the operator lets run them, gets a test key
 //    without the admin UI's password and TOTP. Docker access to the host already outranks that 2FA.)
-// Enrollment prints the TOTP URI and backup codes once. Passwords and API keys are never printed.
+// Enrollment prints the TOTP URI (as a QR code and a link) and backup codes once. Passwords and API keys are never printed.
 import { writeFileSync, renameSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
+import { renderUnicodeCompact } from 'uqr';
 import { loadConfig, type Config } from './config.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb, tx } from './store/db.ts';
@@ -107,7 +108,9 @@ async function enroll(cfg: Config, email: string, mode: 'bootstrap' | 'admin' | 
       return id;
     });
     const enrolled = await startTotp(auth, email, password);
-    out('Add this to your authenticator app (shown once, do not share):');
+    out('Scan this QR code with your authenticator app, or add the link below (shown once, do not share):');
+    // White on black set explicitly, so the code scans on light and dark terminal themes alike.
+    for (const line of renderUnicodeCompact(enrolled.totpURI).split('\n')) out(`\x1b[97;40m${line}\x1b[0m`);
     out(enrolled.totpURI);
     try { await verifyTotp(auth, enrolled.headers, (await ask('Code from the app: ')).trim()); }
     catch { throw Error(`Code rejected: run admin reset-2fa ${email}`); }
