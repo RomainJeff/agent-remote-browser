@@ -4,7 +4,9 @@
 #   ARB_MCP_URL=https://arb.example/mcp ARB_TOKEN=arb_k_... bench/check-quota.sh <label>   # label: baseline, 10a, ...
 # ARB_TOKEN is a profile-scoped or global key (cli.ts key create <profile>|--global); it only goes into a 0600 temp file, never argv or output.
 # COMMIT overrides the recorded commit (the stack's, when the script runs from another branch).
-# Per run: the tools called, and browser_ms = the "ms" of the run_steps / run_playbook / pb_ replies (time spent in the browser).
+# Per run: the tools called, and browser_ms = the "ms" of the run_steps / run_playbook / pb_ replies: the gateway's step loop,
+# runner round trips included. Total ms minus browser_ms is client startup + MCP init + other calls + model, not model alone.
+# A run is ok only if the client finished, every browser reply says ok:true and the answer holds two numbers; medians use ok runs only.
 # Input tokens = input + cache creation + cache read, summed over the run (what the model actually read).
 # ponytail: stream-json, not --output-format json: only the stream shows each tool_use.
 set -euo pipefail
@@ -15,30 +17,34 @@ PROMPT=${PROMPT:-'With the arb browser tools, open https://app.n8n.cloud/manage,
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 umask 077
-jq -n --arg url "$ARB_MCP_URL" --arg tok "$ARB_TOKEN" \
-  '{mcpServers: {arb: {type: "http", url: $url, headers: {Authorization: ("Bearer " + $tok)}}}}' > "$tmp/mcp.json"
+# The key reaches jq through its environment, not argv (visible in ps).
+ARB_TOKEN="$ARB_TOKEN" jq -n --arg url "$ARB_MCP_URL" \
+  '{mcpServers: {arb: {type: "http", url: $url, headers: {Authorization: ("Bearer " + env.ARB_TOKEN)}}}}' > "$tmp/mcp.json"
+unset ARB_TOKEN
 
 runs=()
 for i in $(seq "$N"); do
   # Empty cwd and no settings: no CLAUDE.md, hooks or other MCP servers in the measure. Only the arb tools are allowed.
   (cd "$tmp" && claude -p "$PROMPT" --mcp-config "$tmp/mcp.json" --strict-mcp-config --setting-sources project \
     --tools "" --allowedTools mcp__arb --no-session-persistence --output-format stream-json --verbose) > "$tmp/run$i.jsonl"
-  r=$(jq -s '{
+  r=$(jq -s '[.[] | select(.type == "user") | .message.content[]? | select(.type == "tool_result")
+      | (.content | if type == "array" then map(.text? // "") | join("") else . end) | split("\n")[0] | fromjson? | select(.ms?)] as $b
+    | (last(.[] | select(.type == "result")).result // "") as $a | {
     input_tokens: (last(.[] | select(.type == "result")).usage | .input_tokens + .cache_creation_input_tokens + .cache_read_input_tokens),
     tool_use: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use")] | length,
     tools: [.[] | select(.type == "assistant") | .message.content[] | select(.type == "tool_use") | .name | sub("^mcp__arb__"; "")],
-    browser_ms: [.[] | select(.type == "user") | .message.content[]? | select(.type == "tool_result")
-      | (.content | if type == "array" then map(.text? // "") | join("") else . end) | split("\n")[0] | fromjson? | .ms? // empty] | add,
+    browser_ms: ($b | map(.ms) | add),
     ms: last(.[] | select(.type == "result")).duration_ms,
-    ok: (last(.[] | select(.type == "result")).is_error | not),
-    answer: (last(.[] | select(.type == "result")).result // "" | .[0:200])}' "$tmp/run$i.jsonl")
+    ok: ((last(.[] | select(.type == "result")).is_error | not) and ($b | length > 0 and all(.ok == true)) and ($a | test("[0-9][^0-9]+[0-9]"))),
+    answer: ($a | .[0:200])}' "$tmp/run$i.jsonl")
   echo "run $i: $(jq -c . <<<"$r")"
   runs+=("$r")
 done
 
 printf '%s\n' "${runs[@]}" | jq -s -c --arg label "$label" --arg at "$(date -u +%FT%TZ)" --arg commit "${COMMIT:-$(git -C "$here" rev-parse --short HEAD)}" '
-  def median: sort | .[length / 2 | floor];
+  def median: sort | if length == 0 then null elif length % 2 == 1 then .[length / 2 | floor] else (.[length / 2 - 1] + .[length / 2]) / 2 end;
   {label: $label, at: $at, commit: $commit, n: length, ok: (map(select(.ok)) | length),
-   median_input_tokens: (map(.input_tokens) | median), median_tool_use: (map(.tool_use) | median), median_ms: (map(.ms) | median),
-   median_browser_ms: (map(.browser_ms // empty) | if length > 0 then median else null end),
+   failed: map(select(.ok | not) | .answer),
+   median_input_tokens: (map(select(.ok) | .input_tokens) | median), median_tool_use: (map(select(.ok) | .tool_use) | median),
+   median_ms: (map(select(.ok) | .ms) | median), median_browser_ms: (map(select(.ok) | .browser_ms // empty) | median),
    runs: map({input_tokens, tool_use, ms, browser_ms, tools, ok})}' | tee -a "$here/results.jsonl"
