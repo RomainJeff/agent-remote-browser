@@ -5,7 +5,7 @@ import net from 'node:net';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Request, AB_FLAGS, SESSION, SELECTION, MAX_REQUEST } from '../../src/runner/protocol.ts';
+import { Request, AB_FLAGS, SESSION, SELECTION, HIT, MAX_REQUEST } from '../../src/runner/protocol.ts';
 import { serveRunner } from '../../src/runner/server.ts';
 import { RunnerDriver } from '../../src/host/runner.ts';
 import { FakeDriver } from '../../src/host/fake.ts';
@@ -41,7 +41,8 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ab('auth', 'save', 'gw-shop-1', '--url', 'https://example.com/login', '--username', 'me@example.test', '--password-stdin'),
     ab('open', 'https://example.com/', '--headers', '{"x-bypass":"t0k3n","authorization":"Bearer a b"}'),
     ab('auth', 'login', 'gw-shop-1'), ab('auth', 'login', 'gw-shop-1', '--no-navigate'), ab('auth', 'delete', 'gw-shop-1'),
-    ['base64', '-w0', '/tmp/shot.png'], ['rm', '-f', '/home/agent/.agent-browser/tmp/s-1.png'], ['cat', SESSION]])
+    ['base64', '-w0', '/tmp/shot.png'], ['rm', '-f', '/home/agent/.agent-browser/tmp/s-1.png'], ['cat', SESSION],
+    ['node', '-e', HIT, 'at', '0', '412'], ['node', '-e', HIT, 'focus']])
     assert.ok(ok(exec(a)), a.join(' '));
   for (const a of [['sh', '-c', 'id'], ['agent-browser', 'open', 'https://example.com'], ab('eval', '1'),
     ['agent-browser', ...AB_FLAGS.slice(0, -1), '--no-sandbox', 'open', 'https://example.com'],
@@ -58,7 +59,9 @@ test('exec: only the agent-browser shapes the gateway uses, with its fixed flags
     ['cat', '/etc/shadow'], ['cat', '/home/agent/.agent-browser/../../../etc/shadow'], ['base64', '-w0', '/etc/x.png'],
     ['base64', '-w0', '/tmp/../etc/x.png'], ['rm', '-rf', '/tmp/x.png'], ['rm', '-f', '/tmp/x.png', '/tmp/y.png'],
     ab('get', 'text', 'body\0'), ab('get', 'text', '--json'), ab('get', 'text', '-'), ab('snapshot', '-i', '-s', '--delta'),
-    ab('snapshot', '--delta'), ab('snapshot', '-i', '-s'), ab('snapshot', '-i', '-s', 'x'.repeat(501)), ab('snapshot', '-i', '-d', '3'), ab('fill', '@e1', '--', 'x'.repeat(5001)), []])
+    ab('snapshot', '--delta'), ab('snapshot', '-i', '-s'), ab('snapshot', '-i', '-s', 'x'.repeat(501)), ab('snapshot', '-i', '-d', '3'), ab('fill', '@e1', '--', 'x'.repeat(5001)), [],
+    ['node', '-e', 'require("child_process")', 'at', '1', '2'], ['node', '-e', HIT + ';1', 'focus'], ['node', '-e', HIT, 'at', '-1', '2'],
+    ['node', '-e', HIT, 'at', '1.5', '2'], ['node', '-e', HIT, 'at', '1'], ['node', '-e', HIT, 'focus', 'x'], ['node', '-e', HIT, 'all'], ['node', HIT, 'focus']])
     assert.equal(ok(exec(a)), false, a.join(' '));
   assert.equal(ok(exec(ab('close'), { timeoutMs: 999 })), false);
   assert.equal(ok(exec(ab('close'), { timeoutMs: 120_001 })), false);

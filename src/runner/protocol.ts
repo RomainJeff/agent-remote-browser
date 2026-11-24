@@ -18,6 +18,45 @@ export const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json';
 /** Admin copy during takeover: selected text of the focused field, else of the page. Never a password field's.
  *  ponytail: selections inside iframes are not seen; walk frames if that matters. */
 export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selectionStart?e.value.slice(e.selectionStart,e.selectionEnd):getSelection().toString())(document.activeElement)";
+/** Admin teach mode, read-only: the accessibility chain (self, then ancestors) of the element at x,y (`at x y`) or of the
+ *  focused one (`focus`), over CDP (DevToolsActivePort). Each entry: role, name, tag, type, id, attr (name attribute),
+ *  placeholder, and for named ARIA roles `count` (same role, name contains it, case-insensitive) and `exact` (same name). Names are cut at 300.
+ *  Prints { url, chain } as JSON. ponytail: first page target only; iframes and shadow DOM are not looked into. */
+export const HIT = `const [mode, x, y] = process.argv.slice(1);
+(async () => {
+  const port = require('fs').readFileSync('${PROFILE}/DevToolsActivePort', 'utf8').split('\\n')[0];
+  const page = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).find((t) => t.type === 'page');
+  const ws = new WebSocket(page.webSocketDebuggerUrl), wait = new Map(); let n = 0;
+  ws.onmessage = (m) => { const d = JSON.parse(m.data); wait.get(d.id)?.(d); };
+  await new Promise((r, e) => { ws.onopen = r; ws.onerror = e; });
+  const call = (method, params) => new Promise((r, e) => {
+    wait.set(++n, (d) => d.error ? e(Error(d.error.message)) : r(d.result)); ws.send(JSON.stringify({ id: n, method, params }));
+  });
+  const node = mode === 'at'
+    ? (await call('DOM.getNodeForLocation', { x: +x, y: +y, ignorePointerEventsNone: true })).backendNodeId
+    : (await call('DOM.describeNode', { objectId: (await call('Runtime.evaluate', { expression: 'document.activeElement' })).result.objectId })).node.backendNodeId;
+  const { nodes } = await call('Accessibility.getPartialAXTree', { backendNodeId: node, fetchRelatives: true });
+  const root = (await call('DOM.getDocument', { depth: 0 })).root.backendNodeId, byId = new Map(nodes.map((a) => [a.nodeId, a])), names = {}, chain = [];
+  for (let a = nodes.find((b) => b.backendDOMNodeId === node) || nodes[0]; a && chain.length < 12; a = byId.get(a.parentId)) {
+    const role = a.role?.value;
+    if (a.ignored || !role) continue;
+    const e = { role, name: String(a.name?.value || '').slice(0, 300) };
+    if (a.backendDOMNodeId) {
+      const d = (await call('DOM.describeNode', { backendNodeId: a.backendDOMNodeId })).node, at = {};
+      for (let i = 0; i < (d.attributes || []).length; i += 2) at[d.attributes[i]] = d.attributes[i + 1];
+      Object.assign(e, { tag: d.localName, type: at.type, id: at.id, attr: at.name, placeholder: at.placeholder });
+    }
+    if (e.name && /^[a-z]+$/.test(role) && role !== 'generic' && role !== 'none') {
+      names[role] ??= (await call('Accessibility.queryAXTree', { backendNodeId: root, role })).nodes.filter((b) => !b.ignored).map((b) => b.name?.value || '');
+      e.count = names[role].filter((s) => s.toLowerCase().includes(e.name.toLowerCase())).length;
+      e.exact = names[role].filter((s) => s === e.name).length;
+    }
+    chain.push(e);
+    if (role === 'RootWebArea') break;
+  }
+  console.log(JSON.stringify({ url: page.url, chain }));
+  process.exit(0);
+})().catch((e) => { console.error(String(e.message)); process.exit(1); });`;
 /** Request line limit: the largest legitimate request is a 5000-character fill plus a password on stdin. */
 export const MAX_REQUEST = 64 * 1024;
 
@@ -93,6 +132,8 @@ const other = z.union([
   z.tuple([lit('base64'), lit('-w0'), png]),
   z.tuple([lit('rm'), lit('-f'), png]),
   z.tuple([lit('cat'), lit(SESSION)]),
+  z.tuple([lit('node'), lit('-e'), lit(HIT), lit('at'), z.string().regex(/^\d{1,5}$/), z.string().regex(/^\d{1,5}$/)]),
+  z.tuple([lit('node'), lit('-e'), lit(HIT), lit('focus')]),
 ]);
 
 export const argvAllowed = (a: string[]) => !a.some((s) => s.includes('\0')) && (a[0] === 'agent-browser'
