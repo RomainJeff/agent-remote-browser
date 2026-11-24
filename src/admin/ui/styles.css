@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn tokens set to the admin palette. System fonts only: the page CSP loads no web font. */
+:root {
+  --background: #F6F7F8;
+  --foreground: #1F2226;
+  --card: #FFFFFF;
+  --card-foreground: #1F2226;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2226;
+  --primary: #00543C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E2F2EE;
+  --secondary-foreground: #00543C;
+  --muted: #E9EBEC;
+  --muted-foreground: #585F66;
+  --accent: #E2F2EE;
+  --accent-foreground: #00543C;
+  --destructive: #D43F11;
+  --destructive-soft: #FDE5DC;
+  --destructive-ink: #A8310C;
+  --border: #CFD4D8;
+  --input: #CFD4D8;
+  --ring: #00543C;
+}
+
+@theme inline {
+  --font-sans: Mulish, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* Controls 4px, cards 8px, as before. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 8px;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground font-sans text-sm; }
+}

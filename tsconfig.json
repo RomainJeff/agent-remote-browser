@@ -12,5 +12,7 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "deploy/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "deploy/**/*.ts"],
+  // The admin UI is bundled by Vite and checked with its own tsconfig (DOM, JSX).
+  "exclude": ["src/admin/ui"]
 }

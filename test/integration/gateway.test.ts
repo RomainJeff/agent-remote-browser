@@ -90,12 +90,12 @@ function jar(setCookies: string[], cookie = '') {
 
 /** Raw admin request: full control over Host, Origin, Cookie and fetch metadata headers. */
 function admin(method: string, path: string, { body, headers = {} }: { body?: unknown, headers?: Record<string, string> } = {}) {
-  return new Promise<{ status: number, json: any, cookies: string[] }>((resolve, reject) => {
+  return new Promise<{ status: number, json: any, cookies: string[], headers: http.IncomingHttpHeaders, body: string }>((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port: ADMIN, method, path,
       headers: { host: `127.0.0.1:${ADMIN}`, ...(session && { cookie: session }), ...(body !== undefined && { 'content-type': 'application/json' }), ...headers } }, (res) => {
       let raw = '';
       res.on('data', (d) => { raw += d; });
-      res.on('end', () => { let json; try { json = JSON.parse(raw); } catch {} resolve({ status: res.statusCode!, json, cookies: [res.headers['set-cookie'] ?? []].flat() }); });
+      res.on('end', () => { let json; try { json = JSON.parse(raw); } catch {} resolve({ status: res.statusCode!, json, cookies: [res.headers['set-cookie'] ?? []].flat(), headers: res.headers, body: raw }); });
     });
     req.on('error', reject);
     req.end(body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body));
@@ -154,6 +154,20 @@ test('startup lists its computers, leaves unknown ones alone; probes answer with
   assert.equal(ready.status, 200);
   assert.equal(await ready.text(), 'ready');
   fake.computers.delete('ghost');
+});
+
+test('admin page: the built UI under a self-only script policy, hashed assets cached for good, Host checked first', async () => {
+  const anon = { cookie: '' }, page = await admin('GET', '/', { headers: anon });
+  assert.equal(page.status, 200);
+  assert.match(String(page.headers['content-security-policy']), /script-src 'self';/);
+  const src = page.body.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
+  assert.ok(src, 'module script');
+  const asset = await admin('GET', src, { headers: anon });
+  assert.equal(asset.status, 200);
+  assert.equal(asset.headers['content-type'], 'text/javascript; charset=utf-8');
+  assert.match(String(asset.headers['cache-control']), /immutable/);
+  assert.equal((await admin('GET', src, { headers: { ...anon, host: 'evil.example' } })).status, 403);
+  assert.equal((await admin('GET', '/assets/missing.js', { headers: anon })).status, 401);
 });
 
 test('admin API: refused without a session, without TOTP, and with a wrong password; no public signup', async () => {

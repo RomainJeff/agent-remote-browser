@@ -4,8 +4,8 @@
 // checked on top (DNS rebinding, CSRF, cross-site WebSocket).
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { renderSVG } from 'uqr';
 import { windowBudget, can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, type ProfileId } from '../policy.ts';
 import { badPlaybook, describe, type Profile } from '../store/store.ts';
@@ -32,7 +32,20 @@ const AUTH_API = new Set(['/api/auth/sign-in/email', VERIFY.code, VERIFY.backupC
 const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
 // Playbooks too: an agent follows them as trusted instructions.
 const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete', 'members']);
-const html = new URL('./admin.html', import.meta.url).pathname;
+// The admin UI build (npm run build:admin): index.html, and the hashed files Vite writes under assets/.
+const UI = new URL('../../dist/admin/', import.meta.url);
+const ASSET_TYPES: Record<string, string> = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+/** Read once at startup: a fixed set of paths, so no request path ever reaches the file system. Null = not built. */
+function loadUi() {
+  try {
+    const files = new Map<string, { type: string, body: Buffer }>();
+    for (const name of readdirSync(new URL('assets/', UI))) {
+      const type = ASSET_TYPES[extname(name)];
+      if (type) files.set(`/assets/${name}`, { type, body: readFileSync(new URL(`assets/${name}`, UI)) });
+    }
+    return { index: readFileSync(new URL('index.html', UI)), files };
+  } catch { return null; }
+}
 const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
 /** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
  *  Null = refused: every new key expires. */
@@ -45,6 +58,7 @@ function keyTtl(expiresIn: unknown, expiresAt: unknown) {
 export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, leases, handoffs, computers: pc, driver }: Ctx) {
   const { profile, decryptLogin } = store;
   const teach = teacher({ computers: pc, driver, store });
+  const ui = loadUi();
   // A human may drive a leased browser only while handling the agent's request (paste, saved-login fill, live input).
   const driving = (id: string, role: Role) => canDrive(role, !!leases.of(id), handoffs.open(id)?.state === 'taken');
   const pubUrl = new URL(cfg.publicUrl);
@@ -166,8 +180,13 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       const path = req.url!.split('?')[0], post = req.method === 'POST';
       if (post && req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json')
         return send(res, 415, { error: 'JSON content type required' });
-      if (path === '/' || AUTH_API.has(path)) {
+      const asset = post ? undefined : ui?.files.get(path);
+      if (path === '/' || asset || AUTH_API.has(path)) {
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
+        if (asset) {
+          res.setHeader('cache-control', 'public, max-age=31536000, immutable'); // hashed names: a new build is a new URL
+          return res.writeHead(200, { 'content-type': asset.type }).end(asset.body);
+        }
         if (path !== '/') {
           const verify = FAILURE[path] === 'totp', s = verify ? await requireAdmin(db, authOf(pub), req.headers) : null;
           // Trusted devices are an admin-port convenience: never issued on the public listener (nor read there: server.ts).
@@ -177,9 +196,11 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
           if (verify) await settle(r, s?.session.id);
           return await reply(res, r);
         }
-        const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
-        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
-        return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));
+        if (!ui) return send(res, 503, { error: 'Admin UI not built: run npm run build:admin' });
+        const ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
+        // Inline styles stay allowed: Base UI positions popups with style attributes.
+        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
+        return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(ui.index);
       }
       if (post && (path === '/api/invite/start' || path === '/api/invite/finish')) {
         const email = await reach(req, pub);
