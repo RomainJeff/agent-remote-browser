@@ -6,3 +6,4 @@ secrets/
 agents.json
 audit.jsonl
 KILL
+dist/

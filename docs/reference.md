@@ -38,7 +38,7 @@ All Docker resources are named `${ARB_PREFIX:-arb}-*` (containers `arb-<profile>
 - `src/config.ts`: every env var, validated with zod (`loadConfig` for the gateway, `loadRunnerConfig` for the runner). Invalid config = exit 1. The runner refuses to start without `SANDBOX_RUNTIME=runsc` unless `ALLOW_NO_SANDBOX=1`; in production (`NODE_ENV=production`, set by `compose.tunnel.yaml`), the gateway requires `PUBLIC_URL` and refuses quick tunnels.
 - `src/host/`: the `HostDriver` contract. `RunnerDriver` (gateway side) speaks the runner RPC; `DockerDriver` (runner side) talks to the Engine API (`/v1.47`) over the Docker socket, no docker CLI. `FakeDriver` backs the tests.
 - `src/runner/`: the runner (`server.ts`) and its RPC (`protocol.ts`: one JSON line per connection, zod-validated, argv allowlist).
-- `src/mcp/`, `src/admin/`: MCP tools and leases, admin UI.
+- `src/mcp/`, `src/admin/`: MCP tools and leases, admin API (`routes.ts`). `src/admin/ui/`: the admin UI (React, TanStack Router and Query, shadcn/ui on Base UI, Tailwind), built by `npm run build:admin` into `dist/admin/`, which the gateway serves under a `script-src 'self'` CSP.
 - `src/auth/`: Better Auth setup (`better-auth.ts`), public login/consent/OAuth routes (`routes.ts`), token and admin checks (`guards.ts`), Cloudflare Access JWT (`access-jwt.ts`).
 - `src/store/`: SQLite database (`db.ts`, `migrations/NNN_name.sql`), typed repository functions (`store.ts`), login envelopes (`logins-crypto.ts`).
 - `src/cli.ts`: [operator commands](#operator-commands) for users, API keys, key rotation and backups.

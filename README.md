@@ -98,11 +98,12 @@ A token scoped to `profile:<id>` drives that profile only. A `global` token driv
 
 ## Development
 
-Requires Node >= 24 (target runtime: Node 26). TypeScript runs as-is, no build step.
+Requires Node >= 24 (target runtime: Node 26). The server's TypeScript runs as-is; only the admin UI is bundled (Vite).
 
 ```sh
 npm ci
-npm test            # unit + integration on an in-memory fake driver, no Docker needed (< 1 s)
+npm test            # type-checks and builds the admin UI, then unit + integration on an in-memory fake driver, no Docker needed
+npm run dev:admin   # rebuilds the admin UI on change, served by the running gateway (reload the page)
 npm run typecheck
 npm run smoke       # end to end against a fresh stack
 ```
