@@ -207,6 +207,8 @@ The previous key is kept as `secrets/login_key.old`: delete it once no `arb.db` 
 
 **Saved login looks broken**: "Test" on the login row fills the form like the agent would and shows the page it ended on (still on the login page = wrong password or a changed form). Refused while an agent holds the profile: release the lease first, or wait.
 
+**Write a playbook by showing it**: Playbooks tab, Record. Do the task in the live view (click, type, Enter; the typed text reaches the page on the next click or Enter), add the output, tick the values the agent should pass as params, Replay, then Save as playbook… and give it a name and a first line. A password field needs a saved login for that site first. Release the agent's lease before recording.
+
 **Backups**: section 9.
 
 ## 8. Uninstall
