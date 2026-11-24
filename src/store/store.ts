@@ -82,11 +82,9 @@ export function openStore(db: DatabaseSync, keyFile: string) {
       one('SELECT role FROM profile_members WHERE profile = ? AND user_id = ?', id, userId)?.role ?? null,
     members: (id: string) => all(`SELECT u.email, m.role FROM profile_members m JOIN user u ON u.id = m.user_id
       WHERE m.profile = ? ORDER BY u.email`, id) as { email: string; role: Role }[],
-    createProfile: (id: ProfileId, allow: string[], userId: string | null = null) => tx(db, () => {
+    createProfile: (id: ProfileId, allow: string[], userId: string) => tx(db, () => {
       run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), Date.now());
-      if (userId !== null) run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);
-      else if (!run("INSERT INTO profile_members SELECT ?, user_id, 'admin' FROM admins JOIN user ON user.id = admins.user_id WHERE email NOT IN pending_emails", id).changes)
-        throw Error('No gateway admin');
+      run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);
     }),
     setRole: (id: ProfileId, userId: string, role: Role | null) => tx(db, () => {
       if (role !== 'admin' && !one("SELECT 1 FROM profile_members JOIN user ON user.id = user_id WHERE profile = ? AND role = 'admin' AND user_id <> ? AND email NOT IN pending_emails", id, userId))
