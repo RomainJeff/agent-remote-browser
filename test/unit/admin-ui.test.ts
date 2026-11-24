@@ -13,15 +13,38 @@ const chrome = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/chro
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(p => p && existsSync(p));
 
 const fixture = `
-const writes = [];
-let signedIn = false;
+const writes = [], email = 'admin@example.test';
+let signedIn = false, gatewayAdmin = true, role = 'admin', stepUpLeft = 0;
+const computer = (id, extra) => ({ id, role: 'admin', members: 1, container: 'arb-' + id, state: 'none', status: 'never started', profile: false,
+  allow: ['example.com'], logins: [], leasedUntil: null, lastCall: null, idleStopInS: null, viewers: 0, handoff: null, ...extra });
+let computers = [computer('sample', { state: 'running', status: 'running', profile: true, logins: ['notion'] }), computer('other', { allow: ['notion.so'] })];
+let members = [{ email, role: 'admin' }];
+const SENSITIVE = ['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'delete', 'members'];
 window.fetch = async (path, options = {}) => {
   const body = options.body && JSON.parse(options.body);
   if (body) writes.push([path, body]);
   const json = (value, status = 200) => ({ status, ok: status < 400, json: async () => value });
+  const m = path.match(/^\\/api\\/computers\\/([^/]+)(?:\\/(.+))?$/);
+  if (m) {
+    const [, id, act] = m;
+    if (options.method === 'POST' && SENSITIVE.includes(act) && !stepUpLeft) return json({ stepUp: true, error: 'Confirm with a 2FA code first' }, 401);
+    if (!act) return json({ id, running: true, page: null, headers: [], playbooks: [], cookies: [], storage: [], audit: [],
+      logins: [{ site: 'notion', url: 'https://www.notion.so/login', username: 'me', lastTestedAt: null, lastResult: null }] });
+    if (act === 'members' && body) { members = body.role ? [...members.filter(x => x.email !== body.email), { email: body.email, role: body.role }] : members.filter(x => x.email !== body.email); return json({ role: body.role }); }
+    if (act === 'members') return json(members);
+    if (act === 'candidates') return json(['new@example.com', 'third@example.com']);
+    if (act === 'config') { computers = computers.map(c => c.id === id ? { ...c, allow: body.allow } : c); return json({}); }
+    if (act === 'delete') { computers = computers.filter(c => c.id !== id); return json({ deleted: true }); }
+    if (act === 'start') return json({});
+    throw Error(path);
+  }
   switch (path) {
-    case '/api/session': return signedIn ? json({ email: 'admin@example.test', stepUpRemainingS: 0 }) : json({ error: 'Sign in first' }, 401);
-    case '/api/users': return json([]);
+    case '/api/session': return signedIn ? json({ email, stepUpRemainingS: stepUpLeft, mcpUrl: 'https://arb.example.test/mcp' }) : json({ error: 'Sign in first' }, 401);
+    case '/api/users': return gatewayAdmin ? json([]) : json({ error: 'forbidden' }, 403);
+    case '/api/computers': return json(computers.map(c => c.id === 'sample' ? { ...c, role } : c));
+    case '/api/clients': return json({ keys: [], oauth: [] });
+    case '/api/profiles': computers = [...computers, computer(body.id, { allow: body.allow })]; return json({ id: body.id }, 201);
+    case '/api/step-up': if (body.code !== '123456') return json({ stepUp: true, error: 'Invalid code' }, 401); stepUpLeft = 900; return json({ stepUpRemainingS: 900 });
     case '/api/auth/sign-in/email': return body.password === 'right' ? json({ twoFactorRedirect: true }) : json({ message: 'Invalid' }, 401);
     case '/api/auth/two-factor/verify-totp': signedIn = body.code === '123456'; return signedIn ? json({}) : json({ message: 'Invalid' }, 401);
     case '/api/auth/sign-out': signedIn = false; return json({});
@@ -36,16 +59,26 @@ const until = async (fn, message) => {
   throw Error('timed out: ' + message);
 };
 const text = () => document.body.innerText;
-const field = (name) => document.querySelector('[name="' + name + '"]');
-const submit = (name, value) => { field(name).value = value; field(name).form.requestSubmit(); };`;
+const field = (name, root = document) => root.querySelector('[name="' + name + '"]');
+const submit = (name, value) => { field(name).value = value; field(name).form.requestSubmit(); };
+const button = (label, root = document) => [...root.querySelectorAll('button, a')].find(b => b.textContent.trim() === label);
+const dialog = () => document.querySelector('[role=dialog] form');
+/** Value change React sees (its value tracker ignores plain assignments). */
+const choose = (el, value) => {
+  Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, value);
+  el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+};
+const sent = () => JSON.stringify(writes);`;
 
-/** Serves the build with the fixture first in <head>, runs the scenario once the page loaded; PASS or the failure
- *  comes back in the document title. */
-function browserCase(name: string, hash: string, scenario: string) {
+/** Serves the build with the fixture (then `setup`) first in <head>, runs the scenario once the page loaded; PASS or
+ *  the failure comes back as data-result on <html>. */
+function browserCase(name: string, hash: string, scenario: string, setup = '') {
   test(name, { skip: !chrome && 'Chrome or Chromium required' }, async () => {
     const index = readFileSync(new URL('index.html', dist), 'utf8').replace('<head>', () => `<head><script>${fixture}
+      ${setup};
       addEventListener('load', async () => {
-        try { ${scenario}; document.title = 'PASS'; } catch (e) { document.title = 'FAIL ' + e.message; }
+        const done = (r) => { document.documentElement.dataset.result = r; };
+        try { ${scenario}; done('PASS'); } catch (e) { done('FAIL ' + e.message); }
       });</script>`);
     const server = createServer((req, res) => {
       const path = req.url!.split('?')[0];
@@ -65,7 +98,7 @@ function browserCase(name: string, hash: string, scenario: string) {
         p.on('error', reject);
         p.on('close', () => resolve(stdout));
       });
-      assert.equal(out.match(/<title>([^<]*)<\/title>/)?.[1], 'PASS');
+      assert.equal(out.match(/data-result="([^"]*)"/)?.[1], 'PASS');
     } finally {
       server.close();
       rmSync(dir, { recursive: true, force: true });
@@ -85,7 +118,7 @@ browserCase('a signed-out visit signs in with password then code, opens the cons
   submit('code', '123456');
   await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'console');
   check(text().includes('admin@example.test') && text().includes('Members'), 'account and Members navigation');
-  check(document.querySelector('[aria-current=page]').textContent === 'Profiles', 'current page');
+  check(document.querySelector('[aria-current=page]').textContent.startsWith('Profiles'), 'current page');
   document.querySelector('[aria-label="Sign out"]').click();
   await until(() => field('password'), 'back to sign-in');
   check(JSON.stringify(writes.map(w => w[0])) === JSON.stringify(['/api/auth/sign-in/email', '/api/auth/sign-in/email',
@@ -110,3 +143,85 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
     ['/api/invite/finish', { token: 'sample', code: '000000' }], ['/api/invite/finish', { token: 'sample', code: '123456' }],
   ]), 'invite requests');
 `);
+
+browserCase('profiles list filters and searches, and a new profile opens on its page', '#/profiles', `
+  await until(() => text().includes('other'), 'profile rows');
+  const rows = () => [...document.querySelectorAll('tbody tr')].map(r => r.querySelector('a').textContent).join();
+  check(rows() === 'sample,other', 'all rows ' + rows());
+  button('Running · 1').click();
+  await until(() => rows() === 'sample', 'running filter');
+  button('All · 2').click();
+  choose(document.querySelector('[aria-label="Search profiles"]'), 'notion');
+  await until(() => rows() === 'other', 'search by domain');
+  button('+ New profile').click();
+  await until(dialog, 'new profile dialog');
+  field('id', dialog()).value = 'fresh';
+  field('allow', dialog()).value = 'fresh.example, b.example';
+  dialog().requestSubmit();
+  await until(() => document.querySelector('h1')?.textContent.startsWith('fresh'), 'profile page');
+  check(sent() === JSON.stringify([['/api/profiles', { id: 'fresh', allow: ['fresh.example', 'b.example'] }]]), 'create request ' + sent());
+`, 'signedIn = true');
+
+browserCase('viewer sees only Session, Diagnostics and Sharing, without Stop or Members', '#/profiles/sample', `
+  await until(() => document.querySelector('nav[aria-label="Profile sections"]'), 'profile tabs');
+  const tabs = [...document.querySelectorAll('nav[aria-label="Profile sections"] a')].map(a => a.textContent).join();
+  check(tabs === 'Session,Diagnostics,Sharing', 'tabs ' + tabs);
+  check(!button('Stop browser') && !button('Members'), 'no Stop, no Members');
+`, "signedIn = true; role = 'viewer'; gatewayAdmin = false");
+
+browserCase('editor asking for settings lands on the session, without Delete', '#/profiles/sample?tab=settings', `
+  await until(() => document.querySelector('[aria-current=page][href*="sample"]'), 'current tab');
+  const current = [...document.querySelectorAll('nav[aria-label="Profile sections"] [aria-current=page]')].map(a => a.textContent).join();
+  check(current === 'Session', 'current tab ' + current);
+  check(!button('Delete profile') && button('Stop browser'), 'no Delete, Stop shown');
+`, "signedIn = true; role = 'editor'");
+
+browserCase('profile admin picks members to add, then changes and removes sharing', '#/profiles/sample?tab=sharing', `
+  const form = await until(() => document.querySelector('details')?.closest('form'), 'share form');
+  const pick = form.querySelector('details');
+  await until(() => form.querySelectorAll('[name=email]').length === 2, 'candidates');
+  form.requestSubmit();
+  await until(() => pick.open, 'empty pick opens the list');
+  check(writes.length === 0, 'nothing sent');
+  for (const box of form.querySelectorAll('[name=email]')) box.click();
+  await until(() => form.querySelector('summary').textContent === '2 selected', 'selection count');
+  form.elements.role.value = 'viewer'; form.requestSubmit();
+  await until(() => !pick.open && writes.length === 2, 'list closed after adding');
+  await until(() => document.querySelector('[aria-label="Role · other@example.com"]'), 'other row');
+  check(!document.querySelector('tbody tr:first-child button'), 'no Remove on own row');
+  choose(document.querySelector('[aria-label="Role · ' + email + '"]'), 'editor');
+  await until(() => writes.length === 3, 'role change');
+  [...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('other@example.com')).querySelector('button').click();
+  await until(() => writes.length === 4, 'removal');
+  check(sent() === JSON.stringify([
+    { email: 'new@example.com', role: 'viewer' }, { email: 'third@example.com', role: 'viewer' }, { email, role: 'editor' }, { email: 'other@example.com', role: null },
+  ].map(body => ['/api/computers/sample/members', body])), 'membership requests ' + sent());
+`, "signedIn = true; stepUpLeft = 900; members.push({ email: 'other@example.com', role: 'editor' })");
+
+browserCase('deleting a profile asks to retype its name and for a 2FA code, then returns to the list', '#/profiles/sample?tab=settings', `
+  (await until(() => button('Delete profile'), 'delete button')).click();
+  await until(dialog, 'confirm dialog');
+  field('typed', dialog()).value = 'wrong'; field('code', dialog()).value = '123456'; dialog().requestSubmit();
+  await until(() => dialog().innerText.includes('The text does not match.'), 'typed check');
+  field('typed', dialog()).value = 'sample'; field('code', dialog()).value = '000000'; dialog().requestSubmit();
+  await until(() => dialog().innerText.includes('Invalid code. Five wrong codes end the session.'), 'wrong code');
+  field('code', dialog()).value = '123456'; dialog().requestSubmit();
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles' && text().includes('Profile sample deleted.'), 'back to the list');
+  await until(() => ![...document.querySelectorAll('tbody a')].some(a => a.textContent === 'sample'), 'profile gone from the list');
+  check(sent() === JSON.stringify([['/api/step-up', { code: '000000' }], ['/api/step-up', { code: '123456' }], ['/api/computers/sample/delete', {}]]), 'requests ' + sent());
+`, 'signedIn = true');
+
+browserCase('saving domains with a stale second factor asks for a code once, then retries', '#/profiles/sample?tab=domains', `
+  const add = await until(() => document.querySelector('#newDomain'), 'domain form');
+  add.value = 'New.example'; add.form.requestSubmit();
+  await until(() => document.querySelector('[aria-label="Remove new.example"]'), 'chip added');
+  document.querySelector('[aria-label="Remove example.com"]').click();
+  await until(() => text().includes('Unsaved changes'), 'draft');
+  button('Save domains').click();
+  await until(() => dialog()?.innerText.includes('Confirm with your 2FA code'), 'step-up dialog');
+  field('code', dialog()).value = '123456'; dialog().requestSubmit();
+  await until(() => text().includes('Domains saved. The browser restarts on next use.'), 'saved');
+  check(sent() === JSON.stringify([['/api/computers/sample/config', { allow: ['new.example'] }], ['/api/step-up', { code: '123456' }],
+    ['/api/computers/sample/config', { allow: ['new.example'] }]]), 'requests ' + sent());
+  check(!text().includes('Unsaved changes'), 'draft cleared');
+`, 'signedIn = true');
