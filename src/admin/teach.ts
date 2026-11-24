@@ -58,6 +58,13 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
    *  the lease, a replay that stopped partway), means the focus is not where the admin thinks; a focus that left the
    *  clicked field, likewise. */
   const last = new Map<ProfileId, { rec?: unknown; seq?: unknown; target?: string }>();
+  /** Per profile, the field typing began in: the page buffers keystrokes and calls teach-focus on the first one, the
+   *  gateway notes the focused field then (its locator, or that it is a password), and teach-type fills only that field,
+   *  live focus included. A page that moved the focus in between (a refresh that autofocuses another field) drops the
+   *  text, so a password typed after a Tab is never filled elsewhere. Known limit: a focus change between the keystroke
+   *  and teach-focus's HIT goes unseen. */
+  const typing = new Map<ProfileId, { rec: unknown; after: unknown; locator: string | null; password: boolean }>();
+  const isPassword = (chain: AX[], live?: string) => live === 'password' || chain[0]?.type?.toLowerCase() === 'password';
 
   async function hit(id: ProfileId, args: string[]) {
     await pc.ensure(id);
@@ -81,16 +88,29 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
       // field: a click that only focuses a field, dropped by the page when a fill or a login follows.
       return run(id, { click: l }, { field: FIELDS.has(chain.find((e) => !SKIP.has(e.role))?.role ?? '') });
     }
-    if (act === 'teach-type') {
+    if (act === 'teach-focus' || act === 'teach-type') {
       // login: the admin's pick among several saved logins of the origin (no text then).
       const pick = typeof b.login === 'string';
-      if (!pick && (typeof b.text !== 'string' || !b.text || b.text.length > 500)) return [400, { error: 'Text: 1 to 500 characters' }];
-      const was = last.get(id);
+      if (act === 'teach-type' && !pick && (typeof b.text !== 'string' || !b.text || b.text.length > 500)) return [400, { error: 'Text: 1 to 500 characters' }];
+      const was = last.get(id), f = typing.get(id);
       if (typeof b.rec !== 'string' || !was || b.rec !== was.rec || b.after !== was.seq) return LOST;
+      if (act === 'teach-focus') typing.delete(id);
+      // No field noted for this typing (or noted after another gesture): where it began is unknown.
+      else if (!f || f.rec !== b.rec || f.after !== b.after) return LOST;
       const { url, chain, live } = await hit(id, ['focus']);
       if (live === 'frame') return [422, { error: 'Typing inside a frame is not recorded' }];
       // The live element's type property, or the attribute as written (Chrome reads it case-insensitively).
-      if (live === 'password' || chain[0]?.type?.toLowerCase() === 'password') {
+      const password = isPassword(chain, live);
+      if (act === 'teach-focus') {
+        const l = password ? null : locate(chain);
+        if (!password && !l) return NONE;
+        if (l && was.target && JSON.stringify(l) !== was.target) return MOVED;
+        typing.set(id, { rec: b.rec, after: b.after, locator: l && JSON.stringify(l), password });
+        return [200, {}];
+      }
+      // A password field on either side, not both: the focus moved since typing began; never filled, never echoed.
+      if (password !== f!.password) return MOVED;
+      if (password) {
         // Never recorded, never sent to the page: the saved login of this origin replaces what was typed.
         const origin = URL.parse(url)?.origin, logins = p.logins || {};
         const sites = Object.keys(logins).filter((s) => URL.parse(logins[s].url)?.origin === origin);
@@ -108,8 +128,8 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
       }
       if (pick) return MOVED;
       const l = locate(chain);
-      if (l && was.target && JSON.stringify(l) !== was.target) return MOVED;
-      return l ? run(id, { fill: l, value: b.text }) : NONE;
+      if (!l) return NONE;
+      return JSON.stringify(l) === f!.locator ? run(id, { fill: l, value: b.text }) : MOVED;
     }
     if (act === 'teach-press') return KEYS.includes(b.key) ? run(id, { press: b.key }) : [400, { error: `Keys: ${KEYS.join(', ')}` }];
     if (act === 'teach-open') {
@@ -136,9 +156,12 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
     catch (e) { if (e instanceof BrowserError) return r = [422, { error: e.message.slice(0, 300) }]; throw e; }
     finally {
       // LOST refuses before any input (another tab's recording, a gesture not run here): the state stays the active tab's.
-      if (r !== LOST && a !== 'teach-read') {
+      // teach-focus sends no input either.
+      if (r !== LOST && a !== 'teach-read' && a !== 'teach-focus') {
         // A replay that stopped partway (ok: false) failed too: the focus is wherever it stopped.
         const ok = r[0] === 200 && r[1].ok !== false;
+        // The noted field serves one flush; a login pick resends it.
+        if (!(ok && r[1].pick)) typing.delete(id);
         if (!ok) last.set(id, {});
         else if (a !== 'teach-type') last.set(id, { rec: b.rec, seq: b.seq, target: r[1].field ? JSON.stringify((r[1].step as { click: Locator }).click) : undefined });
       }
