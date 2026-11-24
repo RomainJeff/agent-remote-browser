@@ -575,6 +575,7 @@ function showProfile(id, t) {
           <button type="button" class="btn btn-sm" id="bWatch">Watch</button>
           <button type="button" class="btn btn-sm btn-p" id="bCtl"></button>
           <button type="button" class="btn btn-sm" id="bLeave" hidden>Leave view</button>
+          <button type="button" class="btn btn-sm" id="bRecLive">Record playbook</button>
           <span class="grow"></span><span class="vstate" id="vstate" aria-live="polite">No view</span><span class="hint" id="vfps"></span>
         </div>
         <form class="urlbar" id="nav"><label for="vurl" class="sr">Address</label>
@@ -701,7 +702,7 @@ function showProfile(id, t) {
   });
   wireBook($('#bookForm'));
   // Record: the gateway runs each gesture of the live view as a run_steps step; the draft stays in this page.
-  $('#bRec').onclick = (e) => act(e.currentTarget, async () => {
+  $('#bRec').onclick = $('#bRecLive').onclick = (e) => act(e.currentTarget, async () => {
     location.hash = `#/p/${encodeURIComponent(id)}/session`;
     await takeOver(id);
     rec = { id, rid: crypto.getRandomValues(new Uint32Array(4)).join('-'), steps: [], buf: '', q: Promise.resolve(), lost: false }; renderRec();
@@ -782,6 +783,7 @@ function renderLiveBar() {
   setText($('#bCtl'), up ? 'Take over' : 'Start and take over');
   setBtn($('#bCtl'), ctl || (locked && !h), ctl ? 'You already have control' : locked && !h ? 'An agent holds the lease: force release to take over' : '');
   $('#bLeave').hidden = !live;
+  setBtn($('#bRecLive'), rec?.id === c.id || (locked && !h), rec?.id === c.id ? 'Already recording' : locked && !h ? 'An agent holds the lease: force release to take over' : 'Take over and record your gestures as a playbook');
   // ponytail: the lease holder's name is not exposed by the list API, so the banner says "an agent".
   // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
   const here = ctl && view.url ? logins.filter((l) => originOf(l.url) === originOf(view.url)) : [];
@@ -1263,7 +1265,7 @@ function renderRec() {
   for (const b of $$('[data-rdel]', el)) b.onclick = () => { rec.steps.splice(+b.dataset.rdel, 1); renderRec(); };
   for (const b of $$('[data-rparam]', el)) b.onchange = () => { rec.steps[+b.dataset.rparam].param = b.checked; };
   for (const b of $$('[data-rpname]', el)) b.onchange = () => { rec.steps[+b.dataset.rpname].pname = b.value.trim(); };
-  $('#bRecStop').onclick = () => { rec = null; renderRec(); };
+  $('#bRecStop').onclick = () => { rec = null; renderRec(); renderLiveBar(); };
   $('#recRead').onsubmit = (e) => {
     e.preventDefault();
     const f = e.currentTarget, selector = f.selector.value.trim(), contains = f.contains.value.trim();
