@@ -42,7 +42,9 @@ export async function fillLogin(pc: Ctx['computers'], id: ProfileId, site: strin
   pc.restrict(id, origin);
   try {
     await pc.ab(id, ['auth', 'save', vault, '--url', c.url, '--username', c.username, '--password-stdin'], { stdin: password });
-    await pc.ab(id, here ? ['auth', 'login', vault, '--no-navigate'] : ['auth', 'login', vault]);
+    // auth login navigates without the profile's custom headers: open the login page first (with them), fill it there.
+    const opened = !here && pc.hasHeaders(id, c.url) && !!await pc.ab(id, ['open', c.url]);
+    await pc.ab(id, here || opened ? ['auth', 'login', vault, '--no-navigate'] : ['auth', 'login', vault]);
   } finally {
     await pc.ab(id, ['auth', 'delete', vault]).catch(() => {});
     pc.restrict(id);

@@ -27,6 +27,14 @@ const vault = z.string().regex(/^gw-[a-z0-9-]{1,40}$/);
 const url = z.url({ protocol: /^https?$/ }).max(4096);
 /** A value that cannot be read as a flag ("-" alone is a key name). */
 const value = (max: number) => z.string().min(1).max(max).refine((s) => s === '-' || !s.startsWith('-'));
+/** open --headers: a JSON object of header name -> printable value (a profile's custom headers for the URL's origin). */
+const headers = z.string().max(4096).refine((s) => {
+  try {
+    const o = JSON.parse(s);
+    const e = o && typeof o === 'object' && !Array.isArray(o) ? Object.entries(o) : [];
+    return e.length > 0 && e.length <= 32 && e.every(([k, v]) => /^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/.test(k) && typeof v === 'string' && /^[\x20-\x7e]{1,2000}$/.test(v));
+  } catch { return false; }
+});
 /** A ref or CSS selector (get text), a CSS selector (snapshot -s): never a flag. */
 const sel = value(500).refine((s) => s !== '-');
 
@@ -56,6 +64,7 @@ const wait = [
 /** agent-browser subcommands the tools and the admin UI use, after AB_FLAGS. */
 const agentBrowser = z.union([
   z.tuple([lit('open'), url]),
+  z.tuple([lit('open'), url, lit('--headers'), headers]),
   z.tuple([lit('snapshot'), lit('-i')]),
   z.tuple([lit('snapshot'), lit('-i'), lit('-c')]),
   z.tuple([lit('snapshot'), lit('-i'), lit('-s'), sel]),
