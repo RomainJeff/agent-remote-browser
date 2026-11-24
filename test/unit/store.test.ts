@@ -209,14 +209,15 @@ test('saved logins without their key: refuse to start, never create a new key', 
 
 test('leases: take, slide on use, release, expire', () => {
   const f = fresh(), db = openDb(f.db), s = openStore(db, f.key), leases = createLeases(db);
-  s.createProfile(pid('p'), [], fixtureUser(db));
+  const user = fixtureUser(db);
+  s.createProfile(pid('p'), [], user);
   const { token, exp } = leases.take('p', 1);
   assert.match(token, /^arb_l_/);
   assert.equal(leases.of('p')?.exp, exp);
   assert.ok(!JSON.stringify(db.prepare('SELECT * FROM leases').all()).includes(token), 'only the hash is stored');
-  assert.equal(leases.use(token)?.profile, 'p');
-  assert.equal(leases.use('arb_l_wrong'), null);
-  assert.equal(leases.release(token), true);
+  assert.equal(leases.use(token, user)?.profile, 'p');
+  assert.equal(leases.use('arb_l_wrong', user), null);
+  assert.equal(leases.release(token, user), true);
   assert.equal(leases.of('p'), null);
   leases.take('p', 1);
   db.prepare('UPDATE leases SET exp = 0').run();
