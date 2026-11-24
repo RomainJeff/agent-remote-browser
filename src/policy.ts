@@ -12,7 +12,7 @@ export type Role = typeof roles[number];
 export const isRole = (value: unknown): value is Role => roles.some((role) => role === value);
 
 export function needs(act: string | null): Role {
-  if (act === null || act === 'handoff-take' || act === 'handoff-done' || act === 'handoff-fail') return 'viewer';
+  if (act === null || act === 'start' || act === 'handoff-take' || act === 'handoff-done' || act === 'handoff-fail') return 'viewer';
   if (act === 'delete' || act === 'members') return 'admin';
   return 'editor';
 }

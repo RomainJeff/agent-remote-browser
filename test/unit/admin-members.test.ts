@@ -63,6 +63,7 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   enrollment().password.value = 'test-password';
   enrollment().requestSubmit(); await settle();
   check(enrollment().querySelector('textarea').value === 'otpauth://fixture', 'authenticator URI');
+  check(document.querySelector('#enroll [aria-current=step]').textContent.endsWith('Authenticator'), 'current step');
   enrollment().code.value = '000000'; enrollment().requestSubmit(); await settle();
   check(enrollment().innerText.includes('Invalid code'), 'API error');
   enrollment().code.value = '123456'; enrollment().requestSubmit(); await settle();
@@ -95,13 +96,14 @@ browserCase('editor opening settings sees the session without Delete', '#/p/samp
   check(!visible(document.querySelector('#bDelete')), 'delete');
 `);
 
-browserCase('profile admin adds, changes and removes sharing by email', '#/p/sample/sharing', '', `
+browserCase('profile admin adds, changes and removes sharing by email', '#/p/sample/sharing', "members.push({ email: 'other@example.com', role: 'editor' });", `
   const f = document.querySelector('#shareForm');
   f.email.value = 'new@example.com'; f.elements.role.value = 'viewer'; f.requestSubmit(); await settle();
   const select = document.querySelector('[data-member]');
   select.value = 'editor'; select.dispatchEvent(new Event('change')); await settle();
+  check(!document.querySelector('[data-remove="' + email + '"]'), 'no Remove on own row');
   document.querySelector('[data-remove]').click(); await settle();
   check(JSON.stringify(writes) === JSON.stringify([
-    {email:'new@example.com', role:'viewer'}, {email, role:'editor'}, {email, role:null}
+    {email:'new@example.com', role:'viewer'}, {email, role:'editor'}, {email:'other@example.com', role:null}
   ].map(body => ['/api/computers/sample/members', body])), 'membership requests ' + JSON.stringify(writes));
 `);
