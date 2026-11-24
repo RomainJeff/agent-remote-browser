@@ -20,12 +20,22 @@ export const SESSION = '/home/agent/.agent-browser/sessions/agent-default.json';
 export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selectionStart?e.value.slice(e.selectionStart,e.selectionEnd):getSelection().toString())(document.activeElement)";
 /** Admin teach mode, read-only: the accessibility chain (self, then ancestors) of the element at x,y (`at x y`) or of the
  *  focused one (`focus`), over CDP (DevToolsActivePort). Each entry: role, name, tag, type, id, attr (name attribute),
- *  placeholder, and for named ARIA roles `count` (same role, name contains it, case-insensitive) and `exact` (same name). Names are cut at 300.
- *  Prints { url, chain } as JSON. ponytail: first page target only; iframes and shadow DOM are not looked into. */
+ *  placeholder, and how many elements each locator would match: for named ARIA roles `count` (same role, name contains it,
+ *  case-insensitive) and `exact` (same name); `ids` (same id), `names` (same tag and name attribute), `ph` (placeholder
+ *  contains it, case-insensitive). Names are cut at 300. Prints { url, chain } as JSON. Refuses unless exactly one page
+ *  target exists: agent-browser may drive another tab than the one hit-tested.
+ *  ponytail: iframes and shadow DOM are not looked into. */
 export const HIT = `const [mode, x, y] = process.argv.slice(1);
+// Run in the page: elements a #id, tag[name=…] or placeholder locator would match (attributes, not properties).
+const COUNT = (id, tag, name, ph) => {
+  const n = (a, f) => [...document.querySelectorAll('[' + a + ']')].filter((x) => f(x.getAttribute(a), x)).length;
+  return { ids: id ? n('id', (v) => v === id) : undefined, names: name ? n('name', (v, x) => v === name && x.localName === tag) : undefined,
+    ph: ph ? n('placeholder', (v) => v.toLowerCase().includes(ph.toLowerCase())) : undefined };
+};
 (async () => {
   const port = require('fs').readFileSync('${PROFILE}/DevToolsActivePort', 'utf8').split('\\n')[0];
-  const page = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).find((t) => t.type === 'page');
+  const pages = (await (await fetch('http://127.0.0.1:' + port + '/json')).json()).filter((t) => t.type === 'page'), page = pages[0];
+  if (pages.length !== 1) throw Error(pages.length + ' tabs open: Record needs a single tab. Stop the browser to close them, then record again');
   const ws = new WebSocket(page.webSocketDebuggerUrl), wait = new Map(); let n = 0;
   ws.onmessage = (m) => { const d = JSON.parse(m.data); wait.get(d.id)?.(d); };
   await new Promise((r, e) => { ws.onopen = r; ws.onerror = e; });
@@ -45,6 +55,8 @@ export const HIT = `const [mode, x, y] = process.argv.slice(1);
       const d = (await call('DOM.describeNode', { backendNodeId: a.backendDOMNodeId })).node, at = {};
       for (let i = 0; i < (d.attributes || []).length; i += 2) at[d.attributes[i]] = d.attributes[i + 1];
       Object.assign(e, { tag: d.localName, type: at.type, id: at.id, attr: at.name, placeholder: at.placeholder });
+      if (at.id || at.name || at.placeholder) Object.assign(e, (await call('Runtime.evaluate', { returnByValue: true,
+        expression: '(' + COUNT + ')(...' + JSON.stringify([at.id, d.localName, at.name, at.placeholder]) + ')' })).result.value);
     }
     if (e.name && /^[a-z]+$/.test(role) && role !== 'generic' && role !== 'none') {
       names[role] ??= (await call('Accessibility.queryAXTree', { backendNodeId: root, role })).nodes.filter((b) => !b.ignored).map((b) => b.name?.value || '');

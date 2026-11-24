@@ -611,18 +611,30 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     fake.hit.at = { url: 'https://example.com/', chain: [{ role: 'generic', name: '' }, root] };
     const n = abs().length;
     r = await teach('click', { x: 1, y: 1 });
-    assert.deepEqual([r.status, r.json.error], [422, 'No stable locator for this element: try its text or label']);
+    assert.deepEqual([r.status, r.json.error], [422, 'No stable locator matching only this element: try its text or label']);
+    assert.equal(abs().length, n, 'nothing clicked');
+    // Two buttons named delete: every locator matches both, agent-browser would click the first one.
+    fake.hit.at = { url: 'https://example.com/', chain: [{ role: 'button', name: 'Delete', tag: 'button', attr: 'delete', count: 2, exact: 2, names: 2 }, root] };
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 422, 'no locator matching only the clicked element');
     assert.equal(abs().length, n, 'nothing clicked');
 
+    // The failed click left the focus on the previous field: typing (a password) would land there. Refused until a click goes through.
+    r = await teach('type', { text: secret });
+    assert.deepEqual([r.status, r.json.error], [409, 'The last click or typing did not go through, so the focus may be on another field: click the field again']);
+    assert.equal(abs().length, n, 'nothing typed');
+    fake.hit.at = defaults.at;
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
     r = await teach('type', { text: 'me@example.test' });
     assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me@example.test' } }]);
     assert.deepEqual(abs().at(-1), ['find', 'role', 'textbox', 'fill', 'me@example.test', '--name', 'Email']);
     assert.equal((await teach('type', { text: '-rf' })).status, 400, 'a recipe cannot fill a leading dash');
+    assert.equal((await teach('type', { text: 'me' })).status, 409, 'typing off after a failed fill too');
+    assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
 
-    // Password field: the saved login of the page's origin is filled instead; the typed text goes nowhere.
-    fake.hit.focus = { url: 'https://example.com/login?x=1', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
+    // Password field (type attribute in any case): the saved login of the page's origin is filled instead; the typed text goes nowhere.
+    fake.hit.focus = { url: 'https://example.com/login?x=1', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'PassWord' }, root] };
     r = await teach('type', { text: secret });
-    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true } }]);
+    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true }, user: 'fixture' }]);
     assert.deepEqual(abs().at(-3), ['auth', 'login', 'gw-main', '--no-navigate']);
     fake.hit.focus = { url: 'https://www.example.com/', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
     assert.equal((await teach('type', { text: secret })).status, 422, 'no saved login for this origin');
@@ -649,12 +661,23 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /teach/.test(l.tool));
     assert.deepEqual([...new Set(audit.map((l) => l.tool))].sort(), ['admin:teach-click', 'admin:teach-open', 'admin:teach-press', 'admin:teach-read', 'admin:teach-replay', 'admin:teach-type']);
 
+    // A gesture queued behind another while an agent leases the profile: checked once its turn comes.
+    let go!: (v?: unknown) => void;
+    fake.hold = new Promise((r) => go = r);
+    const h = hits().length, first = teach('click', { x: 1, y: 1 });
+    while (hits().length === h) await new Promise((r) => setTimeout(r, 5)); // first one held in HIT
+    const queued = teach('click', { x: 1, y: 1 }), m = abs().length;
+    await new Promise((r) => setTimeout(r, 50)); // reaches pc.serial before the lease
     const leased = await call(tokens.global, 'lease_profile', { profile: 'shop' });
     assert.ok(!leased.error, leased.text);
+    go(); fake.hold = undefined;
+    assert.deepEqual([(await first).status, (await queued).status], [200, 409]);
+    assert.equal(abs().length, m + 1, 'only the gesture that started before the lease ran');
     assert.equal((await teach('click', { x: 1, y: 1 })).status, 409, 'not while an agent holds it');
     assert.equal((await admin('POST', '/api/computers/shop/release', { body: {} })).status, 200);
   } finally {
     fake.hit = defaults;
+    fake.hold = undefined;
   }
 });
 

@@ -10,7 +10,8 @@ import type { Profile } from '../store/store.ts';
 import type { Ctx } from '../server.ts';
 
 /** One entry of HIT's chain: the element first, then its ancestors. */
-export type AX = { role: string; name: string; tag?: string; type?: string; id?: string; attr?: string; placeholder?: string; count?: number; exact?: number };
+export type AX = { role: string; name: string; tag?: string; type?: string; id?: string; attr?: string; placeholder?: string;
+  count?: number; exact?: number; ids?: number; names?: number; ph?: number };
 
 /** Landmarks and containers: past these, a locator would match far more than what was clicked. */
 const STOP = new Set(['RootWebArea', 'main', 'navigation', 'banner', 'contentinfo', 'complementary', 'region', 'form', 'list', 'table', 'dialog']);
@@ -18,35 +19,39 @@ const STOP = new Set(['RootWebArea', 'main', 'navigation', 'banner', 'contentinf
 const SKIP = new Set(['generic', 'none', 'StaticText', 'InlineTextBox', 'LineBreak', 'LabelText', 'paragraph']);
 const FIELDS = new Set(['textbox', 'searchbox', 'combobox', 'spinbutton']);
 const usable = (s?: string): s is string => !!s && s.length <= 200 && !s.startsWith('-');
-const cssOf = (e: AX) => e.id && /^[A-Za-z][\w-]{0,99}$/.test(e.id) ? `#${e.id}`
-  : e.tag && /^[a-z][a-z0-9]{0,20}$/.test(e.tag) && e.attr && /^[\w-]{1,100}$/.test(e.attr) ? `${e.tag}[name="${e.attr}"]` : null;
 
-/** The locator of the first element of the chain that has one. A role + name matching several elements falls back to
- *  an exact name, then to css; if still ambiguous, `matches` says how many (agent-browser takes the first). Null: none. */
-export function locate(chain: AX[]): { locator: Locator; matches?: number } | null {
+/** The locator of the first element of the chain that has one, among those matching that element only (HIT's counts):
+ *  role + name, the same with an exact name, placeholder, css #id, css tag[name=…]. An element whose locators all match
+ *  several elements ends the walk with null: agent-browser would act on the first match, maybe not this one. */
+export function locate(chain: AX[]): Locator | null {
   for (const e of chain) {
     if (STOP.has(e.role)) return null;
     if (SKIP.has(e.role)) continue;
-    const role = e.role === 'image' ? 'img' : e.role, css = cssOf(e);
-    if (usable(e.name) && /^[a-z]{1,30}$/.test(role)) {
-      if (e.count === 1) return { locator: { role, name: e.name } };
-      if (e.exact === 1) return { locator: { role, name: e.name, exact: true } };
-      if (css) return { locator: { css } };
-      return { locator: { role, name: e.name, exact: true }, matches: e.exact };
-    }
-    if (usable(e.placeholder)) return { locator: { placeholder: e.placeholder } };
-    if (css) return { locator: { css } };
+    const role = e.role === 'image' ? 'img' : e.role, named = usable(e.name) && /^[a-z]{1,30}$/.test(role);
+    const all: [Locator | false, number | undefined][] = [
+      [named && { role, name: e.name }, e.count],
+      [named && { role, name: e.name, exact: true }, e.exact],
+      [usable(e.placeholder) && { placeholder: e.placeholder }, e.ph],
+      [!!e.id && /^[A-Za-z][\w-]{0,99}$/.test(e.id) && { css: `#${e.id}` }, e.ids],
+      [!!e.tag && /^[a-z][a-z0-9]{0,20}$/.test(e.tag) && !!e.attr && /^[\w-]{1,100}$/.test(e.attr) && { css: `${e.tag}[name="${e.attr}"]` }, e.names],
+    ];
+    const has = all.filter(([l]) => l);
+    if (has.length) return has.find(([, n]) => n === 1)?.[0] || null;
   }
   return null;
 }
 
 type Reply = [number, Record<string, unknown>];
-const NONE: Reply = [422, { error: 'No stable locator for this element: try its text or label' }];
+const NONE: Reply = [422, { error: 'No stable locator matching only this element: try its text or label' }];
+const LOST: Reply = [409, { error: 'The last click or typing did not go through, so the focus may be on another field: click the field again' }];
 const KEYS = ['Enter', 'Tab', 'Escape'];
 
 /** teach-* actions. Caller holds pc.serial(id) and checked the admin may drive this browser. */
 export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
   const { computers: pc, driver, store } = ctx;
+  /** Profiles where the last teach-click or teach-type failed: the focus stayed where it was, so typed text (a password)
+   *  would go to the previous field. teach-type is refused until a click or an open goes through. */
+  const lost = new Set<ProfileId>();
 
   async function hit(id: ProfileId, args: string[]) {
     await pc.ensure(id);
@@ -68,12 +73,12 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
       const { chain } = await hit(id, ['at', String(b.x), String(b.y)]), l = locate(chain);
       if (!l) return NONE;
       // field: a click that only focuses a field, dropped by the page when a fill or a login follows.
-      return run(id, { click: l.locator }, { matches: l.matches, field: FIELDS.has(chain.find((e) => !SKIP.has(e.role))?.role ?? '') });
+      return run(id, { click: l }, { field: FIELDS.has(chain.find((e) => !SKIP.has(e.role))?.role ?? '') });
     }
     if (act === 'teach-type') {
       if (typeof b.text !== 'string' || !b.text || b.text.length > 500) return [400, { error: 'Text: 1 to 500 characters' }];
       const { url, chain } = await hit(id, ['focus']);
-      if (chain[0]?.type === 'password') {
+      if (chain[0]?.type?.toLowerCase() === 'password') { // the attribute as written: Chrome reads it case-insensitively
         // Never recorded, never sent to the page: the saved login of this origin replaces what was typed.
         const origin = URL.parse(url)?.origin, logins = p.logins || {};
         const site = Object.keys(logins).find((s) => URL.parse(logins[s].url)?.origin === origin);
@@ -81,10 +86,11 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
         const c = logins[site];
         if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return [400, { error: 'Login URL is outside the allowlist' }];
         await fillLogin(pc, id, site, c, store.decryptLogin(id, site, c), true);
-        return [200, { step: { login: site, if_needed: true } }];
+        // user: the page drops the username fill it replaces (shown in Logins already).
+        return [200, { step: { login: site, if_needed: true }, user: c.username }];
       }
       const l = locate(chain);
-      return l ? run(id, { fill: l.locator, value: b.text }, { matches: l.matches }) : NONE;
+      return l ? run(id, { fill: l, value: b.text }) : NONE;
     }
     if (act === 'teach-press') return KEYS.includes(b.key) ? run(id, { press: b.key }) : [400, { error: `Keys: ${KEYS.join(', ')}` }];
     if (act === 'teach-open') {
@@ -105,7 +111,13 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
   }
 
   return async (a: string, id: ProfileId, p: Profile, b: Record<string, any>): Promise<Reply> => {
-    try { return await act(a, id, p, b); }
-    catch (e) { if (e instanceof BrowserError) return [422, { error: e.message.slice(0, 300) }]; throw e; }
+    if (a === 'teach-type' && lost.has(id)) return LOST;
+    let code = 500;
+    try { const r = await act(a, id, p, b); code = r[0]; return r; }
+    catch (e) { if (e instanceof BrowserError) return [code = 422, { error: e.message.slice(0, 300) }]; throw e; }
+    finally {
+      if ((a === 'teach-click' || a === 'teach-type') && code !== 200) lost.add(id);
+      else if ((a === 'teach-click' || a === 'teach-open') && code === 200) lost.delete(id);
+    }
   };
 }
