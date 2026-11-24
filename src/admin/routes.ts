@@ -6,11 +6,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, type ProfileId } from '../policy.ts';
+import { windowBudget, can, canDrive, isRole, type Role, urlAllowed, localRequest, validId, cleanAllow, sitesOf, type ProfileId } from '../policy.ts';
 import { badPlaybook, describe, type Profile } from '../store/store.ts';
 import { readJson, send } from '../http.ts';
 import { tx } from '../store/db.ts';
-import { requireAdmin, scopedProfile } from '../auth/guards.ts';
+import { requireAdmin, scopedProfile, toHeaders } from '../auth/guards.ts';
+import { AccountError, listUsers, normalizedEmail, requireAvailable, setAdmin } from '../auth/accounts.ts';
+import { finishInvite, issue, openInvites, revoke, startInvite } from '../auth/invites.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
 import { log, errCode } from '../audit.ts';
@@ -64,7 +66,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
   async function gate(req: IncomingMessage, pub: boolean) {
     const email = await reach(req, pub);
     if (email === false) return false;
-    const s = await requireAdmin(authOf(pub), req.headers);
+    const s = await requireAdmin(db, authOf(pub), req.headers);
     return s && (email === undefined || s.user.email.toLowerCase() === email) ? s : null;
   }
 
@@ -144,6 +146,15 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     store.deleteProfile(id); // cascades to its logins, leases, OAuth grants and API keys
   }
 
+  const inviteBudgets = new Map<string, ReturnType<typeof windowBudget>>();
+  let clearBudgetsAt = 0;
+  function allowInviteAttempt(ip: string) {
+    const now = Date.now();
+    if (now >= clearBudgetsAt) { inviteBudgets.clear(); clearBudgetsAt = now + 60_000; }
+    if (!inviteBudgets.has(ip)) inviteBudgets.set(ip, windowBudget(10, 60_000));
+    return inviteBudgets.get(ip)!(now);
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse, pub: boolean) {
     try {
       res.setHeader('cache-control', 'no-store');
@@ -156,7 +167,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (path === '/' || AUTH_API.has(path)) {
         if (await reach(req, pub) === false) return send(res, 403, { error: 'forbidden' });
         if (path !== '/') {
-          const verify = FAILURE[path] === 'totp', s = verify ? await requireAdmin(authOf(pub), req.headers) : null;
+          const verify = FAILURE[path] === 'totp', s = verify ? await requireAdmin(db, authOf(pub), req.headers) : null;
           // Trusted devices are an admin-port convenience: never issued on the public listener (nor read there: server.ts).
           const body = pub && post ? { ...(await readJson(req)), trustDevice: false } : undefined;
           const r = await callAuth(authOf(pub), baseOf(pub), req, path, body), kind = FAILURE[path];
@@ -167,6 +178,18 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         const nonce = randomBytes(18).toString('base64'), ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
         res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(html, 'utf8').replace('<script>', `<script nonce="${nonce}">`));
+      }
+      if (post && (path === '/api/invite/start' || path === '/api/invite/finish')) {
+        const email = await reach(req, pub);
+        if (email === false) return send(res, 403, { error: 'forbidden' });
+        if (!allowInviteAttempt(String(req.headers['cf-connecting-ip']))) return send(res, 429, { error: 'Too many attempts, wait a minute' });
+        const body = await readJson(req) || {};
+        if (path === '/api/invite/start') {
+          const { totpURI, cookies } = await startInvite(db, authOf(pub), body.token, body.password, email);
+          res.setHeader('set-cookie', cookies);
+          return send(res, 200, { totpURI });
+        }
+        return send(res, 200, await finishInvite(db, authOf(pub), toHeaders(req.headers), body.token, body.code, email));
       }
       const session = await gate(req, pub);
       if (session === false) return send(res, 403, { error: 'forbidden' });
@@ -182,9 +205,37 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (r.ok) return send(res, 200, { stepUpRemainingS: stepUpLeft(sid) });
         count('arb_auth_failures_total', { kind: r.status === 429 ? 'rate_limited' : 'totp' });
         if (r.status === 429) return send(res, 429, { error: 'Too many attempts, wait a minute' });
-        return send(res, 401, await requireAdmin(authOf(pub), req.headers) ? { stepUp: true, error: 'Invalid code' } : { error: 'Sign in first' });
+        return send(res, 401, await requireAdmin(db, authOf(pub), req.headers) ? { stepUp: true, error: 'Invalid code' } : { error: 'Sign in first' });
       }
       const stale = () => stepUpLeft(sid) === 0 && (send(res, 401, { stepUp: true, error: 'Confirm with a 2FA code first' }), true);
+      if (path === '/api/users' || path.startsWith('/api/users/')) {
+        if (!db.prepare('SELECT 1 FROM admins WHERE user_id = ?').get(session.user.id)) return send(res, 403, { error: 'forbidden' });
+        if (req.method === 'GET' && path === '/api/users') return send(res, 200, listUsers(db));
+        if (req.method === 'GET' && path === '/api/users/invites') return send(res, 200, openInvites(db));
+        if (post) {
+          if (stale()) return;
+          const record = (email: string, action: string) => audit({ by: session.user.email, agent: email, tool: 'admin:' + action, ok: true });
+          const match = path.match(/^\/api\/users\/invites\/([^/]+)\/revoke$/);
+          if (match) {
+            record(revoke(db, match[1]), 'invite_revoke');
+            return send(res, 200, { revoked: true });
+          }
+          if (path === '/api/users/admin' || path === '/api/users/invite') {
+            const b = await readJson(req) || {}, email = normalizedEmail(b.email);
+            if (typeof b.admin !== 'boolean' && !(path === '/api/users/invite' && b.admin === undefined))
+              return send(res, 400, { error: 'admin must be a boolean' });
+            if (path === '/api/users/admin') {
+              tx(db, () => setAdmin(db, email, b.admin));
+              record(email, b.admin ? 'admin_grant' : 'admin_revoke');
+              return send(res, 200, { admin: b.admin });
+            }
+            const invite = issue(db, email, b.admin ?? false, session.user.id, baseOf(pub));
+            record(email, 'invite');
+            return send(res, 201, invite);
+          }
+        }
+        return send(res, 404, { error: 'not found' });
+      }
       if (path === '/api/computers') return send(res, 200, await listComputers(session.user.id));
       if (path === '/api/profiles' && post) {
         const { id, allow } = (await readJson(req)) || {}, a = cleanAllow(allow);
@@ -239,6 +290,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       if (act === 'members') {
         if (typeof body.email !== 'string' || !(body.role === null || isRole(body.role)))
           return send(res, 400, { error: 'Provide an email and a role (viewer, editor, admin or null)' });
+        requireAvailable(db, body.email.trim().toLowerCase());
         const user = db.prepare('SELECT id FROM user WHERE email = ?').get(body.email.trim().toLowerCase());
         if (!user) return send(res, 404, { error: 'unknown user' });
         if (!store.setRole(id, user.id as string, body.role)) return send(res, 409, { error: 'Profile needs at least one admin' });
@@ -358,6 +410,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       }
       if (act === 'delete') { await pc.serial(id, () => deleteProfile(id)); return send(res, 200, { deleted: id }); }
     } catch (e) {
+      if (e instanceof AccountError) return send(res, e.status, { error: e.message });
       // Closed fields only (see log): the profile and action from the path, an error code, never the message.
       const m = req.url!.match(/^\/api\/computers\/([^/?]+)(?:\/([a-z-]+))?/), raw = m && decodeURIComponent(m[1]);
       log('error', 'admin operation failed', { profile: validId(raw) ? raw : undefined, tool: m ? `admin:${m[2] || req.method}` : req.url!.split('?')[0].slice(0, 40), code: errCode(e), ok: false });

@@ -85,11 +85,11 @@ export function openStore(db: DatabaseSync, keyFile: string) {
     createProfile: (id: ProfileId, allow: string[], userId: string | null = null) => tx(db, () => {
       run('INSERT INTO profiles (id, allow_json, created_at) VALUES (?, ?, ?)', id, JSON.stringify(allow), Date.now());
       if (userId !== null) run("INSERT INTO profile_members VALUES (?, ?, 'admin')", id, userId);
-      else if (!run("INSERT INTO profile_members SELECT ?, user_id, 'admin' FROM admins", id).changes)
+      else if (!run("INSERT INTO profile_members SELECT ?, user_id, 'admin' FROM admins JOIN user ON user.id = admins.user_id WHERE email NOT IN pending_emails", id).changes)
         throw Error('No gateway admin');
     }),
     setRole: (id: ProfileId, userId: string, role: Role | null) => tx(db, () => {
-      if (role !== 'admin' && !one("SELECT 1 FROM profile_members WHERE profile = ? AND role = 'admin' AND user_id <> ?", id, userId))
+      if (role !== 'admin' && !one("SELECT 1 FROM profile_members JOIN user ON user.id = user_id WHERE profile = ? AND role = 'admin' AND user_id <> ? AND email NOT IN pending_emails", id, userId))
         return false;
       if (role === null) run('DELETE FROM profile_members WHERE profile = ? AND user_id = ?', id, userId);
       else run(`INSERT INTO profile_members VALUES (?, ?, ?)

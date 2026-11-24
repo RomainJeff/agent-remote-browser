@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { hash, parseProfileId, type Principal } from '../policy.ts';
 import type { Ctx } from '../server.ts';
 import type { Store } from '../store/store.ts';
+import { pendingEmail } from './accounts.ts';
 import { PREFIX, type Auth } from './better-auth.ts';
 
 export function toHeaders(h: IncomingHttpHeaders) {
@@ -13,9 +14,9 @@ export function toHeaders(h: IncomingHttpHeaders) {
 }
 
 /** The admin session, only once TOTP is enrolled (sign-in creates no session before the TOTP step then). */
-export async function requireAdmin(auth: Auth, headers: IncomingHttpHeaders) {
+export async function requireAdmin(db: DatabaseSync, auth: Auth, headers: IncomingHttpHeaders) {
   const s = await auth.api.getSession({ headers: toHeaders(headers) }).catch(() => null);
-  return s?.user.twoFactorEnabled ? s : null;
+  return s?.user.twoFactorEnabled && !pendingEmail(db, s.user.email) ? s : null;
 }
 
 export function scopedProfile(store: Store, scope: unknown, user: string) {
