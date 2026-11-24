@@ -1,4 +1,4 @@
-// Operator CLI: rotate-login-key, backup-db and admin, on keys generated here.
+// Operator CLI: rotate-login-key, backup-db, user enrollment and API keys, on keys generated here.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, renameSync, statSync } from 'node:fs';
@@ -90,20 +90,20 @@ test('backup-db: consistent copy while the database is open and written, 0600, n
 
 /** Answers the CLI prompts like a person with an authenticator app: password, then the code for the printed URI. */
 const asker = (t: ReturnType<typeof fresh>, password: string, code?: (uri: string) => string) => async (prompt: string) =>
-  prompt.startsWith('Password') ? password : (code ?? totp)(t.lines.find((l) => l.startsWith('otpauth://'))!);
+  prompt.startsWith('Password') ? password : (code ?? totp)(t.lines.findLast((l) => l.startsWith('otpauth://'))!);
 const backups = (lines: string[]) => lines.filter((l) => /^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l));
 const count = (t: ReturnType<typeof fresh>, sql: string) => {
   const db = openDb(join(t.env.DATA_DIR, 'arb.db'));
   try { return (db.prepare(sql).get() as { n: number }).n; } finally { db.close(); }
 };
 
-test('admin create: only the TOTP URI and backup codes are printed; one admin per gateway; no session left', async () => {
+test('admin create: only the TOTP URI and backup codes are printed; bootstrap only; no session left', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url');
-  assert.equal(await t.run(['admin', 'create', 'Admin@Example.test'], asker(t, password)), 0);
+  assert.equal(await t.run(['admin', 'create', 'Admin@Example.com'], asker(t, password)), 0);
   const uri = t.lines.find((l) => l.startsWith('otpauth://totp/'))!;
   assert.match(uri, /secret=[A-Z2-7]+/);
   assertNoSecret(t.lines, [password, t.env.BETTER_AUTH_SECRET]);
-  assert.equal(t.lines.at(-1), 'Admin admin@example.test ready: sign in with the password and a TOTP code.');
+  assert.equal(t.lines.at(-1), 'Admin admin@example.com ready: sign in with the password and a TOTP code.');
   assert.equal(count(t, 'SELECT count(*) n FROM user WHERE twoFactorEnabled = 1'), 1);
   assert.equal(count(t, 'SELECT count(*) n FROM session'), 0);
   const secret = new URL(uri).searchParams.get('secret')!;
@@ -112,15 +112,15 @@ test('admin create: only the TOTP URI and backup codes are printed; one admin pe
   assert.equal(codes.length, 10);
   assert.equal(count(t, `SELECT count(*) n FROM twoFactor WHERE backupCodes LIKE '%${codes[0]}%'`), 0, 'backup codes encrypted at rest');
 
-  await assert.rejects(t.run(['admin', 'create', 'admin@example.test'], asker(t, password)), /exists: use admin reset-2fa/);
-  await assert.rejects(t.run(['admin', 'create', 'other@example.test'], asker(t, password)), /one admin per gateway/);
+  await assert.rejects(t.run(['admin', 'create', 'admin@example.com'], asker(t, password)), /use user create/);
+  await assert.rejects(t.run(['admin', 'create', 'other@example.com'], asker(t, password)), /use user create/);
   await assert.rejects(t.run(['admin', 'create', 'not-an-email'], asker(t, password)), /Invalid email/);
 });
 
 test('admin create: short password or wrong code refused', async () => {
   const t = fresh();
-  await assert.rejects(t.run(['admin', 'create', 'a@example.test'], asker(t, 'short')), /12 to 128/);
-  await assert.rejects(t.run(['admin', 'create', 'a@example.test'],
+  await assert.rejects(t.run(['admin', 'create', 'a@example.com'], asker(t, 'short')), /12 to 128/);
+  await assert.rejects(t.run(['admin', 'create', 'a@example.com'],
     asker(t, randomBytes(12).toString('base64url'), (u) => String((Number(totp(u)) + 1) % 1e6).padStart(6, '0'))), /Code rejected/);
   assert.equal(backups(t.lines).length, 0, 'no backup codes before the code checks out');
   assert.equal(count(t, 'SELECT count(*) n FROM user WHERE twoFactorEnabled = 1'), 0, 'not an admin until the code checks out');
@@ -128,17 +128,58 @@ test('admin create: short password or wrong code refused', async () => {
 
 test('admin reset-2fa: new password and TOTP secret, sessions dropped', async () => {
   const t = fresh(), first = randomBytes(12).toString('base64url'), second = randomBytes(12).toString('base64url');
-  await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.test'], asker(t, first)), /No admin/);
-  assert.equal(await t.run(['admin', 'create', 'a@example.test'], asker(t, first)), 0);
+  await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.com'], asker(t, first)), /No user/);
+  assert.equal(await t.run(['admin', 'create', 'a@example.com'], asker(t, first)), 0);
   const before = t.lines.find((l) => l.startsWith('otpauth://')), oldCodes = backups(t.lines);
   t.lines.length = 0;
-  assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.test'], asker(t, second)), 0);
+  assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.com'], asker(t, second)), 0);
   const after = t.lines.find((l) => l.startsWith('otpauth://'));
   assert.ok(after && after !== before, 'new TOTP secret');
   assert.equal(backups(t.lines).filter((c) => oldCodes.includes(c)).length, 0, 'new backup codes');
   assertNoSecret(t.lines, [first, second]);
   assert.equal(count(t, 'SELECT count(*) n FROM twoFactor'), 1);
   assert.equal(count(t, 'SELECT count(*) n FROM session'), 0);
+});
+
+test('user roles: bootstrap is optional, enrollment is unique, and the last admin cannot be demoted or deleted', async () => {
+  const t = fresh(), ask = asker(t, randomBytes(12).toString('base64url'));
+  const member = 'member@example.com', admin = 'admin@example.com';
+  assert.equal(await t.run(['user', 'create', member], ask), 0);
+  await assert.rejects(t.run(['admin', 'create', admin], ask), /use user create/);
+  await assert.rejects(t.run(['user', 'create', member.toUpperCase(), '--admin'], ask), /exists/);
+  assert.equal(await t.run(['user', 'create', admin, '--admin'], ask), 0);
+  await assert.rejects(t.run(['user', 'admin', admin, 'off']), /last gateway admin/);
+  await assert.rejects(t.run(['user', 'remove', admin]), /last gateway admin/);
+  t.lines.length = 0;
+  assert.equal(await t.run(['user', 'list']), 0);
+  assert.equal(t.lines.length, 2);
+  assert.match(t.lines[0], /^admin@example\.com\tadmin=yes\t2fa=yes\tcreated=\d{4}-\d\d-\d\d/);
+  assert.match(t.lines[1], /^member@example\.com\tadmin=no\t2fa=yes\tcreated=\d{4}-\d\d-\d\d/);
+  assert.equal(await t.run(['admin', 'reset-2fa', member], ask), 0);
+  assert.equal(await t.run(['user', 'admin', member, 'on']), 0);
+  assert.equal(await t.run(['user', 'admin', admin, 'off']), 0);
+  assert.equal(await t.run(['user', 'remove', admin]), 0);
+  await assert.rejects(t.run(['user', 'remove', member]), /last gateway admin/);
+});
+
+test('key ownership: default to the first admin, honor --as, and remove only keys belonging to the deleted user', async () => {
+  const t = fresh(), ask = asker(t, randomBytes(12).toString('base64url'));
+  const member = 'member@example.com', admin = 'admin@example.com';
+  await t.run(['user', 'create', member], ask);
+  await t.run(['user', 'create', admin, '--admin'], ask);
+  const makeKey = async (name: string, ...options: string[]) => {
+    const file = join(t.dir, name);
+    assert.equal(await t.run(['key', 'create', '--global', file, ...options]), 0);
+    assertNoSecret(t.lines, [readFileSync(file, 'utf8')]);
+    return t.lines.at(-1)!.match(/^Key (\S+) /)![1];
+  };
+  const defaultKey = await makeKey('default');
+  const memberKey = await makeKey('member', '--as', member.toUpperCase());
+  const secondMemberKey = await makeKey('another', '2', '--as', member);
+  await t.run(['user', 'remove', member]);
+  for (const key of [memberKey, secondMemberKey]) await assert.rejects(t.run(['key', 'revoke', key]), /No key/);
+  assert.equal(await t.run(['key', 'revoke', defaultKey]), 0);
+  await assert.rejects(t.run(['key', 'create', '--global', join(t.dir, 'missing'), '--as', member]), /No user/);
 });
 
 test('unknown command prints usage, exit code 2', async () => {
@@ -150,9 +191,9 @@ test('unknown command prints usage, exit code 2', async () => {
 test('key create: profile-scoped key in a new 0600 file, never printed, works, expires, revocable', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url'), file = join(t.dir, 'key');
   t.withStore((s) => s.createProfile(parseProfileId('shop')!, ['example.com']));
-  await assert.rejects(t.run(['key', 'create', 'shop', file]), /No admin yet/);
+  await assert.rejects(t.run(['key', 'create', 'shop', file]), /No gateway admin/);
   assert.equal(existsSync(file), false);
-  assert.equal(await t.run(['admin', 'create', 'a@example.test'], asker(t, password)), 0);
+  assert.equal(await t.run(['admin', 'create', 'a@example.com'], asker(t, password)), 0);
   await assert.rejects(t.run(['key', 'create', 'nope', file]), /No profile nope/);
   await assert.rejects(t.run(['key', 'create', 'shop', file, '400']), /Days: 1 to 365/);
   t.lines.length = 0;

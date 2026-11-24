@@ -2,13 +2,13 @@
 // Neither ever receives tool arguments, secrets, tokens or page content.
 import { appendFileSync, readFileSync, existsSync } from 'node:fs';
 
-export interface AuditEntry { agent: string; tool: string; ok: boolean; ms?: number; via?: 'global'; steps?: number; failed_at?: number }
+export interface AuditEntry { agent: string; by?: string; tool: string; ok: boolean; ms?: number; via?: 'global'; steps?: number; failed_at?: number }
 export type Audit = ReturnType<typeof createAudit>;
 
 export function createAudit(file: string) {
   // Persist only fields chosen by the gateway: callers may pass more (e.g. OAuth args), they are dropped here.
-  const write = ({ agent, tool, ok, ms, via, steps, failed_at }: AuditEntry) =>
-    appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), agent, tool, ok, ms, via, steps, failed_at }) + '\n', { mode: 0o600 });
+  const write = ({ agent, by, tool, ok, ms, via, steps, failed_at }: AuditEntry) =>
+    appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), agent, by, tool, ok, ms, via, steps, failed_at }) + '\n', { mode: 0o600 });
   // ponytail: reads the whole file; tail it when it grows past a few MB.
   const read = (): (AuditEntry & { ts: string })[] =>
     existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
