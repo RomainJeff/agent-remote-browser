@@ -595,7 +595,14 @@ test('pb_ tools: a profile token gets one root tool per playbook with a recipe, 
 });
 
 test('teach: each admin gesture runs as a semantic step and comes back as one; a password field becomes the saved login', async () => {
-  const teach = (a: string, body: unknown) => admin('POST', `/api/computers/shop/teach-${a}`, { body });
+  // As the page does: its recording id (rec) on every call, a seq on each gesture that may move the focus, typing after
+  // the last one; explicit values in body win.
+  let S = 0;
+  const teach = (a: string, body: Record<string, unknown>) => {
+    const b: Record<string, unknown> = { rec: 'R', ...(a === 'type' ? { after: S } : a === 'read' ? {} : { seq: ++S }), ...body };
+    if (typeof b.seq === 'number') S = b.seq;
+    return admin('POST', `/api/computers/shop/teach-${a}`, { body: b });
+  };
   const abs = () => calls('exec').filter((c) => c.argv![0] === 'agent-browser').map((c) => c.argv!.slice(1 + AB_FLAGS.length));
   const hits = () => calls('exec').filter((c) => c.argv![0] === 'node').map((c) => c.argv!.slice(3));
   const defaults = { ...fake.hit }, root = { role: 'RootWebArea', name: 'Fake page' };
@@ -634,7 +641,7 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     // Password field (type attribute in any case): the saved login of the page's origin is filled instead; the typed text goes nowhere.
     fake.hit.focus = { url: 'https://example.com/login?x=1', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'PassWord' }, root] };
     r = await teach('type', { text: secret });
-    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true }, user: 'fixture' }]);
+    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true } }]);
     assert.deepEqual(abs().at(-3), ['auth', 'login', 'gw-main', '--no-navigate']);
     fake.hit.focus = { url: 'https://www.example.com/', chain: [{ role: 'textbox', name: '', tag: 'input', type: 'password' }, root] };
     assert.equal((await teach('type', { text: secret })).status, 422, 'no saved login for this origin');
@@ -653,15 +660,25 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     k = abs().length;
     r = await teach('type', { text: secret, after: 3 });
     assert.deepEqual([r.status, r.json.error, abs().length], [409, MOVED, k]);
-    // Same field: filled; form (its form's node) lets the page tell a username fill of this login form from another one.
+    // Same field: filled.
     assert.equal((await teach('click', { x: 1, y: 1, seq: 4 })).status, 200);
-    fake.hit.focus = { ...email, form: 7 };
+    fake.hit.focus = email;
     r = await teach('type', { text: 'me', after: 4 });
-    assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me' }, form: 7 }]);
+    assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me' } }]);
+    // Another recording (a second admin tab) numbers its gestures from 1 too: its click makes this one's text stale.
+    assert.equal((await teach('click', { x: 1, y: 1, seq: 4, rec: 'R2' })).status, 200);
+    k = abs().length;
+    assert.deepEqual([(await teach('type', { text: secret, after: 4 })).status, abs().length], [409, k]);
+    assert.equal((await teach('type', { text: secret, after: 4, rec: undefined })).status, 409, 'no recording id: refused');
+    assert.equal((await teach('click', { x: 1, y: 1, seq: 4 })).status, 200);
     // The live element is a password input (its type property, through shadow roots), whatever the AX chain says: the login.
-    fake.hit.focus = { url: 'https://example.com/login', chain: [{ role: 'textbox', name: 'Password', tag: 'input', count: 1, exact: 1 }, root], live: 'password', form: 7 };
+    fake.hit.focus = { url: 'https://example.com/login', chain: [{ role: 'textbox', name: 'Password', tag: 'input', count: 1, exact: 1 }, root], live: 'password' };
     r = await teach('type', { text: secret, after: 4 });
-    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true }, user: 'fixture', form: 7 }]);
+    assert.deepEqual([r.status, r.json], [200, { step: { login: 'main', if_needed: true } }]);
+    // The login submitted and the next page focused another field: typing goes there, not refused for the clicked one.
+    fake.hit.focus = { url: 'https://example.com/home', chain: [{ role: 'textbox', name: 'Name', tag: 'input', count: 1, exact: 1 }, root] };
+    r = await teach('type', { text: 'Ada', after: 4 });
+    assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Name' }, value: 'Ada' } }]);
     fake.hit.focus = { ...email, live: 'frame' };
     assert.equal((await teach('type', { text: secret, after: 4 })).status, 422, 'typing inside a frame: not recorded');
 
@@ -676,7 +693,7 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
       r = await teach('type', { text: secret, after: 5 });
       assert.deepEqual([r.status, r.json, abs().length], [200, { pick: [{ site: 'alt', username: 'other' }, { site: 'main', username: 'fixture' }] }, k]);
       r = await teach('type', { login: 'alt', after: 5 });
-      assert.deepEqual([r.status, r.json], [200, { step: { login: 'alt', if_needed: true }, user: 'other' }]);
+      assert.deepEqual([r.status, r.json], [200, { step: { login: 'alt', if_needed: true } }]);
       assert.ok(abs().slice(k).some((a) => a.join(' ') === 'auth login gw-alt --no-navigate'), 'the picked login filled');
       assert.equal((await teach('type', { login: 'nope', after: 5 })).status, 400);
       assert.equal((await teach('click', { x: 1, y: 1, seq: 6 })).status, 200);
@@ -705,6 +722,9 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     assert.deepEqual(abs().slice(-2), [['open', 'https://example.com/acme'], ['get', 'text', 'body']]);
     assert.deepEqual([(await teach('replay', { body })).json.error], ['Missing params: ws']);
     assert.equal((await teach('replay', { body: body.replace('example.com', 'example.org'), params: { ws: 'a' } })).json.ok, false, 'allowlist');
+    // That replay stopped partway: the focus is wherever it stopped, typing after it is refused.
+    k = abs().length;
+    assert.deepEqual([(await teach('type', { text: secret })).status, abs().length], [409, k]);
 
     const audit = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /teach/.test(l.tool));
     assert.deepEqual([...new Set(audit.map((l) => l.tool))].sort(), ['admin:teach-click', 'admin:teach-open', 'admin:teach-press', 'admin:teach-read', 'admin:teach-replay', 'admin:teach-type']);
