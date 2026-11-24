@@ -18,7 +18,7 @@ import { SESSION, SELECTION } from '../runner/protocol.ts';
 import { fillLogin, WrongOrigin } from '../mcp/tools.ts';
 import type { Ctx } from '../server.ts';
 
-const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
+const ACTIONS = 'start|stop|open|paste|copy|config|login-save|login-test|login-fill|login-delete|header-save|header-delete|playbook-save|playbook-delete|release|extend|delete|handoff-take|handoff-done|handoff-fail';
 // Better Auth endpoints the admin page calls itself (everything else under /api/auth stays unreachable here).
 const VERIFY = { code: '/api/auth/two-factor/verify-totp', backupCode: '/api/auth/two-factor/verify-backup-code' };
 const FAILURE: Record<string, string> = { '/api/auth/sign-in/email': 'password', [VERIFY.code]: 'totp', [VERIFY.backupCode]: 'totp' };
@@ -26,7 +26,7 @@ const AUTH_API = new Set(['/api/auth/sign-in/email', VERIFY.code, VERIFY.backupC
 // Step-up: these need a second factor proven in the last 15 minutes (sign-in TOTP counts, a trusted device does not).
 const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
 // Playbooks too: an agent follows them as trusted instructions.
-const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'playbook-save', 'playbook-delete', 'delete']);
+const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete']);
 const html = new URL('./admin.html', import.meta.url).pathname;
 const KEY_DAYS: Record<string, number> = { '30d': 30, '90d': 90, '1y': 365 };
 /** API key lifetime in seconds: 30d / 90d / 1y, or an ISO date 1 to 365 days ahead (the api-key plugin's bounds).
@@ -126,6 +126,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
       // Values never leave the gateway: names and metadata only. Same for login passwords.
       logins: Object.entries(p.logins || {}).map(([site, c]) => ({ site, url: c.url, username: c.username,
         lastTestedAt: c.lastTestedAt ? new Date(c.lastTestedAt).toISOString() : null, lastResult: c.lastResult ?? null })),
+      headers: store.headers(id),
       playbooks: store.playbooks(id).map((b) => ({ ...b, description: describe(b.body), updated: new Date(b.updated).toISOString() })),
       cookies: session.cookies.map(({ value, ...c }) => c),
       storage: (session.origins || []).map((o) => ({ origin: o.origin, localStorageKeys: (o.localStorage || []).length })),
@@ -287,6 +288,15 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!Object.hasOwn(p.logins, body.site)) return send(res, 404, { error: 'unknown site' });
         store.deleteLogin(id, body.site);
         return send(res, 200, { deleted: body.site });
+      }
+      // Custom headers: write-only like passwords. Saving the same name again replaces the value.
+      if (act === 'header-save') {
+        try { return send(res, 200, { saved: store.saveHeader(id, p.allow, body.origin, body.name, body.value) }); }
+        catch (e) { return send(res, 400, { error: (e as Error).message }); }
+      }
+      if (act === 'header-delete') {
+        if (typeof body.origin !== 'string' || typeof body.name !== 'string' || !store.deleteHeader(id, body.origin, body.name)) return send(res, 404, { error: 'unknown header' });
+        return send(res, 200, { deleted: body.name.toLowerCase() });
       }
       if (act === 'playbook-save') {
         const bad = badPlaybook(body.name, body.body);

@@ -348,6 +348,40 @@ test('saved login: password only reaches the host through stdin', async () => {
   assert.ok(!JSON.stringify(details.json).includes(password));
 });
 
+test('custom headers: admin saves them (names listed, values never), open and login of that origin send them', async () => {
+  const value = randomBytes(12).toString('hex'), json = JSON.stringify({ 'x-bypass': value });
+  const save = (body: object) => admin('POST', '/api/computers/shop/header-save', { body });
+  assert.equal((await save({ origin: 'https://example.org', name: 'x-bypass', value })).status, 400, 'off the allowlist');
+  assert.equal((await save({ origin: 'https://example.com', name: 'Host', value })).status, 400, 'reserved');
+  const saved = await save({ origin: 'https://example.com/', name: 'X-Bypass', value });
+  assert.deepEqual([saved.status, saved.json], [200, { saved: { origin: 'https://example.com', name: 'x-bypass' } }]);
+  const details = await admin('GET', '/api/computers/shop');
+  assert.deepEqual(details.json.headers, [{ origin: 'https://example.com', name: 'x-bypass' }]);
+
+  fake.calls = [];
+  const sent = () => calls('exec').map((c) => c.argv!.slice(AB_FLAGS.length + 1)).filter((a) => a[0] !== 'wait');
+  await call(tokens.shop, 'open', { url: 'https://example.com/a' });
+  await call(tokens.shop, 'open', { url: 'https://www.example.com/' });
+  assert.deepEqual(sent(), [['open', 'https://example.com/a', '--headers', json], ['open', 'https://www.example.com/']], 'only that origin');
+  // auth login navigates without them: the gateway opens the login page first, then fills it in place.
+  fake.calls = [];
+  const r = await call(tokens.shop, 'login', { site: 'main' });
+  assert.ok(!r.error, r.text);
+  assert.deepEqual(sent().filter((a) => a[0] === 'open' || a[1] === 'login'),
+    [['open', 'https://example.com/login', '--headers', json], ['auth', 'login', 'gw-main', '--no-navigate']]);
+
+  const del = (name: string) => admin('POST', '/api/computers/shop/header-delete', { body: { origin: 'https://example.com', name } });
+  assert.deepEqual((await del('X-Bypass')).json, { deleted: 'x-bypass' });
+  assert.equal((await del('x-bypass')).status, 404);
+  fake.calls = [];
+  await call(tokens.shop, 'open', { url: 'https://example.com/a' });
+  assert.deepEqual(sent(), [['open', 'https://example.com/a']]);
+
+  assert.ok(!JSON.stringify(details.json).includes(value), 'admin API');
+  assert.ok(!readFileSync(f.audit, 'utf8').includes(value), 'audit');
+  assert.ok(!rawDb().includes(value), 'database');
+});
+
 test('takeover clipboard: paste inserts text, leading dashes never read as flags; copy reads the selection', async () => {
   const paste = (text: unknown) => admin('POST', '/api/computers/shop/paste', { body: { text } });
   for (const bad of ['', 'x'.repeat(5001), 42]) assert.equal((await paste(bad)).status, 400, String(bad).slice(0, 10));

@@ -595,6 +595,16 @@ function showProfile(id, t) {
         <div class="alert a-warn"><p>Saving restarts this profile's browser: the DNS list is set at launch. An agent in the middle of a task loses its page.</p></div>
         <div class="row"><button type="button" class="btn btn-p" id="bSaveAllow">Save domains</button><span class="hint" id="allowDirty"></span></div>
       </section>
+      <section class="card" aria-labelledby="hHeaders"><div class="tblhead"><h2 id="hHeaders">Custom headers</h2><span class="hint">Saving or deleting asks for your 2FA code</span></div>
+        <div class="alert a-info"><p>Sent with every request to one origin once the browser opens a page there (e.g. a staging bypass token). Values are encrypted and never shown again, here or to the agent.</p></div>
+        <div id="headers"></div></section>
+      <section class="card pad" aria-labelledby="hHeader"><h3 id="hHeader">Add or replace</h3>
+        <form class="grid-form" id="headerForm">
+          <label class="f">Origin<input class="in mono" name="origin" placeholder="https://staging.example.com" required autocomplete="off" spellcheck="false"></label>
+          <label class="f">Name<input class="in mono" name="name" placeholder="X-Bypass-Token" required autocomplete="off" spellcheck="false"></label>
+          <label class="f wide">Value<input class="in mono" name="value" type="password" required autocomplete="new-password"></label>
+          <div class="wide row"><button type="submit" class="btn btn-p">Save</button><p class="msg" id="headerErr" aria-live="polite"></p></div>
+        </form></section>
     </div>
 
     <div data-panel="diagnostics" class="stack">
@@ -639,6 +649,12 @@ function showProfile(id, t) {
       const r = await api(`${p}/playbook-save`, 'POST', { name: f.name.value.trim(), body: f.body.value });
       f.reset(); flash($('#bookErr'), r.created ? 'Created.' : 'Updated.'); refreshDetail();
     } catch (err) { flash($('#bookErr'), err.message, true); }
+  });
+  submit($('#headerForm'), async (f) => {
+    try {
+      await api(`${p}/header-save`, 'POST', { origin: f.origin.value.trim(), name: f.name.value.trim(), value: f.value.value });
+      f.reset(); flash($('#headerErr'), 'Saved. Applies from the next page opened on that origin.'); refreshDetail();
+    } catch (err) { flash($('#headerErr'), err.message, true); }
   });
   $('#addDomain').onsubmit = (e) => {
     e.preventDefault();
@@ -793,6 +809,13 @@ async function refreshDetail() {
     for (const b of $$('[data-del]')) b.onclick = () => deleteLogin(b, b.dataset.del);
     for (const b of $$('[data-test]')) b.onclick = () => testLogin(b, b.dataset.test);
   }
+  if (patch('headers', d.headers, () => d.headers.length
+    ? `<div class="tbl"><table><tr><th>Origin</th><th>Name</th><th>Value</th><th><span class="sr">Actions</span></th></tr>${d.headers.map((h) => `
+      <tr><td class="mono">${esc(h.origin)}</td><td class="mono" style="font-weight:600">${esc(h.name)}</td><td><span class="pill green">Saved</span></td>
+      <td class="act"><button type="button" class="btn btn-sm btn-dl" data-horigin="${esc(h.origin)}" data-hname="${esc(h.name)}">Delete</button></td></tr>`).join('')}</table></div>`
+    : '<p class="empty">No custom headers.</p>')) {
+    for (const b of $$('[data-hname]')) b.onclick = () => deleteHeader(b, b.dataset.horigin, b.dataset.hname);
+  }
   setText($('[data-count="playbooks"]'), ` · ${d.playbooks.length}`);
   if (patch('playbooks', d.playbooks, () => d.playbooks.length
     ? `<div class="tbl"><table><tr><th>Name</th><th>Description</th><th>Updated</th><th><span class="sr">Actions</span></th></tr>${d.playbooks.map((b) => `
@@ -827,6 +850,12 @@ function deleteLogin(btn, site) {
     if (!await confirmSensitive({ title: `Delete saved login "${site}"?`, desc: 'The agent can no longer sign in with it. Existing cookies stay.', label: 'Delete', danger: true })) return false;
     await api(`/api/computers/${encodeURIComponent(selected)}/login-delete`, 'POST', { site }); refreshDetail(); refreshList();
   }, `Saved login ${site} deleted.`);
+}
+function deleteHeader(btn, origin, name) {
+  act(btn, async () => {
+    if (!await confirmSensitive({ title: `Delete header "${name}"?`, desc: `No longer sent to ${origin}. A page already open there keeps it until the browser restarts.`, label: 'Delete', danger: true })) return false;
+    await api(`/api/computers/${encodeURIComponent(selected)}/header-delete`, 'POST', { origin, name }); refreshDetail();
+  }, `Header ${name} deleted.`);
 }
 function deletePlaybook(btn, name) {
   act(btn, async () => {
