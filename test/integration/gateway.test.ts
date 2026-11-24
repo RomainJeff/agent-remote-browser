@@ -703,6 +703,11 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
       assert.equal((await admin('POST', '/api/computers/shop/login-delete', { body: { site: 'alt' } })).status, 200);
     }
     assert.equal((await teach('click', { x: 1, y: 1 })).status, 200);
+    // A stale tab's call (another recording) is refused before any input and leaves the active tab's state alone.
+    fake.hit.focus = email;
+    assert.equal((await teach('type', { text: secret, rec: 'OLD' })).status, 409);
+    r = await teach('type', { text: 'me' });
+    assert.deepEqual([r.status, r.json], [200, { step: { fill: { role: 'textbox', name: 'Email' }, value: 'me' } }]);
     assert.ok(!JSON.stringify(fake.calls).includes(secret), 'typed password never sent');
 
     assert.deepEqual((await teach('press', { key: 'Enter' })).json, { step: { press: 'Enter' } });
