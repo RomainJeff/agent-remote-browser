@@ -10,5 +10,6 @@ export default defineConfig({
   root,
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': root } },
-  build: { outDir: fileURLToPath(new URL('../../../dist/admin', import.meta.url)), emptyOutDir: true },
+  // One bundle on purpose: served from the local gateway, no route is worth a split.
+  build: { outDir: fileURLToPath(new URL('../../../dist/admin', import.meta.url)), emptyOutDir: true, chunkSizeWarningLimit: 1000 },
 });

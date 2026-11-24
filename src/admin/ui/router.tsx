@@ -4,6 +4,8 @@ import { Shell } from '@/components/shell';
 import { sessionQuery } from '@/lib/session';
 import { InvitePage } from '@/pages/invite';
 import { LoginPage } from '@/pages/login';
+import { ProfilePage } from '@/pages/profile';
+import { ProfilesPage } from '@/pages/profiles';
 
 // Hash history: links the server hands out (invites, handoffs) keep their token in the fragment, out of request logs.
 const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({ component: Outlet });
@@ -28,10 +30,18 @@ const page = <P extends string>(path: P, title: string) => createRoute({
   getParentRoute: () => app, path, component: () => <h1 className="text-[28px] leading-9 font-extrabold">{title}</h1>,
 });
 
+const profiles = createRoute({ getParentRoute: () => app, path: '/profiles', component: ProfilesPage });
+
+const profile = createRoute({
+  getParentRoute: () => app, path: '/profiles/$id',
+  validateSearch: (s: Record<string, unknown>): { tab?: string } => typeof s.tab === 'string' ? { tab: s.tab } : {},
+  component: function Profile() { return <ProfilePage id={profile.useParams().id} tab={profile.useSearch().tab} />; },
+});
+
 const index = createRoute({ getParentRoute: () => app, path: '/', beforeLoad: () => { throw redirect({ to: '/profiles' }); } });
 
 const tree = root.addChildren([login, invite, app.addChildren([
-  index, page('/profiles', 'Profiles'), page('/access', 'Agent access'), page('/members', 'Members'), page('/security', 'Account security'),
+  index, profiles, profile, page('/access', 'Agent access'), page('/members', 'Members'), page('/security', 'Account security'),
 ])]);
 
 export const createAppRouter = (queryClient: QueryClient) => createRouter({ routeTree: tree, history: createHashHistory(), context: { queryClient } });
