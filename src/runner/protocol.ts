@@ -24,8 +24,7 @@ export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selection
  *  case-insensitive) and `exact` (same name); `ids` and `names`: the page's own count for the css `#id` and
  *  `tag[name="…"]` teach.ts emits (quirks mode matches ids case-insensitively); `ph` (placeholder contains it,
  *  case-insensitive). Names are cut at 300. `focus` adds `live` (the focused element, through shadow roots: "password"
- *  by its type property, "frame", else "") and `form` (its form's node id, if any). Prints { url, chain, live?, form? }
- *  as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
+ *  by its type property, "frame", else ""). Prints { url, chain, live? } as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
  *  ponytail: iframes and shadow DOM are not looked into. */
 export const HIT = `const [mode, x, y] = process.argv.slice(1);
 // Run in the page: elements the #id, tag[name="…"] (the selectors teach.ts emits) or placeholder locator would match.
@@ -51,8 +50,6 @@ const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowR
   const out = { url: page.url, chain: [] };
   if (mode === 'focus') {
     out.live = (await call('Runtime.evaluate', { expression: LIVE, returnByValue: true })).result.value;
-    const f = (await call('Runtime.evaluate', { expression: 'document.activeElement.form' })).result.objectId;
-    if (f) out.form = (await call('DOM.describeNode', { objectId: f })).node.backendNodeId;
   }
   const { nodes } = await call('Accessibility.getPartialAXTree', { backendNodeId: node, fetchRelatives: true });
   const root = (await call('DOM.getDocument', { depth: 0 })).root.backendNodeId, byId = new Map(nodes.map((a) => [a.nodeId, a])), names = {}, chain = out.chain;

@@ -51,20 +51,19 @@ const KEYS = ['Enter', 'Tab', 'Escape'];
 /** teach-* actions. Caller holds pc.serial(id). */
 export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
   const { computers: pc, driver, store } = ctx;
-  /** Profiles where the last teach-click or teach-type failed: the focus stayed where it was, so typed text (a password)
-   *  would go to the previous field. teach-type is refused until a click or an open goes through. */
-  const lost = new Set<ProfileId>();
-  /** Per profile, the last gesture that may move the focus (not type, not read): the page's `seq` for it if it went
-   *  through, and the locator of the field it clicked. teach-type names the gesture it follows (`after`): one this gateway
-   *  did not run (failed on the way, refused for the lease) means the focus is not where the admin thinks; a focus that
-   *  left the clicked field, likewise. */
-  const last = new Map<ProfileId, { seq?: unknown; target?: string }>();
+  /** Per profile, the last gesture that may move the focus (not type, not read) if it went through: the recording it
+   *  belongs to (`rec`, random per Record start in the page), the page's `seq` for it, and the locator of the field it
+   *  clicked; {} once any gesture but a read fails. teach-type names its recording and the gesture it follows (`after`):
+   *  another recording's gesture (a second admin tab), or one this gateway did not run (failed on the way, refused for
+   *  the lease, a replay that stopped partway), means the focus is not where the admin thinks; a focus that left the
+   *  clicked field, likewise. */
+  const last = new Map<ProfileId, { rec?: unknown; seq?: unknown; target?: string }>();
 
   async function hit(id: ProfileId, args: string[]) {
     await pc.ensure(id);
     const r = await driver.exec(id, ['node', '-e', HIT, ...args], { timeoutMs: 10_000 });
     if (r.code !== 0) throw new BrowserError((r.stderr || `exit ${r.code}`).trim().slice(0, 300));
-    return JSON.parse(r.stdout) as { url: string; chain: AX[]; live?: string; form?: number };
+    return JSON.parse(r.stdout) as { url: string; chain: AX[]; live?: string };
   }
   /** Runs a step built here; Step checks it first, as run_steps would. */
   async function run(id: ProfileId, step: unknown, extra: object = {}): Promise<Reply> {
@@ -87,8 +86,8 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
       const pick = typeof b.login === 'string';
       if (!pick && (typeof b.text !== 'string' || !b.text || b.text.length > 500)) return [400, { error: 'Text: 1 to 500 characters' }];
       const was = last.get(id);
-      if (b.after !== undefined && b.after !== was?.seq) return LOST;
-      const { url, chain, live, form } = await hit(id, ['focus']);
+      if (typeof b.rec !== 'string' || !was || b.rec !== was.rec || b.after !== was.seq) return LOST;
+      const { url, chain, live } = await hit(id, ['focus']);
       if (live === 'frame') return [422, { error: 'Typing inside a frame is not recorded' }];
       // The live element's type property, or the attribute as written (Chrome reads it case-insensitively).
       if (live === 'password' || chain[0]?.type?.toLowerCase() === 'password') {
@@ -103,13 +102,14 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
         const c = logins[site];
         if (!c.url.startsWith('https://') || !urlAllowed(c.url, p.allow)) return [400, { error: 'Login URL is outside the allowlist' }];
         await fillLogin(pc, id, site, c, store.decryptLogin(id, site, c), true);
-        // user, form: the page drops the fill of this username in this form (shown in Logins already).
-        return [200, { step: { login: site, if_needed: true }, user: c.username, form }];
+        // The login may submit and land on a page that focuses another field: typing goes to the live focus from here.
+        was.target = undefined;
+        return [200, { step: { login: site, if_needed: true } }];
       }
       if (pick) return MOVED;
       const l = locate(chain);
-      if (l && b.after !== undefined && was?.target && JSON.stringify(l) !== was.target) return MOVED;
-      return l ? run(id, { fill: l, value: b.text }, { form }) : NONE;
+      if (l && was.target && JSON.stringify(l) !== was.target) return MOVED;
+      return l ? run(id, { fill: l, value: b.text }) : NONE;
     }
     if (act === 'teach-press') return KEYS.includes(b.key) ? run(id, { press: b.key }) : [400, { error: `Keys: ${KEYS.join(', ')}` }];
     if (act === 'teach-open') {
@@ -132,13 +132,13 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
   /** driving: the admin may drive this browser (no agent lease), checked in the profile's queue. */
   return async (a: string, id: ProfileId, p: Profile, b: Record<string, any>, driving: boolean): Promise<Reply> => {
     let r: Reply = [500, {}];
-    try { return r = !driving ? LEASED : a === 'teach-type' && lost.has(id) ? LOST : await act(a, id, p, b); }
+    try { return r = !driving ? LEASED : await act(a, id, p, b); }
     catch (e) { if (e instanceof BrowserError) return r = [422, { error: e.message.slice(0, 300) }]; throw e; }
     finally {
-      const ok = r[0] === 200;
-      if ((a === 'teach-click' || a === 'teach-type') && !ok) lost.add(id);
-      else if ((a === 'teach-click' || a === 'teach-open') && ok) lost.delete(id);
-      if (a !== 'teach-type' && a !== 'teach-read') last.set(id, ok ? { seq: b.seq, target: r[1].field ? JSON.stringify((r[1].step as { click: Locator }).click) : undefined } : {});
+      // A replay that stopped partway (ok: false) failed too: the focus is wherever it stopped.
+      const ok = r[0] === 200 && r[1].ok !== false;
+      if (a !== 'teach-read' && !ok) last.set(id, {});
+      else if (a !== 'teach-type' && a !== 'teach-read') last.set(id, { rec: b.rec, seq: b.seq, target: r[1].field ? JSON.stringify((r[1].step as { click: Locator }).click) : undefined });
     }
   };
 }
