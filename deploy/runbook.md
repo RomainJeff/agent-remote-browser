@@ -127,6 +127,12 @@ In the admin UI: create a profile (id + allowed domains), save logins for it (an
 
 Sign-in: password, then a TOTP code or a backup code. "Trust this device for 30 days" (admin listener only) skips the code at the next sign-ins from this browser. Sensitive actions (keys, clients, logins, domains, profile deletion) ask for a fresh code when the last one is older than 15 minutes; five wrong codes in a row sign the session out.
 
+### Onboard or remove a member
+
+Open **Members**, enter the recipient's email and send them the invite link privately. Each remote member needs their own SSH forward to open the localhost admin UI (see above). If you serve the UI with `ADMIN_PUBLIC=1`, add the recipient's email to the Cloudflare Access policy and create the invite on that public UI. The recipient opens the link, sets a password, enrolls an authenticator and saves their backup codes. A profile admin can then grant access under **Sharing**.
+
+To remove an active account, choose **Remove** in Members. Check the private profile count before confirming. Removal permanently deletes those profiles, including their browser volumes and saved logins. Share any profile you want to keep with another member first. Shared profiles keep their members. If one loses its last admin, its oldest remaining member becomes admin. For an unfinished enrollment, revoke the invite instead.
+
 ## 5. Cloudflare named tunnel
 
 In the Cloudflare dashboard (Zero Trust, Networks, Tunnels):

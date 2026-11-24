@@ -13,6 +13,7 @@ const chrome = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/chro
 
 const fixture = `
 const writes = [], email = 'member@example.com';
+const users = [];
 let gatewayAdmin = true, role = 'admin', members = [{ email, role: 'admin' }];
 window.fetch = async (path, options = {}) => {
   const body = options.body && JSON.parse(options.body);
@@ -22,8 +23,9 @@ window.fetch = async (path, options = {}) => {
     case '/api/invite/start': return json({totpURI: 'otpauth://fixture'});
     case '/api/invite/finish': return body.code === '123456' ? json({backupCodes:['sample-backup']}) : json({error:'Invalid code'}, 401);
     case '/api/auth/get-session': return json({user:{twoFactorEnabled:true}});
-    case '/api/session': return json({ email });
-    case '/api/users': return gatewayAdmin ? json([]) : json({error:'forbidden'}, 403);
+    case '/api/session': return json({ email, stepUpRemainingS: 60 });
+    case '/api/users': return gatewayAdmin ? json(users) : json({error:'forbidden'}, 403);
+    case '/api/users/remove': return json({removed:true});
     case '/api/users/invites': return json([]);
     case '/api/users/invite': return json({link:'https://example.com/#/invite/sample'});
     case '/api/clients': return json({keys:[], oauth:[]});
@@ -106,4 +108,16 @@ browserCase('profile admin adds, changes and removes sharing by email', '#/p/sam
   check(JSON.stringify(writes) === JSON.stringify([
     {email:'new@example.com', role:'viewer'}, {email, role:'editor'}, {email:'other@example.com', role:null}
   ].map(body => ['/api/computers/sample/members', body])), 'membership requests ' + JSON.stringify(writes));
+`);
+
+browserCase('gateway admin confirms the private profile count before removing an active member', '#/members',
+  "users.push({email}, {email:'other@example.com',privateProfileCount:2}, {email:'pending@example.com',pending:true});", `
+  const buttons = document.querySelectorAll('[data-remove-user]');
+  check(buttons.length === 1, 'only other active members');
+  buttons[0].click(); await settle();
+  const dialog = document.querySelector('dialog[open]');
+  check(dialog.innerText.includes('other@example.com') && dialog.innerText.includes('2 private profiles'), 'deletion warning');
+  check(writes.length === 0, 'requires confirmation');
+  dialog.querySelector('button[type=submit]').click(); await settle();
+  check(JSON.stringify(writes) === JSON.stringify([['/api/users/remove',{email:'other@example.com'}]]), 'confirmed removal');
 `);

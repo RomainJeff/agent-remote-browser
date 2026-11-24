@@ -20,8 +20,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDb, tx } from './store/db.ts';
 import { openStore } from './store/store.ts';
 import { createAuth, authOptions } from './auth/better-auth.ts';
-import { createCredential, deleteSessions, listUsers, normalizedEmail, passwordHash, requireAvailable, setAdmin, startTotp, userId, verifyTotp } from './auth/accounts.ts';
+import { createCredential, deleteSessions, listUsers, normalizedEmail, passwordHash, requireAvailable, removeUser, setAdmin, startTotp, userId, verifyTotp } from './auth/accounts.ts';
 import { parseProfileId } from './policy.ts';
+
+import { createAudit } from './audit.ts';
 
 type Out = (line: string) => void;
 /** Reads one line, without echo on a TTY. */
@@ -126,13 +128,8 @@ function manageUsers(cfg: Config, args: string[], out: Out) {
       }
       return;
     }
-    tx(db, () => {
-      const id = setAdmin(db, email, setting === 'on');
-      if (sub === 'remove') {
-        db.prepare('DELETE FROM apikey WHERE referenceId = ?').run(id);
-        db.prepare('DELETE FROM user WHERE id = ?').run(id);
-      }
-    });
+    if (sub === 'remove') removeUser(db, normalizedEmail(email), 'cli', createAudit(cfg.auditFile));
+    else tx(db, () => setAdmin(db, email, setting === 'on'));
   } finally { db.close(); }
 }
 

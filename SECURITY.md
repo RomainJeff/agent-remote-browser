@@ -8,6 +8,14 @@ Report it privately through GitHub: **Security** tab of this repository, **Repor
 
 Trust model: the public listener accepts untrusted OAuth clients, and MCP tokens delegate use of a browser with real sessions. Pages, tool arguments and browser output are untrusted. The operator, runner, Docker daemon and local machine are trusted. The gateway is trusted with the browsers and their data, not with the host.
 
+## Multi-user trust model
+
+A private profile has one member. The API, MCP and admin UI hide it from every other gateway user, including gateway admins. The host operator can read every profile through Docker, the browser volumes, `arb.db` and the login key file.
+
+Sharing a profile gives a viewer's agent access to the browser's sessions and saved logins. An editor can widen the allowed domains after a second-factor check. A profile admin controls membership and deletion.
+
+Gateway admins can remove members. Removal deletes the member's private profiles without giving the gateway admin permission to read them. Password and 2FA reset stay on the operator CLI because resetting another user's credentials would allow access to their private profiles.
+
 ## Browsers and saved logins
 
 - **Malicious content on a trusted login site** (high). A saved login trusts the configured site, its scripts and the browser automation package.
