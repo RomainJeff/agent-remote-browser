@@ -1,8 +1,13 @@
 {
   "buildCommand": "npm run build:admin",
-  "startCommand": "node --input-type=module -e \"import{mkdtempSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';const d=mkdtempSync(join(tmpdir(),'arb-ui-diff-'));Object.assign(process.env,{ADMIN_PORT:process.env.PORT,PORT:String(+process.env.PORT+1),DATA_DIR:d,LOGIN_KEY_FILE:join(d,'login_key'),AUDIT_FILE:join(d,'audit.jsonl'),KILL_FILE:join(d,'KILL'),BETTER_AUTH_SECRET:'ui-diff-local-preview-only-not-a-secret'});const{start}=await import('./src/server.ts');const{loadConfig}=await import('./src/config.ts');const{FakeDriver}=await import('./src/host/fake.ts');await start(loadConfig(),new FakeDriver())\"",
-  "baseUrl": "http://localhost:{port}",
+  "startCommand": "node test/ui-preview.ts",
+  "readyPath": "/?signed-in",
   "routes": [
-    { "path": "/", "files": ["src/admin/ui/**"] }
+    { "path": "/", "files": ["src/admin/ui/**"] },
+    { "path": "/?signed-in#/profiles", "files": ["src/admin/ui/**"] },
+    { "path": "/?signed-in#/profiles/shop", "files": ["src/admin/ui/**"] },
+    { "path": "/?signed-in#/members", "files": ["src/admin/ui/**"] },
+    { "path": "/?signed-in#/access", "files": ["src/admin/ui/**"] },
+    { "path": "/?signed-in#/security", "files": ["src/admin/ui/**"] }
   ]
 }
