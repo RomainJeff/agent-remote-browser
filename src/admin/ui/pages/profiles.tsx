@@ -4,7 +4,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { Empty, Hint, PageHead, Panel, Sub } from '@/components/page';
-import { LeasePill, StatePill, stateNote } from '@/components/state';
+import { DriverToken, stateNote } from '@/components/state';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
@@ -54,15 +54,14 @@ export function ProfilesPage() {
           : !rows.length ? <Empty>No matching profiles.</Empty> : (
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Profile</TableHead><TableHead>Access</TableHead><TableHead>State</TableHead><TableHead>Agent</TableHead><TableHead>Last activity</TableHead>
+                <TableHead>Profile</TableHead><TableHead>Access</TableHead><TableHead>Driver</TableHead><TableHead>Last activity</TableHead>
                 <TableHead><span className="sr-only">Action</span></TableHead>
               </TableRow></TableHeader>
               <TableBody>{rows.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell><Link to="/profiles/$id" params={{ id: c.id }} className="font-mono font-semibold text-primary">{c.id}</Link><Sub>{c.allow.join(', ')}</Sub></TableCell>
                   <TableCell>{c.role}<Sub>{c.members === 1 ? 'Private' : 'Shared'}</Sub></TableCell>
-                  <TableCell><StatePill c={c} /><Sub>{stateNote(c)}</Sub></TableCell>
-                  <TableCell><LeasePill c={c} /></TableCell>
+                  <TableCell><DriverToken c={c} /><Sub>{stateNote(c)}</Sub></TableCell>
                   <TableCell>{c.lastCall ? <>{ago(c.lastCall.ts)}<Sub mono>{c.lastCall.tool}{c.lastCall.ok ? '' : ' · failed'}</Sub></> : <Hint>No calls</Hint>}</TableCell>
                   <TableCell className="w-px text-right whitespace-nowrap">
                     <ActionButton variant="outline" size="sm" action={async () => {

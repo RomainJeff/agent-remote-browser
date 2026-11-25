@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { KeyRoundIcon, LayoutListIcon, LogOutIcon, ShieldIcon, UsersIcon } from 'lucide-react';
 import { Brand } from '@/components/brand';
+import { driverOf } from '@/components/state';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { computersQuery } from '@/lib/queries';
@@ -15,7 +16,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { data: gatewayAdmin } = useQuery(gatewayAdminQuery);
   const { data: computers } = useQuery(computersQuery);
   const email = session?.email ?? '';
-  const needs = computers?.filter((c) => c.handoff?.state === 'pending').length ?? 0;
+  const needs = computers?.filter((c) => driverOf(c) === 'waiting').length ?? 0;
   useEffect(() => { document.title = (needs ? `(${needs}) ` : '') + 'Agent Remote Browser'; }, [needs]);
   const signOut = async () => {
     await api('/api/auth/sign-out', 'POST');

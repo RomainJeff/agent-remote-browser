@@ -3,8 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { ActionButton } from '@/components/action-button';
 import { PageHead } from '@/components/page';
-import { StatePill } from '@/components/state';
-import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { closeView } from '@/lib/live';
 import { computersQuery, detailsQuery, profilePath } from '@/lib/queries';
@@ -42,7 +40,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   return (
     <>
       <PageHead mono crumb={crumb}
-        title={<span className="flex flex-wrap items-center gap-3">{id}<span className="flex gap-2 font-sans"><StatePill c={c} />{c.leasedUntil && <Badge dot variant="agent">Agent lease</Badge>}</span></span>}
+        title={id}
         actions={c.role !== 'viewer' && (
           <ActionButton variant="outline" size="lg" disabled={c.state !== 'running'} done="Browser stopped. The profile is kept."
             action={async () => { closeView(); await api(`${profilePath(id)}/stop`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }}>Stop browser</ActionButton>

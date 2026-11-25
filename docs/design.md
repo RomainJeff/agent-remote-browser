@@ -13,7 +13,7 @@ Every live browser view sits in a frame with a tab on top that says who is drivi
 | An agent | Solid teal | `An agent is driving`, with the lease time left |
 | You (take over, recording) | Solid ink | `You have control`, `You are recording` |
 | An agent waits for a person | Dashed amber, light amber tab | `An agent is waiting` |
-| Nobody, or stopped | Grey, dashed when stopped or empty | `Nobody` |
+| Nobody, or stopped | Grey, dashed when stopped or empty | `Nobody`, `Stopped`, `Never started` |
 
 The same colors carry the same meaning wherever the driver shows up: the state token in the profiles table, the badge in the navigation, the mobile request screen, the empty state. Nothing else uses them.
 
