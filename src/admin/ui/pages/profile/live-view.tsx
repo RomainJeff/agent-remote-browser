@@ -72,7 +72,8 @@ export function LiveView({ c }: { c: Computer }) {
           </>}
         </RequestBanner>
       )}
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+      {/* Wrapped buttons go above the tab, so the tab stays on its frame. */}
+      <div className="flex flex-wrap-reverse items-start gap-x-3 gap-y-2">
         <span className={cn('relative z-[1] -mb-0.5 inline-flex h-[30px] items-center gap-2.5 rounded-t-lg border-2 border-b-0 px-3 text-[13px] font-semibold', TAB[driver])}>
           {driverLabel(driver, c)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}
         </span>
