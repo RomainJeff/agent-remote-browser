@@ -59,7 +59,7 @@ export function LoginPage() {
 
   return (
     <AuthLayout>
-      <Brand />
+      <Brand large />
       <Card className="w-full max-w-[420px] gap-5 p-8">
         {step === 'password' ? (
           <form className="flex flex-col gap-4" onSubmit={signIn}>

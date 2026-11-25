@@ -1,43 +1,75 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/instrument-sans";
 
-/* shadcn tokens set to the admin palette. System fonts only: the page CSP loads no web font. */
+/* Role tokens (docs/design.md), mapped onto the shadcn names below. Name by role, never by hue. */
 :root {
-  --background: #F6F7F8;
-  --foreground: #1F2226;
-  --card: #FFFFFF;
-  --card-foreground: #1F2226;
-  --popover: #FFFFFF;
-  --popover-foreground: #1F2226;
-  --primary: #00543C;
+  --ink: #15181B;
+  --ink-2: #4D5459;
+  --ink-3: #687076;
+  --canvas: #F4F5F5;
+  --surface: #FFFFFF;
+  --surface-2: #F8F9F9;
+  --line: #E3E6E8;
+  --line-soft: #EEF0F1;
+  --line-strong: #CDD2D5;
+  --agent: #0B6B6F;
+  --agent-soft: #E2F0F0;
+  --agent-ink: #06595C;
+  --needs-you: #F2A81D;
+  --needs-you-soft: #FDF1D8;
+  --needs-you-ink: #774B00;
+  --needs-you-line: #F3D9A0;
+  --danger: #C43D2B;
+
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
   --primary-foreground: #FFFFFF;
-  --secondary: #E2F2EE;
-  --secondary-foreground: #00543C;
-  --muted: #E9EBEC;
-  --muted-foreground: #585F66;
-  --accent: #E2F2EE;
-  --accent-foreground: #00543C;
-  --destructive: #D43F11;
-  --destructive-soft: #FDE5DC;
-  --destructive-ink: #A8310C;
-  --ok: #007556;
-  --off: #9199A1;
-  --warn-ink: #8A5C00;
-  --warn-soft: #FFF6E4;
-  --warn-dot: #E0A500;
-  --warn-line: #FFD02F;
-  --agent: #6F2FD1;
-  --agent-soft: #F0E5FF;
-  --agent-ink: #4A1F8C;
-  --info-line: #B6DDD2;
-  --border: #CFD4D8;
-  --input: #CFD4D8;
-  --ring: #00543C;
+  --secondary: var(--line-soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--line-soft);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--line-soft);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--ink);
+
+  /* Old names, kept as aliases until the slice that stops using them deletes them. */
+  --destructive-soft: var(--surface-2);
+  --destructive-ink: var(--ink);
+  --ok: var(--ink);
+  --off: var(--ink-3);
+  --warn-ink: var(--needs-you-ink);
+  --warn-soft: var(--needs-you-soft);
+  --warn-dot: var(--needs-you);
+  --warn-line: var(--needs-you-line);
+  --info-line: var(--line);
 }
 
 @theme inline {
-  --font-sans: Mulish, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-needs-you: var(--needs-you);
+  --color-needs-you-soft: var(--needs-you-soft);
+  --color-needs-you-ink: var(--needs-you-ink);
+  --color-needs-you-line: var(--needs-you-line);
+  --color-danger: var(--danger);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -68,11 +100,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Controls 4px, cards 8px, as before. */
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 4px;
-  --radius-xl: 8px;
+  /* State tokens 5, controls 7, panels and frames 10, main panel, cards and dialogs 12. */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
 }
 
 @layer base {

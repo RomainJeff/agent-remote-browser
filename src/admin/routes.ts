@@ -35,7 +35,7 @@ const STEP_UP_MS = 15 * 60_000, STEP_UP_FAILS = 5;
 const SENSITIVE = new Set(['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete', 'members']);
 // The admin UI build (npm run build:admin): index.html, and the hashed files Vite writes under assets/.
 const UI = new URL('../../dist/admin/', import.meta.url);
-const ASSET_TYPES: Record<string, string> = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const ASSET_TYPES: Record<string, string> = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 /** Read once at startup: a fixed set of paths, so no request path ever reaches the file system. Null = not built. */
 function loadUi() {
   try {
@@ -201,7 +201,7 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         if (!ui) return send(res, 503, { error: 'Admin UI not built: run npm run build:admin' });
         const ws = `${pub && pubUrl.protocol === 'https:' ? 'wss' : 'ws'}://${req.headers.host}`;
         // Inline styles stay allowed: Base UI positions popups with style attributes.
-        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
+        res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(ui.index);
       }
       if (post && (path === '/api/invite/start' || path === '/api/invite/finish' || path === '/api/password/reset')) {

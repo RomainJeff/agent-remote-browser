@@ -30,9 +30,9 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   const { data: details } = useQuery({ ...detailsQuery(id), enabled: !!c });
   // Leaving the profile (or opening another) closes its view and ends a recording.
   useEffect(() => () => closeView(), [id]);
-  const crumb = (rest: React.ReactNode) => <><Link to="/profiles" className="font-semibold text-primary">Profiles</Link> › {rest}</>;
+  const crumb = <Link to="/profiles">Profiles</Link>;
   if (isPending) return null;
-  if (!c) return <PageHead crumb={crumb(id)} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
+  if (!c) return <PageHead crumb={crumb} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
   const tabs = tabsFor(c);
   // A tab this role does not get (or a mistyped one): the session, with the URL saying so.
   if (tab && !tabs.includes(tab as Tab)) return <Navigate to="/profiles/$id" params={{ id }} replace />;
@@ -41,7 +41,7 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
 
   return (
     <>
-      <PageHead mono crumb={crumb(<span className="font-mono">{id}</span>)}
+      <PageHead mono crumb={crumb}
         title={<span className="flex flex-wrap items-center gap-3">{id}<span className="flex gap-2 font-sans"><StatePill c={c} />{c.leasedUntil && <Badge dot variant="agent">Agent lease</Badge>}</span></span>}
         actions={c.role !== 'viewer' && (
           <ActionButton variant="outline" size="lg" disabled={c.state !== 'running'} done="Browser stopped. The profile is kept."

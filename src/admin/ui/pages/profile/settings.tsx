@@ -12,7 +12,7 @@ const CONSEQUENCES = 'The container, cookies, saved logins, OAuth access and API
 export function SettingsTab({ id }: { id: string }) {
   const queryClient = useQueryClient(), navigate = useNavigate();
   return (
-    <Panel pad danger title="Danger zone">
+    <Panel pad title="Danger zone">
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-0 flex-[1_1_280px]"><b>Delete profile</b><p className="text-muted-foreground">{CONSEQUENCES}</p></div>
         <ActionButton variant="danger" size="lg" done={`Profile ${id} deleted.`} action={async () => {
