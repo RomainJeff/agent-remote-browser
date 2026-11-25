@@ -207,6 +207,8 @@ docker compose start gateway
 
 The previous key is kept as `secrets/login_key.old`: delete it once no `arb.db` backup needs it.
 
+**Forgotten password**: a gateway admin clicks *Reset password* on the member's row in *Members* and hands over the one-time link (24 h; a new link voids the previous one). The member keeps their authenticator, and the reset signs them out everywhere.
+
 **Lost authenticator**: sign in with a backup code, then on the host `docker compose exec gateway node src/cli.ts admin reset-2fa you@example.com` (new password, TOTP and backup codes; old ones void, sessions dropped). No backup code left: the same command, from the host.
 
 **API keys without expiry** (created before Lot 7b): they still work, and the admin list flags them `noExpiry`. Rotate each one: create a new key for the same scope, switch the agent to it, revoke the old one. A key's last IP shows in the same list: an address you do not recognise = revoke.

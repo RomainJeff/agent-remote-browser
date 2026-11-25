@@ -43,7 +43,7 @@ export function createAuth(db: DatabaseSync, o: AuthOptions) {
     appName: 'agent-remote-browser',
     trustedOrigins: o.trustedOrigins,
     telemetry: { enabled: false },
-    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
+    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12, revokeSessionsOnPasswordReset: true },
     session: { expiresIn: 12 * 3600, updateAge: 3600 },
     advanced: {
       // Set by the listener (clientIp in server.ts): Cloudflare's value behind the tunnel, else the socket address.

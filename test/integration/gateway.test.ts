@@ -1558,6 +1558,41 @@ test('a default invite enrolls a member who can sign in and starts with no profi
   assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
 });
 
+test('a password reset link from an admin sets a new password, keeps 2FA and signs the member out everywhere', async () => {
+  await restart();
+  const email = 'forgetful@example.com', password = randomBytes(16).toString('hex'), next = randomBytes(16).toString('hex');
+  const invite = tokenOf((await admin('POST', '/api/users/invite', { body: { email } })).json);
+  const start = await accept('start', { token: invite, password }), uri = start.json.totpURI;
+  assert.equal((await accept('finish', { token: invite, code: totp(uri) }, jar(start.cookies))).status, 200);
+  const signIn = async (pw: string) => {
+    sql((db) => db.exec('DELETE FROM rateLimit'));
+    const half = await admin('POST', '/api/auth/sign-in/email', { headers: { ...adminOrigin(), cookie: '' }, body: { email, password: pw } });
+    if (half.status !== 200) return { status: half.status, cookie: '' };
+    const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(uri) } });
+    return { status: signed.status, cookie: jar(signed.cookies, jar(half.cookies)) };
+  };
+  const issue = async () => {
+    const r = await admin('POST', '/api/users/reset-link', { body: { email } });
+    assert.equal(r.status, 201);
+    return r.json.link.split('/#/reset-password/')[1] as string;
+  };
+  const reset = (token: string, pw = next) => admin('POST', '/api/password/reset', { headers: { ...adminOrigin(), cookie: '' }, body: { token, password: pw } });
+  const old = await signIn(password);
+  assert.equal(old.status, 200);
+
+  const replaced = await issue(), token = await issue();
+  assert.equal((await reset(replaced)).status, 404, 'a new link replaces the earlier one');
+  assert.equal((await reset(token, 'short')).status, 400);
+  assert.equal((await reset(token)).status, 200);
+  assert.equal((await reset(token)).status, 404, 'one use');
+  assert.equal((await admin('GET', '/api/session', { headers: { cookie: old.cookie } })).status, 401);
+  assert.equal((await signIn(password)).status, 401);
+  assert.equal((await signIn(next)).status, 200, 'same authenticator, new password');
+  const audited = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => /^admin:password_reset/.test(l.tool));
+  assert.deepEqual(audited.map((l) => [l.tool, l.agent, l.by]), [
+    ['admin:password_reset_link', email, owner.email], ['admin:password_reset_link', email, owner.email], ['admin:password_reset', email, email]]);
+});
+
 test('removing a member deletes their private computer and gives the oldest remaining member shared administration', async () => {
   const email = 'departing@example.com', headers = await signInNewUser(email);
   const later = 'later@example.com';
@@ -1614,7 +1649,7 @@ test('expired enrollment can be replaced, revocation removes its pending user, a
   for (let i = 0; i < 10; i++) assert.equal((await createInvite(`cap-${i}@example.com`)).status, 201);
   assert.equal((await createInvite(email)).status, 409);
   sql(db => db.exec('DELETE FROM step_up'));
-  for (const path of ['/api/users/remove', '/api/users/admin', '/api/users/invite', '/api/users/invites/' + replacement.json.id + '/revoke']) {
+  for (const path of ['/api/users/remove', '/api/users/admin', '/api/users/invite', '/api/users/reset-link', '/api/users/invites/' + replacement.json.id + '/revoke']) {
     const r = await admin('POST', path, { body: { email, admin: true } });
     assert.deepEqual([r.status, r.json.stepUp], [401, true]);
   }
@@ -1623,10 +1658,11 @@ test('expired enrollment can be replaced, revocation removes its pending user, a
 test('invite acceptance enforces the listener boundary and a shared attempt limit', async () => {
   await restart();
   const body = { token: 'unavailable' };
-  for (const step of ['start', 'finish']) {
-    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { origin: 'https://example.com' } })).status, 403);
-    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { host: 'example.com' } })).status, 403);
+  for (const path of ['/api/invite/start', '/api/invite/finish', '/api/password/reset']) {
+    assert.equal((await admin('POST', path, { body, headers: { origin: 'https://example.com' } })).status, 403);
+    assert.equal((await admin('POST', path, { body, headers: { host: 'example.com' } })).status, 403);
   }
   for (let i = 0; i < 10; i++) assert.equal((await accept(i % 2 ? 'start' : 'finish', body)).status, 404);
   assert.equal((await accept('finish', body)).status, 429);
+  assert.equal((await admin('POST', '/api/password/reset', { body, headers: { ...adminOrigin(), cookie: '' } })).status, 429, 'one budget for every signed-out account route');
 });

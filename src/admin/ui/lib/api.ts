@@ -21,8 +21,8 @@ export async function api<T = unknown>(path: string, method: 'GET' | 'POST' = 'G
     if (!await hooks.stepUp?.()) throw new ApiError('Cancelled: this action needs a 2FA code', 0);
     return api(path, method, body);
   }
-  // Sign-in, invitation and step-up answer 401 for a wrong password or code: the session (if any) is still there.
-  if (r.status === 401 && !j.stepUp && !/^\/api\/(auth|invite)\//.test(path)) hooks.signedOut?.();
+  // Sign-in, invitation, password reset and step-up answer 401 for a wrong password or code: the session (if any) is still there.
+  if (r.status === 401 && !j.stepUp && !/^\/api\/(auth|invite|password)\//.test(path)) hooks.signedOut?.();
   if (!r.ok) throw new ApiError(j.error || j.message || `HTTP ${r.status}`, r.status);
   return j as T;
 }
