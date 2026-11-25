@@ -38,8 +38,8 @@ export function recBody(g: Rec) {
   const params: Record<string, string | undefined> = {};
   const steps = g.steps.map(({ step, param, pname = '', typed }) => {
     if (!param || !step.fill) return step;
-    if (!/^[A-Za-z_]\w{0,39}$/.test(pname) || pname === '__proto__') throw new Error(`Param name "${pname}": letters, digits and _, not starting with a digit`);
-    if (Object.hasOwn(params, pname) && params[pname] !== typed) throw new Error(`Param "${pname}" is used for different values: rename one`);
+    if (!/^[A-Za-z_]\w{0,39}$/.test(pname) || pname === '__proto__') throw new Error(`Input name "${pname}": letters, digits and _, not starting with a digit`);
+    if (Object.hasOwn(params, pname) && params[pname] !== typed) throw new Error(`Input "${pname}" is used for different values: rename one`);
     params[pname] = typed;
     return { ...step, value: `{${pname}}` };
   });

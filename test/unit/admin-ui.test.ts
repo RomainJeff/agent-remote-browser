@@ -319,11 +319,11 @@ browserCase('handoff link: Take over focused, takes the request, Done sends the 
 
 browserCase('recording: a click in the view becomes a step, saved through the playbook editor', '#/profiles/sample', `
   (await until(() => button('Record playbook'), 'Record button')).click();
-  await until(() => text().includes('No steps yet.'), 'recording panel');
+  await until(() => text().includes('each gesture becomes a step'), 'recording panel');
   frame(1);
   const img = await until(() => document.querySelector('#frame:not([hidden])'), 'frame');
   mouse('mousedown', img); mouse('mouseup', img);
-  await until(() => text().includes('{"click":{"text":"OK"}}'), 'step listed');
+  await until(() => document.querySelector('[aria-label=Recording] ol li')?.innerText.includes('Click OK'), 'step listed');
   check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'the click went to the gateway, not the stream');
   button('Save as playbook…').click();
   await until(() => document.activeElement === field('name'), 'playbook editor, name focused');
