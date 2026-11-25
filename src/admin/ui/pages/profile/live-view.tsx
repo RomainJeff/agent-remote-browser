@@ -185,7 +185,7 @@ function UrlBar({ c, url, children }: { c: Computer; url?: string; children?: Re
     finally { setOpening(false); setBusy(false); }
   };
   return (
-    <form className="flex min-h-[38px] flex-wrap items-center gap-2 border-b bg-surface-2 py-1 pr-1.5 pl-3 focus-within:bg-surface" onSubmit={submit}>
+    <form className="flex min-h-[38px] flex-wrap items-center gap-2 border-b bg-surface-2 py-1 pr-1.5 pl-3 has-[input:focus-visible]:bg-surface has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50 has-[input:focus-visible]:ring-inset" onSubmit={submit}>
       <label htmlFor="vurl" className="sr-only">Address</label>
       <input ref={input} id="vurl" className="h-7 min-w-0 flex-[1_1_200px] bg-transparent font-mono text-[12.5px] outline-none placeholder:text-ink-3"
         placeholder="https://… (allowed domains only)" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} />
