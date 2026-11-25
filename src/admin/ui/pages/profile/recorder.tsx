@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { XIcon } from 'lucide-react';
-import { InputToken, StepText } from '@/components/step-text';
+import { InputToken, NumberedStep, StepText } from '@/components/step-text';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { plural } from '@/lib/format';
@@ -32,7 +32,7 @@ export function Recorder({ id }: { id: string }) {
       </div>
       <ol className="border-t border-line-soft">
         {g.steps.map((s, i) => (
-          <Step key={i} n={i + 1} remove={() => { g.steps.splice(i, 1); recorder.edited(); }}>
+          <NumberedStep key={i} n={i + 1} action={<Button variant="ghost" size="icon-xs" className="text-ink-3" aria-label={`Remove step ${i + 1}`} onClick={() => { g.steps.splice(i, 1); recorder.edited(); }}><XIcon /></Button>}>
             <StepText parts={describeStep(s.step)} />
             {s.step.fill && (
               <span className="mt-2 flex items-center gap-2 text-[13px] text-ink-2">
@@ -43,7 +43,7 @@ export function Recorder({ id }: { id: string }) {
                   value={s.pname ?? ''} onChange={(e) => { s.pname = e.target.value.trim(); recorder.edited(); }} />
               </span>
             )}
-          </Step>
+          </NumberedStep>
         ))}
         {/* What has not become a step yet, as the last row. */}
         <Pending>
@@ -90,22 +90,7 @@ export function Recorder({ id }: { id: string }) {
   );
 }
 
-function Step({ n, remove, children }: { n: number; remove: () => void; children: ReactNode }) {
-  return (
-    <li className="grid grid-cols-[22px_minmax(0,1fr)_24px] items-start gap-2.5 border-b border-line-soft py-2.5 text-[13.5px] leading-5">
-      <i className="grid size-[22px] place-items-center rounded-full bg-line-soft text-[11.5px] font-semibold not-italic tabular-nums">{n}</i>
-      <span className="min-w-0">{children}</span>
-      <Button variant="ghost" size="icon-xs" className="text-ink-3" aria-label={`Remove step ${n}`} onClick={remove}><XIcon /></Button>
-    </li>
-  );
-}
-
 function Pending({ children }: { children: ReactNode }) {
   if (!children) return null;
-  return (
-    <li aria-live="polite" className="grid grid-cols-[22px_minmax(0,1fr)] items-start gap-2.5 py-2.5 text-[13.5px] leading-5 text-ink-2">
-      <i className="size-[22px] rounded-full border border-dashed border-line-strong" />
-      <span className="min-w-0">{children}</span>
-    </li>
-  );
+  return <NumberedStep><span aria-live="polite" className="text-ink-2">{children}</span></NumberedStep>;
 }
