@@ -1,16 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { confirmSensitive } from '@/components/confirm';
-import { Alert, Empty, Hint, Panel } from '@/components/page';
+import { Alert, Hint, Section } from '@/components/page';
+import { InputToken, NumberedStep, StepText } from '@/components/step-text';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { ago, message } from '@/lib/format';
-import { ACTIONS, DEFAULTS, LOCATORS, WAITS, parse, placeholders, serialize, toolName, type Action, type Fields, type Model, type Row } from '@/lib/playbook';
+import { ACTIONS, DEFAULTS, LOCATORS, WAITS, describeStep, parse, placeholders, serialize, toStep, toolName, type Action, type Fields, type Model, type Row } from '@/lib/playbook';
 import { startRecording } from '@/lib/live';
 import { detailsQuery, profilePath } from '@/lib/queries';
 import type { Login } from '@/lib/types';
@@ -28,66 +29,95 @@ export const openInEditor = (body: string) => { incoming = body; };
 const EMPTY: Model = { desc: '', notes: '', steps: [], fallback: '' };
 const control = 'h-8 rounded-lg border border-input bg-card px-2.5 font-mono text-[13px]';
 
+type Draft = { name: string; body: string; key: number };
+
 export function PlaybooksTab({ id }: { id: string }) {
   const { data } = useQuery(detailsQuery(id));
   const queryClient = useQueryClient(), p = profilePath(id);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['computers', id] });
   const navigate = useNavigate();
-  const [draft, setDraft] = useState(() => { const body = incoming ?? ''; incoming = null; return { name: '', body, key: 0, notice: '', focus: !!body }; });
-  const books = data?.playbooks ?? [];
+  // The editor is open on New playbook, Edit, or a recording saved from the session tab.
+  const [draft, setDraft] = useState<Draft | null>(() => { const body = incoming; incoming = null; return body ? { name: '', body, key: 0 } : null; });
+  const [sel, setSel] = useState<string | null>(null);
+  const books = data?.playbooks ?? [], current = books.find((b) => b.name === sel) ?? books[0];
+  const open = (name: string, body: string) => setDraft((d) => ({ name, body, key: (d?.key ?? 0) + 1 }));
 
   return (
-    <div className="flex flex-col gap-4">
-      <Alert>Notes for the agent, read with the <code>playbook</code> tool and followed as written: only you can write them. Fill the form, or write the Markdown yourself: both stay in sync.</Alert>
-      <Panel title="Playbooks" aside={<>
-        <Hint>Saving or deleting asks for your 2FA code</Hint>
-        <ActionButton variant="outline" size="sm" action={async () => {
-          await navigate({ to: '/profiles/$id', params: { id } });
-          await startRecording(queryClient, id);
-        }}>Record</ActionButton>
-      </>}>
-        {!books.length ? <Empty>No playbooks. Write one below: how to do a known task on a site, step by step.</Empty> : (
-          <Table>
-            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
-            <TableBody>{books.map((b) => (
-              <TableRow key={b.name}>
-                <TableCell className="font-mono font-semibold whitespace-nowrap">{b.name}</TableCell>
-                <TableCell>{b.description}</TableCell>
-                <TableCell className="whitespace-nowrap">{ago(b.updated)}</TableCell>
-                <TableCell className="w-px text-right whitespace-nowrap">
-                  <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ name: b.name, body: b.body, key: d.key + 1, notice: '', focus: true }))}>Edit</Button>{' '}
-                  <ActionButton variant="danger-outline" size="sm" done={`Playbook ${b.name} deleted.`} action={async () => {
-                    if (!await confirmSensitive({ title: `Delete playbook "${b.name}"?`, desc: 'The agent no longer sees it.', label: 'Delete', danger: true })) return false;
-                    await api(`${p}/playbook-delete`, 'POST', { name: b.name });
-                    await refresh();
-                  }}>Delete</ActionButton>
-                </TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-        )}
-      </Panel>
-      <Panel pad title="Add or replace">
-        {/* Remounted on Edit and after a save: the editor starts from that body. */}
-        <Editor key={draft.key} initial={draft} logins={data?.logins ?? []} onSave={async (name, body) => {
-          const r = await api<{ created: boolean }>(`${p}/playbook-save`, 'POST', { name, body });
-          await refresh();
-          setDraft((d) => ({ name: '', body: '', key: d.key + 1, notice: r.created ? 'Created.' : 'Updated.', focus: false }));
-        }} />
-      </Panel>
+    <div className="grid grid-cols-[220px_minmax(0,1fr)] items-start gap-8 max-[900px]:grid-cols-1">
+      <div className="flex flex-col gap-1">
+        <div className="mb-2 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => open('', '')}>New playbook</Button>
+          <ActionButton variant="outline" size="sm" action={async () => {
+            await navigate({ to: '/profiles/$id', params: { id } });
+            await startRecording(queryClient, id);
+          }}>Record playbook</ActionButton>
+        </div>
+        <nav aria-label="Playbooks" className="flex flex-col gap-0.5">
+          {books.map((b) => (
+            <button key={b.name} type="button" aria-current={!draft && current?.name === b.name ? 'page' : undefined} onClick={() => { setSel(b.name); setDraft(null); }}
+              className="flex cursor-pointer flex-col rounded-lg px-2.5 py-2 text-left hover:bg-line-soft aria-[current=page]:bg-line">
+              <b className="font-mono text-[13px] font-semibold [overflow-wrap:anywhere]">{b.name}</b>
+              <span className="text-[12.5px] text-ink-3">Updated {ago(b.updated)}</span>
+            </button>
+          ))}
+        </nav>
+        {!books.length && !draft && <p className="px-2.5 text-[13px] text-ink-3">No playbooks yet: how to do a known task on a site, step by step.</p>}
+      </div>
+      {draft ? (
+        <Section title={draft.name ? <>Edit <span className="font-mono">{draft.name}</span></> : 'New playbook'}
+          lead={<>Notes for the agent, read with the <code className="font-mono text-[12.5px]">playbook</code> tool and followed as written: only you can write them.</>}
+          actions={<Button variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>}>
+          {/* Remounted on each New or Edit: the editor starts from that body. */}
+          <Editor key={draft.key} initial={draft} logins={data?.logins ?? []} onSave={async (name, body) => {
+            const r = await api<{ created: boolean }>(`${p}/playbook-save`, 'POST', { name, body });
+            await refresh();
+            setDraft(null); setSel(name);
+            toast(`Playbook ${name} ${r.created ? 'created' : 'updated'}.`);
+          }} />
+        </Section>
+      ) : current && (
+        <Section title={<span className="font-mono">{current.name}</span>} lead={current.description}
+          actions={<>
+            <Button variant="outline" onClick={() => open(current.name, current.body)}>Edit</Button>
+            <ActionButton variant="outline" done={`Playbook ${current.name} deleted.`} action={async () => {
+              if (!await confirmSensitive({ title: `Delete playbook ${current.name}?`, desc: 'The agent no longer sees it.', label: 'Delete', danger: true })) return false;
+              await api(`${p}/playbook-delete`, 'POST', { name: current.name });
+              setSel(null);
+              await refresh();
+            }}>Delete</ActionButton>
+          </>}>
+          <Recipe body={current.body} />
+        </Section>
+      )}
+    </div>
+  );
+}
+
+/** A saved playbook as the agent will follow it: its inputs, notes, steps as sentences, and what to do if it fails. */
+function Recipe({ body }: { body: string }) {
+  const m = parse(body), inputs = placeholders(body);
+  if ('err' in m) return <p className="text-ink-2">The recipe can't be read: {m.err} Edit it to fix it.</p>;
+  return (
+    <div className="flex max-w-[720px] flex-col gap-4">
+      {inputs.length > 0 && <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-2">Inputs {inputs.map((n) => <InputToken key={n} name={n} />)}</div>}
+      {m.notes && <p className="whitespace-pre-wrap text-ink-2">{m.notes}</p>}
+      {m.steps.length ? (
+        <ol className="border-t border-line-soft">
+          {m.steps.map((r, i) => <NumberedStep key={i} n={i + 1}><StepText parts={describeStep('raw' in r ? JSON.parse(r.raw) : toStep(r))} /></NumberedStep>)}
+        </ol>
+      ) : <p className="text-ink-3">No recipe: the agent reads the notes and acts step by step.</p>}
+      {m.fallback && <p className="whitespace-pre-wrap"><span className="font-medium">If it fails: </span><span className="text-ink-2">{m.fallback}</span></p>}
     </div>
   );
 }
 
 /** The form edits the model and rewrites the Markdown (what is saved); editing the Markdown redraws the form. */
-/** initial.notice: the outcome of the save that reset the editor, shown for 3 s. */
-function Editor({ initial, logins, onSave }: { initial: { name: string; body: string; notice: string; focus: boolean }; logins: Login[]; onSave: (name: string, body: string) => Promise<void> }) {
+function Editor({ initial, logins, onSave }: { initial: { name: string; body: string }; logins: Login[]; onSave: (name: string, body: string) => Promise<void> }) {
   const [name, setName] = useState(initial.name);
   const [body, setBody] = useState(initial.body);
   const [model, setModel] = useState<Model>(() => { const m = parse(initial.body); return 'err' in m ? EMPTY : m; });
   const [mode, setMode] = useState<'form' | 'md'>('form');
-  const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(initial.notice ? { text: initial.notice, error: false } : null);
-  useEffect(() => { if (!initial.notice) return; const t = setTimeout(() => setMsg(null), 3000); return () => clearTimeout(t); }, [initial.notice]);
+  const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   // Bumped when steps move or go: rows remount, so a JSON row's textarea never shows another step's text.
   const [gen, setGen] = useState(0);
@@ -99,7 +129,7 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
-    // Success remounts the editor (empty, with the notice): only an error stays here.
+    // Success closes the editor: only an error stays here.
     try { await onSave(name.trim(), body); } catch (x) { setMsg({ text: message(x), error: true }); setBusy(false); }
   };
   const tool = toolName(name.trim() || 'name'), params = placeholders(body), n = 'err' in parsed ? 0 : parsed.steps.length, kb = new Blob([body]).size / 1024;
@@ -109,14 +139,14 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
       <Field>
         <FieldLabel htmlFor="bname">Name</FieldLabel>
         <Input id="bname" name="name" className="font-mono" placeholder="check-quota" pattern="[a-z0-9][a-z0-9\-]{0,39}" required autoComplete="off" spellCheck={false}
-          title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." autoFocus={initial.focus} value={name} onChange={(e) => setName(e.target.value)} />
+          title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         <FieldDescription>Lowercase, digits and dashes. Becomes the tool <code className="font-mono">{tool}</code></FieldDescription>
       </Field>
       <fieldset className="flex flex-wrap gap-1.5" aria-label="Edit as">
         {(['form', 'md'] as const).map((m) => (
           <label key={m} className="relative">
             <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="peer absolute opacity-0" />
-            <span className="inline-flex h-9 cursor-pointer items-center rounded-full border px-3.5 font-semibold peer-checked:border-primary peer-checked:bg-secondary peer-checked:text-primary peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
+            <span className="inline-flex h-9 cursor-pointer items-center rounded-lg border px-3.5 font-medium peer-checked:border-ink peer-checked:bg-line-soft peer-checked:text-ink peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
               {m === 'form' ? 'Form' : 'Markdown'}
             </span>
           </label>
@@ -136,7 +166,7 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
               <textarea id="bnotes" rows={3} className="rounded-lg border border-input px-3 py-2.5" placeholder="What to fill in, what the result means." value={model.notes} onChange={(e) => edit({ ...model, notes: e.target.value })} />
             </Field>
             <div className="flex flex-col gap-2">
-              <div className="flex justify-between"><span className="text-xs font-bold text-muted-foreground">Steps · {model.steps.length} of 20</span><Hint>Run in one call, 18 s at most</Hint></div>
+              <div className="flex justify-between"><span className="text-[13px] font-medium">Steps <span className="font-normal text-ink-3">{model.steps.length} of 20</span></span><Hint>Run in one call, 18 s at most</Hint></div>
               <ol className="flex flex-col gap-2">
                 {model.steps.map((r, i) => (
                   <StepRow key={`${gen}-${i}`} row={r} i={i} n={model.steps.length} logins={logins} onChange={(x) => setStep(i, x)}
@@ -150,8 +180,8 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
               </div>
               {params.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-                  <span className="text-xs font-bold text-muted-foreground">The agent fills</span>
-                  {params.map((x) => <span key={x} className="rounded-full bg-agent-soft px-2 font-mono text-xs leading-[18px] text-agent-ink">{`{${x}}`}</span>)}
+                  <span className="text-ink-2">Inputs</span>
+                  {params.map((x) => <InputToken key={x} name={x} />)}
                   <Hint>→ <code className="font-mono">{tool}({params.join(', ')})</code></Hint>
                 </div>
               )}
@@ -170,26 +200,26 @@ function Editor({ initial, logins, onSave }: { initial: { name: string; body: st
       {body.trim() && (
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-muted-foreground">
           <span>Agent sees <b className="font-semibold text-foreground">{name.trim() || 'name'}</b>: {'err' in parsed ? '' : parsed.desc || <Ko>no description</Ko>}</span>
-          <span>{err ? <Ko>Recipe not readable</Ko> : n > 20 ? <Ko>{n} steps, 20 max</Ko> : n ? <><span className="font-semibold text-ok">✓ Recipe</span> {n} steps</> : 'No recipe: the agent reads it and acts step by step'}</span>
-          <span className={cn(kb > 20 && 'font-semibold text-destructive-ink')}>{kb.toFixed(1)} KB of 20</span>
+          <span>{err ? <Ko>Recipe not readable</Ko> : n > 20 ? <Ko>{n} steps, 20 max</Ko> : n ? `Recipe, ${n} steps` : 'No recipe: the agent reads it and acts step by step'}</span>
+          <span className={cn(kb > 20 && 'font-medium text-ink')}>{kb.toFixed(1)} KB of 20</span>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="lg" disabled={busy}>Save</Button>
-        <p aria-live="polite" className={cn('min-h-5 text-[13px] text-muted-foreground', msg?.error && 'font-semibold text-destructive-ink')}>{msg?.text}</p>
+        <p aria-live="polite" className={cn('min-h-5 text-[13px] text-muted-foreground', msg?.error && 'font-medium text-ink')}>{msg?.text}</p>
       </div>
     </form>
   );
 }
 
-const Ko = ({ children }: { children: React.ReactNode }) => <span className="font-semibold text-destructive-ink">{children}</span>;
+const Ko = ({ children }: { children: React.ReactNode }) => <span className="font-medium text-ink">{children}</span>;
 
 function StepRow({ row, i, n, logins, onChange, onMove, onDelete }: {
   row: Row; i: number; n: number; logins: Login[]; onChange: (r: Row) => void; onMove: (to: number) => void; onDelete: () => void;
 }) {
   const label = `step ${i + 1}`;
   return (
-    <li className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-muted bg-[#FAFBFB] p-2.5 max-[600px]:grid-cols-[20px_minmax(0,1fr)]">
+    <li className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-muted bg-surface-2 p-2.5 max-[600px]:grid-cols-[20px_minmax(0,1fr)]">
       <span className="grid h-10 place-items-center font-mono text-[13px] font-bold text-muted-foreground">{i + 1}</span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
@@ -212,7 +242,7 @@ function StepRow({ row, i, n, logins, onChange, onMove, onDelete }: {
       <div className="flex gap-0.5 max-[600px]:col-start-2">
         <Button type="button" variant="ghost" size="sm" aria-label={`Move ${label} up`} disabled={!i} onClick={() => onMove(i - 1)}>↑</Button>
         <Button type="button" variant="ghost" size="sm" aria-label={`Move ${label} down`} disabled={i === n - 1} onClick={() => onMove(i + 1)}>↓</Button>
-        <Button type="button" variant="ghost" size="sm" className="text-destructive-ink" aria-label={`Delete ${label}`} onClick={onDelete}>✕</Button>
+        <Button type="button" variant="ghost" size="sm" className="text-ink-3" aria-label={`Delete ${label}`} onClick={onDelete}>✕</Button>
       </div>
     </li>
   );
@@ -243,7 +273,7 @@ function StepFields({ a, f, logins, onChange }: { a: Action; f: Fields; logins: 
         <select aria-label="Saved login" className={control} value={f.v ?? ''} onChange={(e) => set({ v: e.target.value })}>
           <option value="">{sites.length ? 'Pick a saved login' : 'No saved login: add one in Logins'}</option>
           {f.v && !sites.includes(f.v) && <option value={f.v}>{f.v} (not saved)</option>}
-          {logins.map((l) => <option key={l.site} value={l.site}>{l.site} · {l.username}</option>)}
+          {logins.map((l) => <option key={l.site} value={l.site}>{l.site}, {l.username}</option>)}
         </select>
         {check('if_needed', 'Skip if signed in')}
       </>;

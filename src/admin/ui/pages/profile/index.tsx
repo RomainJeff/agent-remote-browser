@@ -45,11 +45,11 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
           <ActionButton variant="outline" size="lg" disabled={c.state !== 'running'} done="Browser stopped. The profile is kept."
             action={async () => { closeView(); await api(`${profilePath(id)}/stop`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }}>Stop browser</ActionButton>
         )} />
-      <nav className="-mb-2 flex gap-1 overflow-x-auto border-b" aria-label="Profile sections">
+      <nav className="-mb-2 flex gap-[22px] overflow-x-auto border-b" aria-label="Profile sections">
         {tabs.map((t) => (
           <Link key={t} to="/profiles/$id" params={{ id }} search={{ tab: t === 'session' ? undefined : t }} activeOptions={{ exact: true }}
-            className="-mb-px border-b-2 border-transparent px-3.5 py-2.5 font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:font-bold aria-[current=page]:text-primary">
-            {TABS[t]}{count[t] !== undefined && ` · ${count[t]}`}
+            className="-mb-px flex h-[42px] items-center gap-1.5 border-b-2 border-transparent px-0.5 text-[13.5px] font-medium whitespace-nowrap text-ink-2 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:font-semibold aria-[current=page]:text-ink">
+            {TABS[t]}{count[t] !== undefined && <span className="font-medium text-ink-3 tabular-nums">{count[t]}</span>}
           </Link>
         ))}
       </nav>

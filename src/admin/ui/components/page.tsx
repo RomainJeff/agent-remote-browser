@@ -37,6 +37,22 @@ export function Panel({ title, aside, children, className, pad }: { title?: Reac
   );
 }
 
+/** A titled part of a tab, without a card: title and one line under it on the left, actions on the right, then the content. */
+export function Section({ title, lead, actions, children, className }: { title: ReactNode; lead?: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string }) {
+  return (
+    <section className={cn('flex min-w-0 flex-col gap-4', className)}>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          {lead && <p className="max-w-[720px] text-[13.5px] leading-5 text-ink-2">{lead}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export const Empty = ({ children }: { children: ReactNode }) => <p className="px-5 py-6 text-muted-foreground">{children}</p>;
 export const Hint = ({ children, className }: { children: ReactNode; className?: string }) => <span className={cn('text-xs text-muted-foreground', className)}>{children}</span>;
 
