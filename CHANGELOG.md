@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-25
+
+- The admin UI is rebuilt as a React app (TypeScript, Vite, TanStack Router and Query, shadcn/ui), with the same pages and look. The gateway serves the built bundle under a `script-src 'self'` policy; its image builds it in a separate stage and ships no front-end package. Admin URLs change from `#/p/<id>/<tab>` to `#/profiles/<id>?tab=<tab>`; handoff and invite links keep working.
+
 ## 2026-11-24
 
 - Authenticator enrollment shows a QR code to scan, with the link as a fallback: on invite acceptance in the admin UI, and in the terminal for `admin create` and `admin reset-2fa`.
