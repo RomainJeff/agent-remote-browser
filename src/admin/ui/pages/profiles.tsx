@@ -3,88 +3,117 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
-import { Empty, Hint, PageHead, Panel, Sub } from '@/components/page';
-import { DriverToken, stateNote } from '@/components/state';
+import { PageHead, Sub } from '@/components/page';
+import { ControlFrame, ControlTab, DriverToken, driverOf, type Driver } from '@/components/state';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import { ago, domains, message } from '@/lib/format';
-import { openView, takeControl } from '@/lib/live';
-import { clientsQuery, computersQuery } from '@/lib/queries';
+import { ago, domains, message, plural } from '@/lib/format';
+import { openView, takeControl, takeOver } from '@/lib/live';
+import { computersQuery } from '@/lib/queries';
+import type { Computer } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+/** The list is grouped by who drives, people first: a request waiting for someone is the reason to open this page. */
+const GROUPS: { title: string; has: Driver[] }[] = [
+  { title: 'Needs you', has: ['waiting', 'you'] },
+  { title: 'Agent driving', has: ['agent'] },
+  { title: 'Running', has: ['nobody'] },
+  { title: 'Stopped', has: ['stopped'] },
+];
+
 export function ProfilesPage() {
-  const { data: computers = [] } = useQuery(computersQuery);
-  const { data: clients } = useQuery(clientsQuery);
-  const [filter, setFilter] = useState<'all' | 'up'>('all');
+  const { data: computers = [], isPending } = useQuery(computersQuery);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
-  const queryClient = useQueryClient(), navigate = useNavigate();
-  const up = computers.filter((c) => c.state === 'running');
   const q = search.trim().toLowerCase();
-  const rows = computers.filter((c) => (filter === 'all' || c.state === 'running') && (!q || c.id.includes(q) || c.allow.some((d) => d.includes(q))));
+  const rows = computers.filter((c) => !q || c.id.includes(q) || c.allow.some((d) => d.includes(q)));
+  const groups = GROUPS.map((g) => ({ ...g, rows: rows.filter((c) => g.has.includes(driverOf(c))) })).filter((g) => g.rows.length);
 
   return (
     <>
-      <PageHead title="Profiles" sub="Each profile is an isolated browser with its own cookies, saved logins and allowed domains."
-        actions={<>
-          <Link to="/access" className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}>Connect an agent</Link>
-          <Button size="lg" onClick={() => setCreating(true)}>+ New profile</Button>
-        </>} />
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-        <Stat label="Running browsers">{up.length} <small className="text-sm font-semibold text-muted-foreground">of {computers.length}</small></Stat>
-        <Stat label="Active agent leases">{computers.filter((c) => c.leasedUntil).length}</Stat>
-        <Stat label="Agent access">{clients ? clients.keys.length + clients.oauth.length : '…'}</Stat>
-      </div>
-      <Panel title="All profiles" aside={<>
-        <div className="flex gap-1.5" role="group" aria-label="Filter">
-          {(['all', 'up'] as const).map((f) => (
-            <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
-              className="h-8 cursor-pointer rounded-full border bg-card px-3 text-xs font-bold text-muted-foreground aria-pressed:border-primary aria-pressed:bg-secondary aria-pressed:text-primary">
-              {f === 'all' ? `All · ${computers.length}` : `Running · ${up.length}`}
-            </button>
-          ))}
-        </div>
-        <Input type="search" className="w-[220px]" placeholder="Search profiles" aria-label="Search profiles" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </>}>
-        {!computers.length ? <Empty>No profiles yet. Create one, then take over to sign in to your sites.</Empty>
-          : !rows.length ? <Empty>No matching profiles.</Empty> : (
+      <PageHead title="Profiles" actions={computers.length > 0 && <>
+        <Input type="search" className="h-8 w-[220px] bg-surface-2" placeholder="Search" aria-label="Search profiles" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button onClick={() => setCreating(true)}>New profile</Button>
+      </>} />
+      {isPending ? null : !computers.length ? <FirstProfile onCreate={() => setCreating(true)} />
+        : !rows.length ? <p className="text-ink-3">No profile matches “{search.trim()}”.</p> : (
+          // Edge to edge in the main panel, right under the header bar.
+          <div className="-mx-6 -mt-6 max-[700px]:-mx-4 [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Profile</TableHead><TableHead>Access</TableHead><TableHead>Driver</TableHead><TableHead>Last activity</TableHead>
+                <TableHead>Profile</TableHead><TableHead>Control</TableHead><TableHead>Last activity</TableHead><TableHead>Access</TableHead>
                 <TableHead><span className="sr-only">Action</span></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{rows.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell><Link to="/profiles/$id" params={{ id: c.id }} className="font-mono font-semibold text-primary">{c.id}</Link><Sub>{c.allow.join(', ')}</Sub></TableCell>
-                  <TableCell>{c.role}<Sub>{c.members === 1 ? 'Private' : 'Shared'}</Sub></TableCell>
-                  <TableCell><DriverToken c={c} /><Sub>{stateNote(c)}</Sub></TableCell>
-                  <TableCell>{c.lastCall ? <>{ago(c.lastCall.ts)}<Sub mono>{c.lastCall.tool}{c.lastCall.ok ? '' : ' · failed'}</Sub></> : <Hint>No calls</Hint>}</TableCell>
-                  <TableCell className="w-px text-right whitespace-nowrap">
-                    <ActionButton variant="outline" size="sm" action={async () => {
-                      await navigate({ to: '/profiles/$id', params: { id: c.id } });
-                      if (c.state === 'running') openView(c.id, false); else await takeControl(queryClient, c.id, c.role !== 'viewer');
-                    }}>{c.state === 'running' ? 'Watch' : 'Start'}</ActionButton>
-                  </TableCell>
-                </TableRow>
-              ))}</TableBody>
+              {groups.map((g) => (
+                <TableBody key={g.title} className="[&_tr:last-child]:border-b">
+                  <TableRow className="bg-surface-2 hover:bg-surface-2">
+                    <th colSpan={5} scope="colgroup" className="h-9 pl-5 text-left text-[13px] font-semibold">{g.title}<span className="ml-1.5 font-medium text-ink-3">{g.rows.length}</span></th>
+                  </TableRow>
+                  {g.rows.map((c) => <ProfileRow key={c.id} c={c} />)}
+                </TableBody>
+              ))}
             </Table>
-          )}
-        <div className="border-t border-muted px-5 py-3"><Hint>An idle browser stops on its own. Its cookies and saved logins are kept.</Hint></div>
-      </Panel>
+          </div>
+        )}
       <NewProfileDialog open={creating} onOpenChange={setCreating} />
     </>
   );
 }
 
-function Stat({ label, children }: { label: string; children: React.ReactNode }) {
+function ProfileRow({ c }: { c: Computer }) {
+  const queryClient = useQueryClient(), navigate = useNavigate();
+  const d = driverOf(c), h = c.handoff, viewer = c.role === 'viewer';
+  const idle = c.state === 'running' && c.idleStopInS != null ? `stops in ${Math.ceil(c.idleStopInS / 60)} min if idle` : '';
+  const open = (then: () => unknown) => async () => { await navigate({ to: '/profiles/$id', params: { id: c.id } }); await then(); };
   return (
-    <div className="flex flex-col gap-1 rounded-xl border bg-card px-5 py-4">
-      <span className="text-xs font-bold text-muted-foreground">{label}</span>
-      <b className="text-[28px] leading-9 font-extrabold">{children}</b>
+    <TableRow className={cn(d === 'waiting' && 'bg-needs-you-soft/40 hover:bg-needs-you-soft/60')}>
+      <TableCell>
+        <Link to="/profiles/$id" params={{ id: c.id }} className="font-semibold hover:underline">{c.id}</Link>
+        <Sub mono>{c.allow.join(', ')}</Sub>
+      </TableCell>
+      <TableCell className="whitespace-nowrap"><DriverToken c={c} />{c.viewers > 0 && <Sub>{plural(c.viewers, 'viewer')}</Sub>}</TableCell>
+      <TableCell className="max-w-[360px]">
+        {h ? <>
+          {/* The agent's words: quoted, never phrased as an instruction from this page. */}
+          <q className="line-clamp-2 [overflow-wrap:anywhere]">{h.reason}</q><Sub>Asked {ago(h.created)}</Sub>
+        </> : c.lastCall ? <>
+          <span className="font-mono text-[13px]">{c.lastCall.tool}</span>{!c.lastCall.ok && ', failed'}
+          <Sub>{[ago(c.lastCall.ts), idle].filter(Boolean).join(', ')}</Sub>
+        </> : <><span className="text-ink-3">No activity yet</span>{idle && <Sub>{idle}</Sub>}</>}
+      </TableCell>
+      <TableCell className="whitespace-nowrap"><span className="capitalize">{c.role}</span><Sub>{c.members === 1 ? 'Private' : `Shared, ${plural(c.members, 'member')}`}</Sub></TableCell>
+      <TableCell className="w-px text-right whitespace-nowrap">
+        {d === 'waiting'
+          ? <ActionButton size="sm" action={open(() => takeOver(queryClient, c.id))}>Take over</ActionButton>
+          : c.state === 'running'
+            ? <ActionButton variant="outline" size="sm" action={open(() => openView(c.id, false))}>Watch</ActionButton>
+            : <ActionButton variant="outline" size="sm" action={open(() => takeControl(queryClient, c.id, !viewer))}>{viewer ? 'Start and watch' : 'Start'}</ActionButton>}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** No profile yet: an empty frame, nobody driving it. */
+function FirstProfile({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex flex-auto items-center justify-center py-16">
+      <div className="flex w-full max-w-[520px] flex-col items-start">
+        <ControlTab driver="stopped">Nobody</ControlTab>
+        <ControlFrame driver="stopped" className="gap-5 self-stretch px-8 py-9 max-[700px]:px-5">
+          <div className="flex flex-col gap-1.5">
+            <h2 className="text-lg font-semibold">Create your first profile</h2>
+            <p className="text-ink-2">A profile is a browser your agents can drive, with its own cookies, saved logins and allowed sites.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="lg" onClick={onCreate}>New profile</Button>
+            <Link to="/access" className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}>Connect an agent</Link>
+          </div>
+        </ControlFrame>
+      </div>
     </div>
   );
 }
@@ -106,25 +135,23 @@ function NewProfileDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   };
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); setError(''); }}>
-      <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-[520px]">
-        <form className="flex flex-col gap-4 p-6" onSubmit={submit}>
-          <div className="flex flex-col gap-1">
-            <DialogTitle className="text-xl font-extrabold">New profile</DialogTitle>
-            <DialogDescription>An isolated browser. The agent can only open the allowed domains.</DialogDescription>
-          </div>
+      <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-[460px]">
+        <form className="flex flex-col gap-4 p-[22px]" onSubmit={submit}>
+          <DialogTitle className="text-base font-semibold">New profile</DialogTitle>
           <Field>
-            <FieldLabel htmlFor="pid">Profile name</FieldLabel>
+            <FieldLabel htmlFor="pid">Name</FieldLabel>
             <Input id="pid" name="id" className="font-mono" placeholder="notion-research" pattern="[a-z0-9][a-z0-9\-]{0,39}" required autoComplete="off" spellCheck={false} autoFocus
               title="Lowercase letters, digits and hyphens, 40 max. Starts with a letter or digit." />
+            <FieldDescription>Lowercase letters, digits and hyphens. Agents use it to pick this browser.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="pallow">Allowed domains</FieldLabel>
-            <Input id="pallow" name="allow" className="font-mono" placeholder="notion.so, example.com" required autoComplete="off" spellCheck={false} />
-            <FieldDescription>Comma-separated. Subdomains are included.</FieldDescription>
+            <textarea id="pallow" name="allow" rows={3} required autoComplete="off" spellCheck={false} placeholder={'notion.so\nexample.com'}
+              className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-2 font-mono text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+            <FieldDescription>One per line. Subdomains are included. You can change them later.</FieldDescription>
           </Field>
-          <Hint>Next: take over to sign in to your sites, add saved logins if needed, then connect an agent.</Hint>
-          <p aria-live="polite" className={cn('min-h-5 text-[13px] font-semibold text-destructive-ink')}>{error}</p>
-          <div className="flex justify-end gap-2">
+          {error && <p role="alert" className="text-[13px] font-medium">{error}</p>}
+          <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="lg" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" size="lg" disabled={busy}>Create profile</Button>
           </div>

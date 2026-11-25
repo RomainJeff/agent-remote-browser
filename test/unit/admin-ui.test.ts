@@ -178,19 +178,17 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   ]), 'invite requests');
 `);
 
-browserCase('profiles list filters and searches, and a new profile opens on its page', '#/profiles', `
+browserCase('profiles list groups by driver and searches, and a new profile opens on its page', '#/profiles', `
   await until(() => text().includes('other'), 'profile rows');
-  const rows = () => [...document.querySelectorAll('tbody tr')].map(r => r.querySelector('a').textContent).join();
-  check(rows() === 'sample,other', 'all rows ' + rows());
-  button('Running · 1').click();
-  await until(() => rows() === 'sample', 'running filter');
-  button('All · 2').click();
+  const rows = () => [...document.querySelectorAll('tbody tr:has(a)')].map(r => r.querySelector('a').textContent).join();
+  const groups = () => [...document.querySelectorAll('tbody th')].map(t => t.textContent).join();
+  check(rows() === 'sample,other' && groups() === 'Running1,Stopped1', 'grouped rows ' + rows() + ' ' + groups());
   choose(document.querySelector('[aria-label="Search profiles"]'), 'notion');
   await until(() => rows() === 'other', 'search by domain');
-  button('+ New profile').click();
+  button('New profile').click();
   await until(dialog, 'new profile dialog');
   field('id', dialog()).value = 'fresh';
-  field('allow', dialog()).value = 'fresh.example, b.example';
+  field('allow', dialog()).value = 'fresh.example\\nb.example';
   dialog().requestSubmit();
   await until(() => document.querySelector('h1')?.textContent.startsWith('fresh'), 'profile page');
   check(sent() === JSON.stringify([['/api/profiles', { id: 'fresh', allow: ['fresh.example', 'b.example'] }]]), 'create request ' + sent());
