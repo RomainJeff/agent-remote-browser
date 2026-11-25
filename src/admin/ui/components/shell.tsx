@@ -3,19 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { KeyRoundIcon, LayoutListIcon, LogOutIcon, ShieldIcon, UsersIcon } from 'lucide-react';
 import { Brand } from '@/components/brand';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
-import { clientsQuery, computersQuery } from '@/lib/queries';
+import { computersQuery } from '@/lib/queries';
 import { gatewayAdminQuery, sessionQuery } from '@/lib/session';
 
-/** Signed-in layout: sidebar navigation and the account, page content beside it. */
+/** Signed-in layout: sidebar on the canvas, page content in the main panel beside it. */
 export function Shell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient(), navigate = useNavigate();
   const { data: session } = useQuery(sessionQuery);
   const { data: gatewayAdmin } = useQuery(gatewayAdminQuery);
   const { data: computers } = useQuery(computersQuery);
-  const { data: clients } = useQuery(clientsQuery);
   const email = session?.email ?? '';
   const needs = computers?.filter((c) => c.handoff?.state === 'pending').length ?? 0;
   useEffect(() => { document.title = (needs ? `(${needs}) ` : '') + 'Agent Remote Browser'; }, [needs]);
@@ -26,35 +24,33 @@ export function Shell({ children }: { children: ReactNode }) {
   };
   return (
     <div className="flex min-h-screen flex-wrap">
-      <aside className="flex max-w-full flex-[1_1_232px] flex-col gap-6 border-r border-[#E0E0E0] bg-card px-4 py-5 min-[900px]:sticky min-[900px]:top-0 min-[900px]:h-screen min-[900px]:flex-[0_0_232px]">
+      <aside className="flex max-w-full flex-[1_1_228px] flex-col gap-5 px-3 py-[18px] min-[900px]:sticky min-[900px]:top-0 min-[900px]:h-screen min-[900px]:flex-[0_0_228px]">
         <Brand />
-        <nav className="flex flex-col gap-1" aria-label="Main navigation">
-          <NavLink to="/profiles" icon={<LayoutListIcon />} count={computers?.length}>
-            Profiles{needs > 0 && <Badge variant="warn" title="Agents waiting for you">{needs}</Badge>}
+        <nav className="flex flex-col gap-0.5" aria-label="Main navigation">
+          <NavLink to="/profiles" icon={<LayoutListIcon />}>
+            Profiles{needs > 0 && <span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-needs-you px-[5px] text-[11.5px] font-bold text-ink" title="Agents waiting for you">{needs}</span>}
           </NavLink>
-          <NavLink to="/access" icon={<KeyRoundIcon />} count={clients && clients.keys.length + clients.oauth.length}>Agent access</NavLink>
+          <NavLink to="/access" icon={<KeyRoundIcon />}>Agent access</NavLink>
           {gatewayAdmin && <NavLink to="/members" icon={<UsersIcon />}>Members</NavLink>}
           <NavLink to="/security" icon={<ShieldIcon />}>Security</NavLink>
         </nav>
-        <header className="mt-auto flex items-center gap-3 border-t border-muted pt-4">
-          <span className="flex size-8 flex-none items-center justify-center rounded-full bg-muted text-xs font-bold">{(email || 'AD').slice(0, 2).toUpperCase()}</span>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <b className="truncate text-[13px]">{email}</b>
-            <span className="text-xs font-semibold text-primary">2FA enabled</span>
-          </span>
-          <Button variant="ghost" size="icon-lg" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOutIcon /></Button>
-        </header>
+        <div className="mt-auto flex items-center gap-2.5 pl-2 text-[13px] text-ink-2">
+          <span className="grid size-6 flex-none place-items-center rounded-full bg-line text-[10.5px] font-bold text-ink">{(email || 'AD').slice(0, 2).toUpperCase()}</span>
+          <span className="min-w-0 flex-1 truncate">{email}</span>
+          <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOutIcon /></Button>
+        </div>
       </aside>
-      <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 px-10 pt-8 pb-12 max-[700px]:px-4 max-[700px]:pt-6">{children}</main>
+      {/* PageHead's negative side margins match this padding. */}
+      <main className="m-2 flex min-w-0 flex-[999_1_560px] flex-col gap-6 rounded-2xl border bg-card px-6 pb-10 min-[900px]:ml-0 max-[700px]:px-4">{children}</main>
     </div>
   );
 }
 
-function NavLink({ to, icon, count, children }: { to: '/profiles' | '/access' | '/members' | '/security'; icon: ReactNode; count?: number; children: ReactNode }) {
+function NavLink({ to, icon, children }: { to: '/profiles' | '/access' | '/members' | '/security'; icon: ReactNode; children: ReactNode }) {
   return (
-    <Link to={to} className="flex min-h-10 items-center gap-3 rounded-lg px-3 font-semibold text-foreground hover:bg-background [&_svg]:size-[18px]"
-      activeProps={{ 'aria-current': 'page', className: 'bg-secondary text-primary font-bold hover:bg-secondary' }}>
-      {icon}{children}{count !== undefined && <span className="ml-auto text-xs font-normal text-muted-foreground">{count}</span>}
+    <Link to={to} className="flex h-8 items-center gap-2.5 rounded-lg px-2.5 font-medium text-ink-2 hover:bg-line-soft [&_svg]:size-4"
+      activeProps={{ 'aria-current': 'page', className: 'bg-line font-semibold text-ink hover:bg-line' }}>
+      {icon}{children}
     </Link>
   );
 }

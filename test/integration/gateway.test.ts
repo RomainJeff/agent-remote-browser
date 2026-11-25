@@ -168,6 +168,13 @@ test('admin page: the built UI under a self-only script policy, hashed assets ca
   assert.match(String(asset.headers['cache-control']), /immutable/);
   assert.equal((await admin('GET', src, { headers: { ...anon, host: 'evil.example' } })).status, 403);
   assert.equal((await admin('GET', '/assets/missing.js', { headers: anon })).status, 401);
+  // The UI font is self-hosted: allowed from 'self' only, served before sign-in with its font type.
+  assert.match(String(page.headers['content-security-policy']), /font-src 'self';/);
+  const css = page.body.match(/href="(\/assets\/[^"]+\.css)"/)?.[1];
+  assert.ok(css, 'stylesheet');
+  const font = (await admin('GET', css, { headers: anon })).body.match(/url\((\/assets\/[^)]+\.woff2)\)/)?.[1];
+  assert.ok(font, 'woff2 font');
+  assert.equal((await admin('GET', font, { headers: anon })).headers['content-type'], 'font/woff2');
 });
 
 test('admin API: refused without a session, without TOTP, and with a wrong password; no public signup', async () => {
