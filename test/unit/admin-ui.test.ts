@@ -205,7 +205,7 @@ browserCase('editor asking for settings lands on the session, without Delete', '
   await until(() => document.querySelector('[aria-current=page][href*="sample"]'), 'current tab');
   const current = [...document.querySelectorAll('nav[aria-label="Profile sections"] [aria-current=page]')].map(a => a.textContent).join();
   check(current === 'Session', 'current tab ' + current);
-  check(!button('Delete profile') && button('Stop browser'), 'no Delete, Stop shown');
+  check(!button('Delete profile…') && button('Stop browser'), 'no Delete, Stop shown');
 `, "signedIn = true; role = 'editor'");
 
 browserCase('profile admin picks members to add, then changes and removes sharing', '#/profiles/sample?tab=sharing', `
@@ -219,9 +219,9 @@ browserCase('profile admin picks members to add, then changes and removes sharin
   await until(() => form.querySelector('summary').textContent === '2 selected', 'selection count');
   form.elements.role.value = 'viewer'; form.requestSubmit();
   await until(() => !pick.open && writes.length === 2, 'list closed after adding');
-  await until(() => document.querySelector('[aria-label="Role · other@example.com"]'), 'other row');
+  await until(() => document.querySelector('[aria-label="Role of other@example.com"]'), 'other row');
   check(!document.querySelector('tbody tr:first-child button'), 'no Remove on own row');
-  choose(document.querySelector('[aria-label="Role · ' + email + '"]'), 'editor');
+  choose(document.querySelector('[aria-label="Role of ' + email + '"]'), 'editor');
   await until(() => writes.length === 3, 'role change');
   [...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('other@example.com')).querySelector('button').click();
   await until(() => writes.length === 4, 'removal');
@@ -231,7 +231,7 @@ browserCase('profile admin picks members to add, then changes and removes sharin
 `, "signedIn = true; stepUpLeft = 900; members.push({ email: 'other@example.com', role: 'editor' })");
 
 browserCase('deleting a profile asks to retype its name and for a 2FA code, then returns to the list', '#/profiles/sample?tab=settings', `
-  (await until(() => button('Delete profile'), 'delete button')).click();
+  (await until(() => button('Delete profile…'), 'delete button')).click();
   await until(dialog, 'confirm dialog');
   field('typed', dialog()).value = 'wrong'; field('code', dialog()).value = '123456'; dialog().requestSubmit();
   await until(() => dialog().innerText.includes('The text does not match.'), 'typed check');
@@ -248,19 +248,19 @@ browserCase('saving domains with a stale second factor asks for a code once, the
   add.value = 'New.example'; add.form.requestSubmit();
   await until(() => document.querySelector('[aria-label="Remove new.example"]'), 'chip added');
   document.querySelector('[aria-label="Remove example.com"]').click();
-  await until(() => text().includes('Unsaved changes'), 'draft');
+  await until(() => text().includes('2 unsaved changes'), 'draft');
   button('Save domains').click();
   await until(() => dialog()?.innerText.includes('Confirm with your 2FA code'), 'step-up dialog');
   field('code', dialog()).value = '123456'; dialog().requestSubmit();
   await until(() => text().includes('Domains saved. The browser restarts on next use.'), 'saved');
   check(sent() === JSON.stringify([['/api/computers/sample/config', { allow: ['new.example'] }], ['/api/step-up', { code: '123456' }],
     ['/api/computers/sample/config', { allow: ['new.example'] }]]), 'requests ' + sent());
-  check(!text().includes('Unsaved changes'), 'draft cleared');
+  check(!text().includes('unsaved change'), 'draft cleared');
 `, 'signedIn = true');
 
 browserCase('playbook editor: edit in the form, check the Markdown, pause on an error, then save', '#/profiles/sample?tab=playbooks', `
   (await until(() => button('Edit'), 'playbook row')).click();
-  await until(() => field('name').value === 'check-quota', 'loaded name');
+  await until(() => field('name')?.value === 'check-quota', 'loaded name');
   check(document.querySelector('#bdesc').value === 'Check quota', 'description');
   check(document.querySelectorAll('ol li').length === 1, 'one step');
   button('+ Add step').click();
@@ -278,8 +278,8 @@ browserCase('playbook editor: edit in the form, check the Markdown, pause on an 
   document.querySelector('input[value=md]').click();
   choose(await until(() => document.querySelector('[aria-label="Playbook Markdown"]'), 'markdown again'), body);
   button('Save').click();
-  await until(() => text().includes('Updated.'), 'saved');
-  check(field('name').value === '' && document.querySelector('#bdesc')?.value === '', 'editor reset to the form, empty');
+  await until(() => text().includes('Playbook check-quota updated.'), 'saved');
+  check(!field('name') && text().includes('Open example.com'), 'editor closed, the playbook steps as sentences');
   check(sent() === JSON.stringify([['/api/computers/sample/playbook-save', { name: 'check-quota', body }]]), 'save request ' + sent());
 `, 'signedIn = true; stepUpLeft = 900');
 
