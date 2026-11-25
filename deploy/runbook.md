@@ -125,7 +125,7 @@ Readiness: `curl -fsS http://127.0.0.1:18787/readyz` (without tunnel), or with t
 
 In the admin UI: create a profile (id + allowed domains), save logins for it (and "Test" them), create API keys (expiry required: 30 days, 90 days, 1 year or a date), revoke connected clients, extend or release an agent's lease, watch a browser live.
 
-Sign-in: password, then a TOTP code or a backup code. "Trust this device for 30 days" (admin listener only) skips the code at the next sign-ins from this browser. Sensitive actions (keys, clients, logins, domains, profile deletion) ask for a fresh code when the last one is older than 15 minutes; five wrong codes in a row sign the session out.
+Sign-in: password, then a TOTP code or a backup code. "Trust this device for 30 days" (admin listener only) skips the code at the next sign-ins from this browser. Sensitive actions (keys, clients, logins, domains, profile deletion) ask for a fresh code when the last one is older than 15 minutes; five wrong codes in a row sign the session out. A forgotten password is reset from the sign-in page ("Forgot password?") with the email and a current authenticator code, not a backup code; this signs the account out everywhere, and five wrong codes lock its second factor for 15 minutes, sign-in included. Without the authenticator either, run `admin reset-2fa` on the host.
 
 ### Onboard or remove a member
 

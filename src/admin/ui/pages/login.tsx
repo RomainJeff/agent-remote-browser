@@ -14,10 +14,11 @@ import { sessionQuery } from '@/lib/session';
 const status = (e: unknown) => e instanceof ApiError ? e.status : 0;
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-/** Sign-in: password, then the TOTP or a backup code (Better Auth session cookie). */
+/** Sign-in: password, then the TOTP or a backup code (Better Auth session cookie). A forgotten password is reset with the TOTP. */
 export function LoginPage() {
   const queryClient = useQueryClient(), navigate = useNavigate();
-  const [step, setStep] = useState<'password' | 'code'>('password');
+  const [step, setStep] = useState<'password' | 'code' | 'reset'>('password');
+  const [notice, setNotice] = useState('');
   const [backup, setBackup] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ export function LoginPage() {
       const r = await api<{ twoFactorRedirect?: boolean }>('/api/auth/sign-in/email', 'POST', { email: String(data.get('email')).trim(), password: data.get('password') });
       // No twoFactorRedirect = TOTP not enrolled: the server refuses that session anyway.
       if (!r.twoFactorRedirect) throw new Error('2FA is not set up: run `arb admin reset-2fa`.');
-      setError(''); setBackup(false); setStep('code');
+      setError(''); setNotice(''); setBackup(false); setStep('code');
     } catch (e) {
       setError(status(e) === 429 ? 'Too many attempts. Wait a minute and try again.' : status(e) === 401 ? 'Wrong email or password.' : message(e));
     }
@@ -49,19 +50,44 @@ export function LoginPage() {
     }
   });
 
+  const reset = submit(async (data) => {
+    try {
+      await api('/api/password/reset', 'POST', { email: String(data.get('email')).trim(), code: String(data.get('code')).trim(), password: data.get('password') });
+      setError(''); setNotice('Password changed.'); setStep('password');
+    } catch (e) {
+      setError(status(e) === 401 ? 'Wrong email or code.' : message(e));
+    }
+  });
+
   return (
     <AuthLayout>
       <Brand />
       <Card className="w-full max-w-[420px] gap-5 p-8">
         {step === 'password' ? (
-          <form className="flex flex-col gap-4" onSubmit={signIn}>
+          <form key="password" className="flex flex-col gap-4" onSubmit={signIn}>
             <div><StepLabel>Step 1 of 2</StepLabel><h1 className="text-2xl font-extrabold">Sign in</h1></div>
             <Field><FieldLabel htmlFor="email">Email</FieldLabel><Input id="email" name="email" type="email" autoComplete="username" required autoFocus /></Field>
             <Field><FieldLabel htmlFor="password">Password</FieldLabel><Input id="password" name="password" type="password" autoComplete="current-password" required /></Field>
+            <Button type="button" variant="link" className="self-start px-0" onClick={() => { setError(''); setNotice(''); setStep('reset'); }}>Forgot password?</Button>
             <Button type="submit" size="lg" disabled={busy}>Continue</Button>
+            {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+          </form>
+        ) : step === 'reset' ? (
+          <form key="reset" className="flex flex-col gap-4" onSubmit={reset}>
+            <h1 className="text-2xl font-extrabold">Reset password</h1>
+            <Field><FieldLabel htmlFor="email">Email</FieldLabel><Input id="email" name="email" type="email" autoComplete="username" required autoFocus /></Field>
+            <Field>
+              <FieldLabel htmlFor="code">6-digit code from your authenticator</FieldLabel>
+              <Input id="code" name="code" className="h-12 text-center font-mono text-[22px]! font-semibold tracking-[.3em]" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required />
+            </Field>
+            <Field><FieldLabel htmlFor="password">New password</FieldLabel><Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></Field>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="lg" onClick={() => { setError(''); setStep('password'); }}>Back</Button>
+              <Button type="submit" size="lg" disabled={busy}>Reset password</Button>
+            </div>
           </form>
         ) : (
-          <form className="flex flex-col gap-4" onSubmit={verify}>
+          <form key="code" className="flex flex-col gap-4" onSubmit={verify}>
             <div><StepLabel>Step 2 of 2</StepLabel><h1 className="text-2xl font-extrabold">Authenticator code</h1></div>
             <p className="text-muted-foreground">Open your authenticator app and enter the 6-digit code.</p>
             {backup ? (

@@ -2,6 +2,7 @@
 
 ## 2026-11-25
 
+- Members who forget their password reset it from the sign-in page with their email and a current authenticator code. The reset signs the account out everywhere and counts wrong codes toward the same 15-minute lockout as sign-in.
 - The admin UI is rebuilt as a React app (TypeScript, Vite, TanStack Router and Query, shadcn/ui), with the same pages and look. The gateway serves the built bundle under a `script-src 'self'` policy; its image builds it in a separate stage and ships no front-end package. Admin URLs change from `#/p/<id>/<tab>` to `#/profiles/<id>?tab=<tab>`; handoff and invite links keep working.
 
 ## 2026-11-24

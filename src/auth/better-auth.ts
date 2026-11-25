@@ -14,6 +14,8 @@ import type { Config } from '../config.ts';
 
 export const PREFIX = { access: 'arb_at_', refresh: 'arb_rt_', secret: 'arb_cs_', apiKey: 'arb_k_' } as const;
 export const SCOPES = ['mcp', 'offline_access'];
+// Per-account TOTP lockout, shared by sign-in and the password reset (password-reset.ts).
+export const LOCKOUT = { maxFailedAttempts: 5, durationSeconds: 900 };
 
 export interface AuthOptions { baseURL: string; secret: string; trustedOrigins: string[] }
 export type Auth = ReturnType<typeof createAuth>['auth'];
@@ -60,7 +62,7 @@ export function createAuth(db: DatabaseSync, o: AuthOptions) {
       },
     },
     plugins: [
-      twoFactor({ issuer: 'agent-remote-browser', accountLockout: { enabled: true, maxFailedAttempts: 5, durationSeconds: 900 } }),
+      twoFactor({ issuer: 'agent-remote-browser', accountLockout: { enabled: true, ...LOCKOUT } }),
       apiKey({ defaultPrefix: PREFIX.apiKey, enableMetadata: true, startingCharactersConfig: { charactersLength: 12 }, rateLimit: { enabled: false }, requireName: true }),
       oauthProvider({
         loginPage: '/login',

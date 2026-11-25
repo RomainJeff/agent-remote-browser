@@ -14,6 +14,7 @@ import { tx } from '../store/db.ts';
 import { requireAdmin, scopedProfile, toHeaders } from '../auth/guards.ts';
 import { AccountError, listUsers, normalizedEmail, privateProfilesOf, removalTarget, removeUser, requireAvailable, setAdmin } from '../auth/accounts.ts';
 import { finishInvite, issue, openInvites, revoke, startInvite } from '../auth/invites.ts';
+import { resetPassword } from '../auth/password-reset.ts';
 import { callAuth, reply } from '../auth/routes.ts';
 import { count } from '../metrics.ts';
 import { log, errCode } from '../audit.ts';
@@ -162,13 +163,14 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
     store.deleteProfile(id); // cascades to its logins, leases, OAuth grants and API keys
   }
 
-  const inviteBudgets = new Map<string, ReturnType<typeof windowBudget>>();
+  // Signed-out account routes (invite acceptance, password reset): one per-IP budget.
+  const accountBudgets = new Map<string, ReturnType<typeof windowBudget>>();
   let clearBudgetsAt = 0;
-  function allowInviteAttempt(ip: string) {
+  function allowAccountAttempt(ip: string) {
     const now = Date.now();
-    if (now >= clearBudgetsAt) { inviteBudgets.clear(); clearBudgetsAt = now + 60_000; }
-    if (!inviteBudgets.has(ip)) inviteBudgets.set(ip, windowBudget(10, 60_000));
-    return inviteBudgets.get(ip)!(now);
+    if (now >= clearBudgetsAt) { accountBudgets.clear(); clearBudgetsAt = now + 60_000; }
+    if (!accountBudgets.has(ip)) accountBudgets.set(ip, windowBudget(10, 60_000));
+    return accountBudgets.get(ip)!(now);
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse, pub: boolean) {
@@ -202,11 +204,19 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
         res.setHeader('content-security-policy', `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self' ${ws}`);
         return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(ui.index);
       }
-      if (post && (path === '/api/invite/start' || path === '/api/invite/finish')) {
+      if (post && (path === '/api/invite/start' || path === '/api/invite/finish' || path === '/api/password/reset')) {
         const email = await reach(req, pub);
         if (email === false) return send(res, 403, { error: 'forbidden' });
-        if (!allowInviteAttempt(String(req.headers['cf-connecting-ip']))) return send(res, 429, { error: 'Too many attempts, wait a minute' });
+        if (!allowAccountAttempt(String(req.headers['cf-connecting-ip']))) return send(res, 429, { error: 'Too many attempts, wait a minute' });
         const body = await readJson(req) || {};
+        if (path === '/api/password/reset') {
+          const reset = await resetPassword(db, authOf(pub), body, email).catch((e) => {
+            if (e instanceof AccountError && (e.status === 401 || e.status === 429)) count('arb_auth_failures_total', { kind: e.status === 429 ? 'rate_limited' : 'totp' });
+            throw e;
+          });
+          audit({ by: reset, agent: reset, tool: 'admin:password_reset', ok: true });
+          return send(res, 200, { reset: true });
+        }
         if (path === '/api/invite/start') {
           const { totpURI, cookies } = await startInvite(db, authOf(pub), body.token, body.password, email);
           res.setHeader('set-cookie', cookies);

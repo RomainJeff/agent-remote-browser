@@ -1558,6 +1558,38 @@ test('a default invite enrolls a member who can sign in and starts with no profi
   assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
 });
 
+test('password reset: the authenticator code sets a new password, signs out everywhere and shares the sign-in lockout', async () => {
+  await restart();
+  const email = 'forgetful@example.com', password = randomBytes(16).toString('hex'), next = randomBytes(16).toString('hex');
+  const token = tokenOf((await admin('POST', '/api/users/invite', { body: { email } })).json);
+  const start = await accept('start', { token, password }), uri = start.json.totpURI;
+  assert.equal((await accept('finish', { token, code: totp(uri) }, jar(start.cookies))).status, 200);
+  const signIn = async (pw: string) => {
+    sql((db) => db.exec('DELETE FROM rateLimit'));
+    const half = await admin('POST', '/api/auth/sign-in/email', { headers: { ...adminOrigin(), cookie: '' }, body: { email, password: pw } });
+    if (half.status !== 200) return { status: half.status, cookie: '' };
+    const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(uri) } });
+    return { status: signed.status, cookie: jar(signed.cookies, jar(half.cookies)) };
+  };
+  const reset = (code: string) => admin('POST', '/api/password/reset', { headers: { ...adminOrigin(), cookie: '' }, body: { email, code, password: next } });
+  const bad = () => String((Number(totp(uri)) + 1) % 1e6).padStart(6, '0');
+  const old = await signIn(password);
+  assert.equal(old.status, 200);
+
+  for (let i = 0; i < 5; i++) assert.equal((await reset(bad())).status, 401);
+  assert.equal((await reset(totp(uri))).status, 429, 'five wrong codes lock the account');
+  assert.equal((await signIn(password)).status, 429, 'the lock also holds at sign-in');
+  sql((db) => db.prepare('UPDATE twoFactor SET lockedUntil = ? WHERE userId = (SELECT id FROM user WHERE email = ?)').run(new Date(Date.now() - 1000).toISOString(), email));
+  assert.equal((await reset(bad())).status, 401, 'an expired lock restarts the count');
+
+  assert.equal((await reset(totp(uri))).status, 200);
+  assert.equal((await admin('GET', '/api/session', { headers: { cookie: old.cookie } })).status, 401);
+  assert.equal((await signIn(password)).status, 401);
+  assert.equal((await signIn(next)).status, 200);
+  const audited = readFileSync(f.audit, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((l) => l.tool === 'admin:password_reset');
+  assert.deepEqual(audited.map((l) => [l.agent, l.by]), [[email, email]]);
+});
+
 test('removing a member deletes their private computer and gives the oldest remaining member shared administration', async () => {
   const email = 'departing@example.com', headers = await signInNewUser(email);
   const later = 'later@example.com';
@@ -1623,10 +1655,11 @@ test('expired enrollment can be replaced, revocation removes its pending user, a
 test('invite acceptance enforces the listener boundary and a shared attempt limit', async () => {
   await restart();
   const body = { token: 'unavailable' };
-  for (const step of ['start', 'finish']) {
-    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { origin: 'https://example.com' } })).status, 403);
-    assert.equal((await admin('POST', '/api/invite/' + step, { body, headers: { host: 'example.com' } })).status, 403);
+  for (const path of ['/api/invite/start', '/api/invite/finish', '/api/password/reset']) {
+    assert.equal((await admin('POST', path, { body, headers: { origin: 'https://example.com' } })).status, 403);
+    assert.equal((await admin('POST', path, { body, headers: { host: 'example.com' } })).status, 403);
   }
   for (let i = 0; i < 10; i++) assert.equal((await accept(i % 2 ? 'start' : 'finish', body)).status, 404);
   assert.equal((await accept('finish', body)).status, 429);
+  assert.equal((await admin('POST', '/api/password/reset', { body: { email: owner.email }, headers: { ...adminOrigin(), cookie: '' } })).status, 429, 'one budget for every signed-out account route');
 });
