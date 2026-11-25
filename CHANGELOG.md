@@ -2,6 +2,7 @@
 
 ## 2026-11-25
 
+- Fixed: on a device trusted for 30 days, admin sign-in now skips the authenticator code instead of failing with "2FA is not set up".
 - Gateway admins can create a one-time password reset link for a member from the Members page. The member picks a new password and keeps their authenticator. The reset signs them out everywhere.
 - The admin UI is rebuilt as a React app (TypeScript, Vite, TanStack Router and Query, shadcn/ui), with the same pages and look. The gateway serves the built bundle under a `script-src 'self'` policy; its image builds it in a separate stage and ships no front-end package. Admin URLs change from `#/p/<id>/<tab>` to `#/profiles/<id>?tab=<tab>`; handoff and invite links keep working.
 

@@ -28,11 +28,20 @@ export function LoginPage() {
     try { await fn(new FormData(e.currentTarget)); } finally { setBusy(false); }
   };
 
+  const enter = async () => {
+    const session = await queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });
+    if (session) await navigate({ to: '/profiles' });
+    return !!session;
+  };
+
   const signIn = submit(async (data) => {
     try {
       const r = await api<{ twoFactorRedirect?: boolean }>('/api/auth/sign-in/email', 'POST', { email: String(data.get('email')).trim(), password: data.get('password') });
-      // No twoFactorRedirect = TOTP not enrolled: the server refuses that session anyway.
-      if (!r.twoFactorRedirect) throw new Error('2FA is not set up: run `arb admin reset-2fa`.');
+      // No twoFactorRedirect: a trusted device (signed in) or TOTP not enrolled (the server refuses that session).
+      if (!r.twoFactorRedirect) {
+        if (await enter()) return;
+        throw new Error('2FA is not set up: run `arb admin reset-2fa`.');
+      }
       setError(''); setBackup(false); setStep('code');
     } catch (e) {
       setError(status(e) === 429 ? 'Too many attempts. Wait a minute and try again.' : status(e) === 401 ? 'Wrong email or password.' : message(e));
@@ -42,8 +51,7 @@ export function LoginPage() {
   const verify = submit(async (data) => {
     try {
       await api(`/api/auth/two-factor/${backup ? 'verify-backup-code' : 'verify-totp'}`, 'POST', { code: String(data.get('code')).trim(), trustDevice: data.has('trust') });
-      await queryClient.fetchQuery({ ...sessionQuery, staleTime: 0 });
-      await navigate({ to: '/profiles' });
+      await enter();
     } catch (e) {
       setError(status(e) === 429 ? 'Too many attempts. The account locks for 15 min after 5 failures.' : status(e) === 401 ? 'Invalid or expired code. Sign in again if this keeps happening.' : message(e));
     }

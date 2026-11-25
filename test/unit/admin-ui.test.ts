@@ -14,7 +14,7 @@ const chrome = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/chro
 
 const fixture = `
 const writes = [], email = 'admin@example.test';
-let signedIn = false, gatewayAdmin = true, role = 'admin', stepUpLeft = 0;
+let signedIn = false, trusted = false, gatewayAdmin = true, role = 'admin', stepUpLeft = 0;
 const computer = (id, extra) => ({ id, role: 'admin', members: 1, container: 'arb-' + id, state: 'none', status: 'never started', profile: false,
   allow: ['example.com'], logins: [], leasedUntil: null, lastCall: null, idleStopInS: null, viewers: 0, handoff: null, ...extra });
 let computers = [computer('sample', { state: 'running', status: 'running', profile: true, logins: ['notion'] }), computer('other', { allow: ['notion.so'] })];
@@ -58,7 +58,8 @@ window.fetch = async (path, options = {}) => {
     case '/api/clients': return json({ keys, oauth: [] });
     case '/api/profiles': computers = [...computers, computer(body.id, { allow: body.allow })]; return json({ id: body.id }, 201);
     case '/api/step-up': if (body.code !== '123456') return json({ stepUp: true, error: 'Invalid code' }, 401); stepUpLeft = 900; return json({ stepUpRemainingS: 900 });
-    case '/api/auth/sign-in/email': return body.password === 'right' ? json({ twoFactorRedirect: true }) : json({ message: 'Invalid' }, 401);
+    case '/api/auth/sign-in/email': if (body.password !== 'right') return json({ message: 'Invalid' }, 401);
+      signedIn = trusted; return json(trusted ? { token: 't', user: { email } } : { twoFactorRedirect: true });
     case '/api/auth/two-factor/verify-totp': signedIn = body.code === '123456'; return signedIn ? json({}) : json({ message: 'Invalid' }, 401);
     case '/api/auth/sign-out': signedIn = false; return json({});
     case '/api/invite/start': return json({ totpURI: 'otpauth://fixture', qrSVG: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
@@ -146,6 +147,14 @@ browserCase('a signed-out visit signs in with password then code, opens the cons
     '/api/auth/two-factor/verify-totp', '/api/auth/two-factor/verify-totp', '/api/auth/sign-out']), 'requests ' + JSON.stringify(writes));
   check(writes[3][1].trustDevice === false, 'device not trusted by default');
 `);
+
+browserCase('a trusted device signs in with the password alone', '#/profiles', `
+  await until(() => field('password'), 'sign-in form');
+  field('email').value = 'admin@example.test';
+  submit('password', 'right');
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'console without a code');
+  check(sent() === JSON.stringify([['/api/auth/sign-in/email', { email: 'admin@example.test', password: 'right' }]]), 'requests ' + sent());
+`, 'trusted = true');
 
 browserCase('invite enrollment keeps an invalid code on screen, then shows backup codes once', '#/invite/sample', `
   await until(() => field('password'), 'password step');
