@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { askNote } from '@/components/confirm';
-import { driverLabel, driverOf, LeaseClock, type Driver } from '@/components/state';
+import { ControlFrame, ControlTab, driverLabel, driverOf, LeaseClock } from '@/components/state';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { leftMin, message, plural } from '@/lib/format';
@@ -74,9 +74,7 @@ export function LiveView({ c }: { c: Computer }) {
       )}
       {/* Wrapped buttons go above the tab, so the tab stays on its frame. */}
       <div className="flex flex-wrap-reverse items-start gap-x-3 gap-y-2">
-        <span className={cn('relative z-[1] -mb-0.5 inline-flex h-[30px] items-center gap-2.5 rounded-t-lg border-2 border-b-0 px-3 text-[13px] font-semibold', TAB[driver])}>
-          {driverLabel(driver, c)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}
-        </span>
+        <ControlTab driver={driver}>{driverLabel(driver, c)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}</ControlTab>
         <span aria-live="polite" className="flex-[1_1_160px] pb-2 text-[13px] text-ink-3">{caption}</span>
         <div className="flex flex-wrap gap-2 pb-1.5">
           {driver === 'agent' && !viewer && <>
@@ -95,7 +93,7 @@ export function LiveView({ c }: { c: Computer }) {
           {view && <Button variant="outline" size="sm" onClick={() => { closeView(); takeOverRef.current?.focus(); }}>Leave view</Button>}
         </div>
       </div>
-      <div className={cn('flex flex-col overflow-hidden rounded-xl rounded-tl-none border-2', FRAME[driver])}>
+      <ControlFrame driver={driver}>
         {!viewer && (
           <UrlBar c={c} url={view?.url}>
             {here.length > 0 && (
@@ -115,7 +113,7 @@ export function LiveView({ c }: { c: Computer }) {
             : <NoSignal title="No signal">Watch shows a running browser.</NoSignal>)}
           {filling && <div className="absolute inset-0 grid place-items-center bg-ink/60 p-4 text-center font-semibold text-white">The server is filling the form… do not touch the view</div>}
         </div>
-      </div>
+      </ControlFrame>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-2.5 text-[12.5px] text-ink-3">
         {details?.page ? <>
           <span className="text-ink-2">{details.page.title || 'Untitled page'}</span>
@@ -127,19 +125,6 @@ export function LiveView({ c }: { c: Computer }) {
     </section>
   );
 }
-
-const TAB: Record<Driver, string> = {
-  agent: 'border-agent bg-agent text-white',
-  you: 'border-ink bg-ink text-white',
-  recording: 'border-ink bg-ink text-white',
-  waiting: 'border-dashed border-needs-you bg-needs-you-soft text-needs-you-ink',
-  nobody: 'border-line-strong bg-surface-2 text-ink-2',
-  stopped: 'border-dashed border-line-strong bg-surface text-ink-3',
-};
-const FRAME: Record<Driver, string> = {
-  agent: 'border-agent', you: 'border-ink', recording: 'border-ink',
-  waiting: 'border-dashed border-needs-you', nobody: 'border-line-strong', stopped: 'border-dashed border-line-strong',
-};
 
 /** An agent asks for a person. The reason is the agent's words (untrusted): quoted, never phrased as an instruction from this page. */
 function RequestBanner({ reason, left, children }: { reason: string; left: number; children: ReactNode }) {
