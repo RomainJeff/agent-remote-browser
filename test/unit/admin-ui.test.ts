@@ -296,21 +296,21 @@ browserCase('live view: watch a running browser, take over, send a click, hand b
   mouse('mousedown', img);
   check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'no input while watching');
   button('Take over').click();
-  await until(() => text().includes('You have control.'), 'control banner');
+  await until(() => text().includes('You have control'), 'control tab');
   check(sockets.length === 1, 'same stream');
   mouse('mousedown', img); mouse('mouseup', img);
   const input = sockets[0].sent.filter(m => m.type === 'input_mouse').map(m => m.eventType + ' ' + m.x + ',' + m.y).join();
   check(input === 'mousePressed 20,15,mouseReleased 20,15', 'mouse input ' + input);
   button('Hand back').click();
-  await until(() => !text().includes('You have control.'), 'control handed back');
+  await until(() => !text().includes('You have control') && text().includes('Nobody'), 'control handed back');
   check(sent() === JSON.stringify([['/api/computers/sample/start', {}]]), 'requests ' + sent());
 `, 'signedIn = true');
 
 browserCase('handoff link: Take over focused, takes the request, Done sends the note', '#/handoff/h1', `
   await until(() => document.activeElement?.textContent === 'Take over', 'Take over focused');
-  check(text().includes('The agent needs you') && text().includes('Agent says: Solve the captcha'), 'request banner');
+  check(text().includes('An agent asked for help') && text().includes('Solve the captcha') && text().includes('An agent is waiting'), 'request banner');
   button('Take over').click();
-  await until(() => text().includes("You are handling the agent's request."), 'request taken');
+  await until(() => text().includes('You have control') && button('Done'), 'request taken');
   button('Done').click();
   await until(dialog, 'note dialog');
   field('note', dialog()).value = 'Solved it'; dialog().requestSubmit();
