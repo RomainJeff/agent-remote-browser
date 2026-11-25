@@ -12,8 +12,9 @@ import { InvitePage } from '@/pages/invite';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
 import { ProfilesPage } from '@/pages/profiles';
+import { ResetPasswordPage } from '@/pages/reset-password';
 
-// Hash history: links the server hands out (invites, handoffs) keep their token in the fragment, out of request logs.
+// Hash history: links the server hands out (invites, password resets, handoffs) keep their token in the fragment, out of request logs.
 const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({ component: Outlet });
 
 const login = createRoute({
@@ -24,6 +25,11 @@ const login = createRoute({
 const invite = createRoute({
   getParentRoute: () => root, path: '/invite/$token',
   component: function Invite() { return <InvitePage token={invite.useParams().token} />; },
+});
+
+const resetPassword = createRoute({
+  getParentRoute: () => root, path: '/reset-password/$token',
+  component: function ResetPassword() { return <ResetPasswordPage token={resetPassword.useParams().token} />; },
 });
 
 const app = createRoute({
@@ -60,7 +66,7 @@ const handoff = createRoute({
 
 const index = createRoute({ getParentRoute: () => app, path: '/', beforeLoad: () => { throw redirect({ to: '/profiles' }); } });
 
-const tree = root.addChildren([login, invite, app.addChildren([
+const tree = root.addChildren([login, invite, resetPassword, app.addChildren([
   index, profiles, profile, handoff, access, members, security,
 ])]);
 

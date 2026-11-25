@@ -8,6 +8,7 @@
     { "path": "/?signed-in#/profiles/shop", "files": ["src/admin/ui/**"] },
     { "path": "/?signed-in#/members", "files": ["src/admin/ui/**"] },
     { "path": "/?signed-in#/access", "files": ["src/admin/ui/**"] },
-    { "path": "/?signed-in#/security", "files": ["src/admin/ui/**"] }
+    { "path": "/?signed-in#/security", "files": ["src/admin/ui/**"] },
+    { "path": "/#/reset-password/preview", "files": ["src/admin/ui/**"] }
   ]
 }

@@ -15,14 +15,14 @@ import { day, message, plural } from '@/lib/format';
 import { invitesQuery, usersQuery } from '@/lib/queries';
 import { sessionQuery } from '@/lib/session';
 
-/** Gateway members (the route lets only gateway admins in): roles, removal, invites. */
+/** Gateway members (the route lets only gateway admins in): roles, password reset links, removal, invites. */
 export function MembersPage() {
   const queryClient = useQueryClient();
   const { data: session } = useQuery(sessionQuery);
   const { data: users = [] } = useQuery(usersQuery);
   const { data: invites = [] } = useQuery(invitesQuery);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] });
-  const [link, setLink] = useState<string | null>(null);
+  const [link, setLink] = useState<{ title: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const invite = async (e: FormEvent<HTMLFormElement>) => {
@@ -32,7 +32,7 @@ export function MembersPage() {
     try {
       const r = await api<{ link: string }>('/api/users/invite', 'POST', { email: String(data.get('email')).trim(), admin: data.get('admin') === 'on' });
       form.reset();
-      setLink(r.link);
+      setLink({ title: 'Invite link', url: r.link });
       await refresh();
     } catch (err) { toast.error(message(err)); } finally { setBusy(false); }
   };
@@ -57,8 +57,14 @@ export function MembersPage() {
               <TableCell>{u.twoFactorEnabled ? 'Enabled' : 'Off'}</TableCell>
               <TableCell>{u.pending ? 'Pending' : 'Active'}</TableCell>
               <TableCell className="w-px text-right whitespace-nowrap">
-                {!u.pending && u.email !== session?.email && (
+                {!u.pending && (
                   <ActionButton variant="outline" size="sm" action={async () => {
+                    const r = await api<{ link: string }>('/api/users/reset-link', 'POST', { email: u.email });
+                    setLink({ title: 'Password reset link', url: r.link });
+                  }}>Reset password</ActionButton>
+                )}
+                {!u.pending && u.email !== session?.email && (
+                  <ActionButton className="ml-2" variant="outline" size="sm" action={async () => {
                     if (!await confirmSensitive({ title: `Remove ${u.email}?`, desc: `Permanently deletes ${plural(u.privateProfileCount, 'private profile')}.`, danger: true, label: 'Remove' })) return false;
                     await api('/api/users/remove', 'POST', { email: u.email });
                     await refresh();
@@ -100,9 +106,9 @@ export function MembersPage() {
       <Dialog open={!!link} onOpenChange={(open) => { if (!open) setLink(null); }}>
         {link && (
           <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 sm:max-w-[520px]">
-            <DialogTitle className="text-xl font-extrabold">Invite link</DialogTitle>
-            <Input className="font-mono" aria-label="Invite link" readOnly value={link} />
-            <div className="flex gap-2"><CopyButton text={link} /><Button size="lg" onClick={() => setLink(null)}>Done</Button></div>
+            <DialogTitle className="text-xl font-extrabold">{link.title}</DialogTitle>
+            <Input className="font-mono" aria-label={link.title} readOnly value={link.url} />
+            <div className="flex gap-2"><CopyButton text={link.url} /><Button size="lg" onClick={() => setLink(null)}>Done</Button></div>
           </DialogContent>
         )}
       </Dialog>

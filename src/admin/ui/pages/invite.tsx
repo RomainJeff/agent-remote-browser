@@ -54,7 +54,7 @@ export function InvitePage({ token }: { token: string }) {
   );
 }
 
-function StepForm({ title, children, onSubmit }: { title: string; children: ReactNode; onSubmit: (data: FormData) => Promise<void> }) {
+export function StepForm({ title, children, onSubmit }: { title: string; children: ReactNode; onSubmit: (data: FormData) => Promise<void> }) {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
