@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { ago } from '@/lib/format';
+import { recorder, useLive } from '@/lib/live';
 import { detailsQuery } from '@/lib/queries';
 import type { Computer } from '@/lib/types';
 import { LiveView } from './live-view';
@@ -8,12 +9,13 @@ import { Recorder } from './recorder';
 
 /** The view on the left, what the agent did on the right. */
 export function SessionTab({ c }: { c: Computer }) {
+  useLive();
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-6 max-[1180px]:grid-cols-1">
       <LiveView c={c} />
       <aside className="flex min-w-0 flex-col gap-4 min-[1181px]:border-l min-[1181px]:pl-5" aria-label="Activity">
-        <Recorder id={c.id} />
-        <Activity id={c.id} />
+        {/* While recording, the recording takes the rail. */}
+        {recorder.rec?.id === c.id ? <Recorder id={c.id} /> : <Activity id={c.id} />}
       </aside>
     </div>
   );
