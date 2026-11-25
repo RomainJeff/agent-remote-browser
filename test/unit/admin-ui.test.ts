@@ -149,6 +149,10 @@ browserCase('a signed-out visit signs in with password then code, opens the cons
 
 browserCase('invite enrollment keeps an invalid code on screen, then shows backup codes once', '#/invite/sample', `
   await until(() => field('password'), 'password step');
+  field('confirm').value = 'test-passwrod';
+  submit('password', 'test-password');
+  await until(() => document.querySelector('[role=alert]')?.textContent === "Passwords don't match.", 'mismatch caught before any request');
+  field('confirm').value = 'test-password';
   submit('password', 'test-password');
   await until(() => document.querySelector('textarea')?.value === 'otpauth://fixture', 'authenticator URI');
   check(document.querySelector('[aria-current=step]').textContent.endsWith('Authenticator'), 'current step');

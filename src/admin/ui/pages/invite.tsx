@@ -20,10 +20,10 @@ export function InvitePage({ token }: { token: string }) {
         <Progress current={step.n} />
         {step.n === 0 && (
           <StepForm key={0} title="Accept invitation" onSubmit={async (data) => {
-            const r = await api<{ totpURI: string; qrSVG: string }>('/api/invite/start', 'POST', { token, password: data.get('password') });
+            const r = await api<{ totpURI: string; qrSVG: string }>('/api/invite/start', 'POST', { token, password: newPassword(data) });
             setStep({ n: 1, ...r });
           }}>
-            <Field><FieldLabel htmlFor="password">New password</FieldLabel><Input id="password" name="password" type="password" autoComplete="new-password" required autoFocus /></Field>
+            <NewPasswordFields />
           </StepForm>
         )}
         {step.n === 1 && (
@@ -52,6 +52,21 @@ export function InvitePage({ token }: { token: string }) {
       </Card>
     </AuthLayout>
   );
+}
+
+/** New password typed twice, so a typo does not lock the member out. Read it back with newPassword(). */
+export function NewPasswordFields() {
+  return (
+    <>
+      <Field><FieldLabel htmlFor="password">New password</FieldLabel><Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required autoFocus /></Field>
+      <Field><FieldLabel htmlFor="confirm">Confirm password</FieldLabel><Input id="confirm" name="confirm" type="password" autoComplete="new-password" required /></Field>
+    </>
+  );
+}
+
+export function newPassword(data: FormData) {
+  if (data.get('password') !== data.get('confirm')) throw new Error("Passwords don't match.");
+  return data.get('password');
 }
 
 export function StepForm({ title, children, onSubmit }: { title: string; children: ReactNode; onSubmit: (data: FormData) => Promise<void> }) {

@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { AuthLayout } from '@/components/auth-layout';
 import { Card } from '@/components/ui/card';
-import { Field, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { StepForm } from '@/pages/invite';
+import { NewPasswordFields, newPassword, StepForm } from '@/pages/invite';
 
 /** One-time link from a gateway admin: choose a new password, then sign in as usual (password and authenticator code). */
 export function ResetPasswordPage({ token }: { token: string }) {
@@ -20,10 +18,10 @@ export function ResetPasswordPage({ token }: { token: string }) {
           </div>
         ) : (
           <StepForm title="Reset password" onSubmit={async (data) => {
-            await api('/api/password/reset', 'POST', { token, password: data.get('password') });
+            await api('/api/password/reset', 'POST', { token, password: newPassword(data) });
             setDone(true);
           }}>
-            <Field><FieldLabel htmlFor="password">New password</FieldLabel><Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required autoFocus /></Field>
+            <NewPasswordFields />
           </StepForm>
         )}
       </Card>
