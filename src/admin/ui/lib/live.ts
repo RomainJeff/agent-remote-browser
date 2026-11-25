@@ -19,7 +19,7 @@ export type View = {
 export const live = {
   view: null as View | null,
   frame: null as { id: string; src: string; seq: number } | null,
-  note: 'No view' as string | null,
+  note: null as string | null,
   fps: '',
   opening: false,
   focusTakeOver: false,
@@ -84,7 +84,7 @@ export function closeView() {
   const v = live.view;
   recorder.stop();
   if (v) { live.view = null; clearTimeout(v.settle); v.ws.close(); if (!v.seen) live.frame = null; }
-  Object.assign(live, { note: 'No view', fps: '' });
+  Object.assign(live, { note: null, fps: '' });
   emit();
 }
 

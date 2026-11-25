@@ -1,75 +1,45 @@
-import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ActionButton } from '@/components/action-button';
-import { McpUrl } from '@/components/mcp-url';
-import { Hint, Panel } from '@/components/page';
-import { api } from '@/lib/api';
 import { ago } from '@/lib/format';
-import { detailsQuery, profilePath } from '@/lib/queries';
+import { detailsQuery } from '@/lib/queries';
 import type { Computer } from '@/lib/types';
-import { cn } from '@/lib/utils';
 import { LiveView } from './live-view';
 import { Recorder } from './recorder';
 
+/** The view on the left, what the agent did on the right. */
 export function SessionTab({ c }: { c: Computer }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-6 max-[1180px]:grid-cols-1">
+    <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-6 max-[1180px]:grid-cols-1">
       <LiveView c={c} />
-      <div className="flex min-w-0 flex-col gap-4">
+      <aside className="flex min-w-0 flex-col gap-4 min-[1181px]:border-l min-[1181px]:pl-5" aria-label="Activity">
         <Recorder id={c.id} />
-        <Panel pad title="Agent lease"><Lease c={c} /></Panel>
-        <Panel pad title="Agent activity"><Activity id={c.id} /></Panel>
-        <Panel pad title="Connect an agent">
-          <McpUrl />
-          <p className="text-[13px] text-muted-foreground">OAuth is recommended: add the URL to your MCP client, sign in, then pick this profile. Otherwise, use an API key scoped to this profile.</p>
-          <Link to="/access" className="font-semibold text-primary">Agent access →</Link>
-        </Panel>
-      </div>
+        <Activity id={c.id} />
+      </aside>
     </div>
-  );
-}
-
-function useNow(ms: number) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]);
-  return now;
-}
-
-function Lease({ c }: { c: Computer }) {
-  const queryClient = useQueryClient(), now = useNow(1000), p = profilePath(c.id);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['computers'] });
-  if (!c.leasedUntil) return <p className="text-muted-foreground">Free. No agent is driving this profile. An agent takes a 10 min lease, extended on every action.</p>;
-  const s = Math.max(0, Math.round((Date.parse(c.leasedUntil) - now) / 1000));
-  return (
-    <>
-      <div>
-        <span className="font-mono text-[28px] leading-9 font-bold">{String(Math.floor(s / 60)).padStart(2, '0')}:{String(s % 60).padStart(2, '0')}</span>
-        <Hint className="mt-1 block">Extended on every agent call. Ends at {new Date(c.leasedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</Hint>
-      </div>
-      {c.role !== 'viewer' && (
-        <div className="flex flex-wrap gap-2">
-          <ActionButton variant="outline" size="sm" done="Lease extended to at least 30 min from now." action={async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); await refresh(); }}>Extend 30 min</ActionButton>
-          <ActionButton variant="danger-outline" size="sm" done="Lease released. The agent has to take a new one." action={async () => { await api(`${p}/release`, 'POST'); await refresh(); }}>Force release</ActionButton>
-        </div>
-      )}
-    </>
   );
 }
 
 function Activity({ id }: { id: string }) {
   const { data } = useQuery(detailsQuery(id));
-  const calls = data?.audit.slice(0, 6) ?? [];
-  if (!calls.length) return <Hint>No calls yet.</Hint>;
+  const calls = data?.audit.slice(0, 8) ?? [];
   return (
-    <ul className="flex flex-col gap-2.5 text-[13px]">
-      {calls.map((l, i) => (
-        <li key={i} className="flex items-baseline gap-2">
-          <span className={cn(!l.ok && 'text-destructive-ink')}>{l.ok ? '✓' : '✗'}</span>
-          <span className="font-mono">{l.tool}</span>
-          <time className="ml-auto text-xs whitespace-nowrap text-muted-foreground" dateTime={l.ts}>{ago(l.ts)}</time>
-        </li>
-      ))}
-    </ul>
+    <section className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[13.5px] font-semibold">Activity</h2>
+        {calls.length > 0 && <Link to="/profiles/$id" params={{ id }} search={{ tab: 'diagnostics' }} className="text-[13px] text-ink-2 underline-offset-2 hover:underline">See all</Link>}
+      </div>
+      {!calls.length ? (
+        <p className="text-[13px] text-ink-3">No calls yet. <Link to="/access" className="font-medium text-ink underline underline-offset-2">Connect an agent</Link></p>
+      ) : (
+        <ol>
+          {calls.map((l, i) => (
+            <li key={i} className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-b border-line-soft py-2 text-[13.5px] leading-[19px] last:border-b-0">
+              <time className="text-[12.5px] text-ink-3 tabular-nums" dateTime={l.ts} title={new Date(l.ts).toLocaleString('en-GB')}>{ago(l.ts)}</time>
+              <span className="min-w-0 [overflow-wrap:anywhere]"><span className="font-mono text-[12.5px]">{l.tool}</span>{!l.ok && <span className="text-ink-2">, failed</span>}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
