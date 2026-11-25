@@ -37,10 +37,11 @@ export function Panel({ title, aside, children, className, pad, danger }: { titl
 export const Empty = ({ children }: { children: ReactNode }) => <p className="px-5 py-6 text-muted-foreground">{children}</p>;
 export const Hint = ({ children, className }: { children: ReactNode; className?: string }) => <span className={cn('text-xs text-muted-foreground', className)}>{children}</span>;
 
-export function Alert({ kind = 'info', children }: { kind?: 'info' | 'warn'; children: ReactNode }) {
+export function Alert({ kind = 'info', children }: { kind?: 'info' | 'warn' | 'danger'; children: ReactNode }) {
   return (
-    <div className={cn('rounded-lg border px-3.5 py-3 text-sm [&_code]:font-mono',
-      kind === 'info' ? 'border-info-line bg-secondary text-primary' : 'border-warn-line bg-warn-soft text-warn-ink')}>{children}</div>
+    <div className={cn('rounded-lg border px-3.5 py-3 text-sm [&_code]:font-mono', {
+      info: 'border-info-line bg-secondary text-primary', warn: 'border-warn-line bg-warn-soft text-warn-ink', danger: 'border-[#F6B9A3] bg-destructive-soft text-destructive-ink',
+    }[kind])}>{children}</div>
   );
 }
 
