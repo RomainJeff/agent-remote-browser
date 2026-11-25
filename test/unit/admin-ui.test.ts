@@ -19,6 +19,8 @@ const computer = (id, extra) => ({ id, role: 'admin', members: 1, container: 'ar
   allow: ['example.com'], logins: [], leasedUntil: null, lastCall: null, idleStopInS: null, viewers: 0, handoff: null, ...extra });
 let computers = [computer('sample', { state: 'running', status: 'running', profile: true, logins: ['notion'] }), computer('other', { allow: ['notion.so'] })];
 let members = [{ email, role: 'admin' }];
+const user = (e, extra) => ({ email: e, admin: false, twoFactorEnabled: true, createdAt: '2026-01-01', pending: false, privateProfileCount: 0, ...extra });
+let users = [user(email, { admin: true })], keys = [];
 const SENSITIVE = ['config', 'login-save', 'login-delete', 'header-save', 'header-delete', 'playbook-save', 'playbook-delete', 'delete', 'members'];
 window.fetch = async (path, options = {}) => {
   const body = options.body && JSON.parse(options.body);
@@ -45,9 +47,15 @@ window.fetch = async (path, options = {}) => {
   }
   switch (path) {
     case '/api/session': return signedIn ? json({ email, stepUpRemainingS: stepUpLeft, mcpUrl: 'https://arb.example.test/mcp' }) : json({ error: 'Sign in first' }, 401);
-    case '/api/users': return gatewayAdmin ? json([]) : json({ error: 'forbidden' }, 403);
+    case '/api/users': return gatewayAdmin ? json(users) : json({ error: 'forbidden' }, 403);
+    case '/api/users/invites': return json([]);
+    case '/api/users/invite': return json({ link: 'https://arb.example.test/#/invite/sample' });
+    case '/api/users/remove': users = users.filter(u => u.email !== body.email); return json({ removed: true });
+    case '/api/keys': if (!stepUpLeft) return json({ stepUp: true, error: 'Confirm with a 2FA code first' }, 401);
+      keys = [{ id: 'k1', name: body.name, start: 'arb_k_ab', scope: body.scope, createdAt: new Date().toISOString(), lastRequest: null, lastIp: null, expiresAt: '2027-02-23T00:00:00.000Z', noExpiry: false }];
+      return json({ id: 'k1', key: 'arb_k_secret-fixture', expiresAt: '2027-02-23T00:00:00.000Z' }, 201);
     case '/api/computers': return json(computers.map(c => c.id === 'sample' ? { ...c, role } : c));
-    case '/api/clients': return json({ keys: [], oauth: [] });
+    case '/api/clients': return json({ keys, oauth: [] });
     case '/api/profiles': computers = [...computers, computer(body.id, { allow: body.allow })]; return json({ id: body.id }, 201);
     case '/api/step-up': if (body.code !== '123456') return json({ stepUp: true, error: 'Invalid code' }, 401); stepUpLeft = 900; return json({ stepUpRemainingS: 900 });
     case '/api/auth/sign-in/email': return body.password === 'right' ? json({ twoFactorRedirect: true }) : json({ message: 'Invalid' }, 401);
@@ -311,4 +319,55 @@ browserCase('recording: a click in the view becomes a step, saved through the pl
   check(document.querySelector('ol li [aria-label="Text on the page"]').value === 'OK', 'recorded step in the form');
   const click = writes.find(w => w[0].endsWith('/teach-click'))[1];
   check(click.x === 20 && click.y === 15 && click.seq === 1 && click.rec, 'teach-click ' + JSON.stringify(click));
+`, 'signedIn = true');
+
+browserCase('gateway admin reveals a new invite link once', '#/members', `
+  const f = await until(() => field('email')?.form, 'invite form');
+  field('email').value = 'new@example.test'; f.requestSubmit();
+  await until(() => document.querySelector('[aria-label="Invite link"]')?.value.endsWith('#/invite/sample'), 'new link');
+  button('Done').click();
+  await until(() => !document.querySelector('[aria-label="Invite link"]'), 'link discarded');
+  check(sent() === JSON.stringify([['/api/users/invite', { email: 'new@example.test', admin: false }]]), 'requests ' + sent());
+`, 'signedIn = true');
+
+browserCase('gateway admin confirms the private profile count before removing an active member', '#/members', `
+  await until(() => text().includes('other@example.test'), 'member rows');
+  const removes = [...document.querySelectorAll('tbody button')].filter(b => b.textContent === 'Remove');
+  check(removes.length === 1, 'only other active members ' + removes.length);
+  removes[0].click();
+  await until(() => dialog()?.innerText.includes('Remove other@example.test?') && dialog().innerText.includes('2 private profiles'), 'deletion warning');
+  check(writes.length === 0, 'requires confirmation');
+  dialog().requestSubmit();
+  await until(() => !text().includes('other@example.test'), 'removed');
+  check(sent() === JSON.stringify([['/api/users/remove', { email: 'other@example.test' }]]), 'requests ' + sent());
+`, "signedIn = true; stepUpLeft = 900; users.push(user('other@example.test', { privateProfileCount: 2 }), user('pending@example.test', { pending: true }))");
+
+browserCase('a member without gateway admin is sent from Members to the profiles', '#/members', `
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'profiles');
+  check(!button('Members'), 'no Members navigation');
+`, 'signedIn = true; gatewayAdmin = false');
+
+browserCase('API key: scoped to a profile, shown once, closable only once saved', '#/access', `
+  (await until(() => button('+ Create API key'), 'create button')).click();
+  const f = await until(dialog, 'key dialog');
+  field('name', f).value = 'ci-agent'; f.requestSubmit();
+  const key = await until(() => document.querySelector('[aria-label="API key"]'), 'key shown');
+  check(key.value === 'arb_k_secret-fixture', 'key value');
+  check(text().includes('"url": "https://arb.example.test/mcp"'), 'MCP config');
+  const close = button('Close');
+  check(close.disabled, 'Close needs the saved box');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await new Promise(r => setTimeout(r, 100));
+  check(document.querySelector('[aria-label="API key"]'), 'Escape keeps the key on screen');
+  [...document.querySelectorAll('[role=dialog] input[type=checkbox]')][0].click();
+  await until(() => !button('Close').disabled, 'Close enabled');
+  button('Close').click();
+  await until(() => !document.querySelector('[aria-label="API key"]'), 'key gone');
+  await until(() => text().includes('Active access · 1') && text().includes('arb_k_ab…'), 'listed');
+  check(sent() === JSON.stringify([['/api/keys', { name: 'ci-agent', scope: 'profile:sample', expiresIn: '90d' }]]), 'requests ' + sent());
+`, 'signedIn = true; stepUpLeft = 900');
+
+browserCase('security page shows the reset command for the signed-in account', '#/security', `
+  await until(() => text().includes('Two-factor authentication is on'), 'security page');
+  check(text().includes('docker compose exec gateway node src/cli.ts admin reset-2fa admin@example.test'), 'reset command');
 `, 'signedIn = true');

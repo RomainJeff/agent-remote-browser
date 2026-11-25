@@ -24,4 +24,11 @@ export type Details = {
 };
 
 export type Member = { email: string; role: Role };
-export type Clients = { oauth: unknown[]; keys: unknown[] };
+/** scopes: the profiles (profile:<id>) or global the client was granted, comma-separated. */
+export type OAuthClient = { id: string; name: string | null; createdAt: string; scopes: string | null; lastToken: string | null };
+/** noExpiry: a key from before expiry was required, to replace. */
+export type ApiKey = { id: string; name: string; start: string; scope: string | null; createdAt: string; lastRequest: string | null; lastIp: string | null; expiresAt: string | null; noExpiry: boolean };
+export type Clients = { oauth: OAuthClient[]; keys: ApiKey[] };
+
+export type GatewayUser = { email: string; admin: boolean; twoFactorEnabled: boolean; createdAt: string; pending: boolean; privateProfileCount: number };
+export type Invite = { id: string; email: string; admin: boolean; created: number; expires: number; createdBy: string | null };

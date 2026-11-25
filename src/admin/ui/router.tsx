@@ -4,7 +4,10 @@ import { Shell } from '@/components/shell';
 import { toast } from 'sonner';
 import { live } from '@/lib/live';
 import { computersQuery } from '@/lib/queries';
-import { sessionQuery } from '@/lib/session';
+import { gatewayAdminQuery, sessionQuery } from '@/lib/session';
+import { AccessPage } from '@/pages/access';
+import { MembersPage } from '@/pages/members';
+import { SecurityPage } from '@/pages/security';
 import { InvitePage } from '@/pages/invite';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
@@ -29,8 +32,11 @@ const app = createRoute({
   component: () => <Shell><Outlet /></Shell>,
 });
 
-const page = <P extends string>(path: P, title: string) => createRoute({
-  getParentRoute: () => app, path, component: () => <h1 className="text-[28px] leading-9 font-extrabold">{title}</h1>,
+const access = createRoute({ getParentRoute: () => app, path: '/access', component: AccessPage });
+const security = createRoute({ getParentRoute: () => app, path: '/security', component: SecurityPage });
+const members = createRoute({
+  getParentRoute: () => app, path: '/members', component: MembersPage,
+  beforeLoad: async ({ context }) => { if (!await context.queryClient.ensureQueryData(gatewayAdminQuery)) throw redirect({ to: '/profiles' }); },
 });
 
 const profiles = createRoute({ getParentRoute: () => app, path: '/profiles', component: ProfilesPage });
@@ -55,7 +61,7 @@ const handoff = createRoute({
 const index = createRoute({ getParentRoute: () => app, path: '/', beforeLoad: () => { throw redirect({ to: '/profiles' }); } });
 
 const tree = root.addChildren([login, invite, app.addChildren([
-  index, profiles, profile, handoff, page('/access', 'Agent access'), page('/members', 'Members'), page('/security', 'Account security'),
+  index, profiles, profile, handoff, access, members, security,
 ])]);
 
 export const createAppRouter = (queryClient: QueryClient) => createRouter({ routeTree: tree, history: createHashHistory(), context: { queryClient } });
