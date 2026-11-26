@@ -55,7 +55,7 @@ Name tokens by role, never by hue (`--agent`, not `--teal-600`), so a color cann
 - Shadows only on dialogs and popovers. Cards and panels use a 1px border.
 - Spacing steps of 4: 8, 12, 16, 20, 24, 28.
 - Desktop: sidebar 228px on the canvas color, main panel on the surface color with an 8px margin. Header bar 56px with the title or breadcrumb on the left and actions on the right. Tab bar 42px, active tab underlined 2px in ink.
-- Mobile: one column, primary action 44px tall, the request first and the frame below it.
+- Mobile (under 900px): one column, primary action 44px tall, the request first and the frame below it. The sidebar becomes a tab bar at the bottom: icon over label, the current tab in ink with a 2px bar on top, the waiting count on Profiles. Inside a profile the tab bar is hidden; the breadcrumb leads back. The account and Sign out open from the avatar in the header bar.
 
 ## Components
 
