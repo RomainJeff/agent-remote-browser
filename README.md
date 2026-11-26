@@ -1,6 +1,6 @@
 # agent-remote-browser
 
-![Admin UI: an agent drives the n8n-ops profile, live view of n8n.io, lease and activity on the right](docs/admin.png)
+![Admin UI: an agent drives the shop profile, live view of a shop page in a teal frame with the time left on its lease, activity on the right](docs/admin.png)
 
 **Give an AI agent a real browser, without giving it your machine or your passwords.**
 
