@@ -24,7 +24,8 @@ export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selection
  *  case-insensitive) and `exact` (same name); `ids` and `names`: the page's own count for the css `#id` and
  *  `tag[name="…"]` teach.ts emits (quirks mode matches ids case-insensitively); `ph` (placeholder contains it,
  *  case-insensitive). Names are cut at 300. `focus` adds `live` (the focused element, through shadow roots: "password"
- *  by its type property, "frame", else ""). Prints { url, chain, live? } as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
+ *  by its type property, "frame", else ""); `at` adds `selector` (SELECTOR below: a CSS selector matching that element
+ *  only, or null). Prints { url, chain, live?, selector? } as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
  *  ponytail: iframes and shadow DOM are not looked into. */
 export const HIT = `const [mode, x, y] = process.argv.slice(1);
 // Run in the page: elements the #id, tag[name="…"] (the selectors teach.ts emits) or placeholder locator would match.
@@ -32,6 +33,30 @@ const COUNT = (id, tag, name, ph) => {
   const q = (s) => { try { return document.querySelectorAll(s).length; } catch { return undefined; } };
   return { ids: id ? q('#' + id) : undefined, names: name ? q(tag + '[name="' + name + '"]') : undefined,
     ph: ph ? [...document.querySelectorAll('[placeholder]')].filter((x) => x.getAttribute('placeholder').toLowerCase().includes(ph.toLowerCase())).length : undefined };
+};
+// Run in the page on the hit node: one CSS selector matching it only, from the nearest ancestor (or itself) with a
+// unique id or data-testid (CSS.escape'd, so " > " only separates segments), else from body, one tag:nth-of-type(n) per
+// element passed. Never text or an accessible name (for an output, that is the value). null inside a frame or a shadow
+// root, or on any error: clicks run this too and must never fail because of it.
+const SELECTOR = function () {
+  try {
+    const start = this.nodeType === 1 ? this : this.parentElement;
+    if (window !== top || !start || start.getRootNode() !== document || /^i?frame$/.test(start.localName)) return null;
+    const one = (s) => { const m = document.querySelectorAll(s); return m.length === 1 && m[0]; }, parts = [];
+    let e = start;
+    for (; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      const id = e.getAttribute('id'), t = e.getAttribute('data-testid');
+      const a = id && one('#' + CSS.escape(id)) === e ? '#' + CSS.escape(id) : t && one('[data-testid=' + CSS.escape(t) + ']') === e ? '[data-testid=' + CSS.escape(t) + ']' : '';
+      if (a) { parts.unshift(a); break; }
+      let n = 1;
+      for (let s = e.previousElementSibling; s; s = s.previousElementSibling) if (s.localName === e.localName) n++;
+      parts.unshift(CSS.escape(e.localName) + ':nth-of-type(' + n + ')');
+    }
+    if (!e) return null;
+    if (e === document.body || e === document.documentElement) parts.unshift(e.localName);
+    const sel = parts.join(' > ');
+    return one(sel) === start ? sel : null;
+  } catch { return null; }
 };
 const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;return !e?'':e.type==='password'?'password':/^i?frame$/.test(e.localName)?'frame':''})(document.activeElement)";
 (async () => {
@@ -50,6 +75,11 @@ const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowR
     ? (await call('DOM.getNodeForLocation', { x: +x, y: +y, ignorePointerEventsNone: true })).backendNodeId
     : (await call('DOM.describeNode', { objectId: (await call('Runtime.evaluate', { expression: 'document.activeElement' })).result.objectId })).node.backendNodeId;
   const out = { url: page.url, chain: [] };
+  if (mode === 'at') {
+    out.selector = await call('DOM.resolveNode', { backendNodeId: node })
+      .then(({ object }) => call('Runtime.callFunctionOn', { objectId: object.objectId, functionDeclaration: String(SELECTOR), returnByValue: true }))
+      .then((r) => typeof r.result.value === 'string' ? r.result.value : null, () => null);
+  }
   if (mode === 'focus') {
     out.live = (await call('Runtime.evaluate', { expression: LIVE, returnByValue: true })).result.value;
   }
@@ -77,7 +107,7 @@ const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowR
   console.log(JSON.stringify(out));
   process.exit(0);
 })().catch((e) => { console.error(String(e.message)); process.exit(1); });`;
-/** Request line limit: the largest legitimate request is a 5000-character fill plus a password on stdin. */
+/** Request line limit: the largest legitimate request is a 5000-character fill plus a password on stdin, or HIT. */
 export const MAX_REQUEST = 64 * 1024;
 
 const lit = <T extends string>(s: T) => z.literal(s);
@@ -167,7 +197,8 @@ export const Request = z.discriminatedUnion('op', [
   op('ensure', { id }),
   op('exec', {
     id,
-    argv: z.array(z.string().max(5000)).max(16).refine(argvAllowed, 'argv not allowed'),
+    // 8000: the HIT literal (over 6000 characters); every other argument keeps its own limit in argvAllowed.
+    argv: z.array(z.string().max(8000)).max(16).refine(argvAllowed, 'argv not allowed'),
     stdin: z.string().max(4096).optional(),
     timeoutMs: z.int().min(1000).max(120_000),
   }),

@@ -31,11 +31,11 @@ export class FakeDriver implements HostDriver {
   slow = '';
   /** `get count input[type=password]` answer. */
   passwordFields = 1;
-  /** Teach mode HIT answers (`node -e HIT at|focus`): { url, chain }. */
   /** Teach mode: HIT calls wait for this (a gesture held mid-way while others queue). */
   hold?: Promise<unknown>;
+  /** Teach mode HIT answers (`node -e HIT at|focus`): { url, chain, selector? }. */
   hit: Record<string, unknown> = {
-    at: { url: origin + '/', chain: [{ role: 'button', name: 'OK', tag: 'button', count: 1, exact: 1 }, { role: 'RootWebArea', name: 'Fake page' }] },
+    at: { url: origin + '/', chain: [{ role: 'button', name: 'OK', tag: 'button', count: 1, exact: 1 }, { role: 'RootWebArea', name: 'Fake page' }], selector: '#summary > div:nth-of-type(2)' },
     focus: { url: origin + '/', chain: [{ role: 'textbox', name: 'Email', tag: 'input', count: 1, exact: 1 }, { role: 'RootWebArea', name: 'Fake page' }] },
   };
 

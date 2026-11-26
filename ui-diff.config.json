@@ -2,6 +2,9 @@
   "buildCommand": "npm run build:admin",
   "startCommand": "node test/ui-preview.ts",
   "readyPath": "/?signed-in",
+  "env": {
+    "EGRESS_DIR": ".ui-diff/egress"
+  },
   "detect": {
     "maxRoutes": 16,
     "conventions": false
@@ -142,6 +145,36 @@
         {
           "wait": "[role=dialog]",
           "checkpoint": "open"
+        }
+      ]
+    },
+    {
+      "name": "record output",
+      "route": "/?signed-in#/profiles/shop",
+      "steps": [
+        {
+          "click": "role=button[name='Record playbook']"
+        },
+        {
+          "click": "role=button[name=/^Add output/]"
+        },
+        {
+          "wait": "[role=menu]",
+          "checkpoint": "menu"
+        },
+        {
+          "click": "role=menuitem[name=/^Page snapshot/]"
+        },
+        {
+          "wait": "text=Snapshot of the page",
+          "checkpoint": "snapshot"
+        },
+        {
+          "click": "role=button[name='Limit to an area']"
+        },
+        {
+          "wait": "text=Picking an area",
+          "checkpoint": "area pick"
         }
       ]
     }

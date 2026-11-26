@@ -16,7 +16,7 @@ function page() {
   const T = { get rec() { return R.rec; }, withBuf: R.withBuf, addStep: R.addStep, addBuf: R.addBuf, tcall: R.tcall, recBody };
   const start = (id = 'p') => { R.start(id); return R.rec as any; };
   const click = () => R.click({ x: 1, y: 1 });
-  return { ctx, T, start, click };
+  return { ctx, T, R, start, click };
 }
 const settle = () => new Promise((r) => setTimeout(r, 80));
 const OK = { step: { click: { role: 'button', name: 'OK' } }, field: false };
@@ -139,4 +139,29 @@ test('record: Save and Replay take the draft after the typing buffer went throug
   g.buf = 'me@x.test'; let body = '';
   T.withBuf(async (g: any) => { body = T.recBody(g).body; }); await settle();
   assert.match(body, /me@x\.test/);
+});
+
+test('record: a picked text becomes a get_text after the typing; the next click is a click again', async () => {
+  const { ctx, start, click } = page(), g = start();
+  const R = { step: { get_text: { selector: '#total' }, keep: true }, text: '€48.90' };
+  ctx.replies.type = fill('Search', 'a'); ctx.replies.read = R; ctx.replies.click = OK;
+  g.buf = 'a'; g.choosing = 'text'; click(); await settle();
+  assert.deepEqual(ctx.calls, ['type', 'read']);
+  assert.deepEqual({ ...ctx.bodies[1] }, { x: 1, y: 1, get_text: {}, rec: g.rid });
+  assert.deepEqual([g.steps.map((s: any) => s.step), g.steps[1].text, g.choosing], [[fill('Search', 'a').step, R.step], '€48.90', null]);
+  click(); await settle();
+  assert.equal(ctx.calls.at(-1), 'click');
+});
+
+test('record: a snapshot row is narrowed to an area, widened and reset in place, one step throughout', async () => {
+  const { ctx, R, start } = page(), g = start();
+  const snap = (scope?: string) => ({ step: { snapshot: scope ? { scope } : {}, keep: true }, text: scope ?? 'page' });
+  ctx.replies.read = snap(); R.snapshot(); await settle();
+  const row = g.steps[0];
+  ctx.replies.read = snap('#items > li:nth-of-type(2)'); R.choose(row); R.click({ x: 3, y: 4 }); await settle();
+  assert.deepEqual([g.steps.length, g.steps[0], row.step.snapshot.scope, g.choosing], [1, row, '#items > li:nth-of-type(2)', null]);
+  ctx.replies.read = snap('#items'); R.snapshot(row, '#items'); await settle();
+  ctx.replies.read = snap(); R.snapshot(row); await settle();
+  assert.deepEqual(ctx.bodies.map(({ rec: _, ...b }: any) => b), [{ snapshot: {} }, { x: 3, y: 4, snapshot: {} }, { snapshot: { scope: '#items' } }, { snapshot: {} }]);
+  assert.deepEqual([g.steps.length, row.step, row.text], [1, { snapshot: {}, keep: true }, 'page']);
 });

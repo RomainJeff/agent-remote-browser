@@ -43,6 +43,8 @@ window.fetch = async (path, options = {}) => {
     if (act === 'handoff-take') { computers = computers.map(c => c.id === id ? { ...c, handoff: { ...c.handoff, state: 'taken' } } : c); return json({ state: 'taken' }); }
     if (act === 'handoff-done') { computers = computers.map(c => c.id === id ? { ...c, handoff: null } : c); return json({}); }
     if (act === 'teach-click') return json({ step: { click: { text: 'OK' } }, field: false });
+    if (act === 'teach-read') return json(body.snapshot ? { step: { snapshot: body.x ? { scope: '#items > li:nth-of-type(2)' } : {}, keep: true }, text: '- button "Buy again" [ref=e7]' }
+      : { step: { get_text: { selector: '#total' }, keep: true }, text: '48.90' });
     throw Error(path);
   }
   switch (path) {
@@ -330,6 +332,31 @@ browserCase('recording: a click in the view becomes a step, saved through the pl
   check(document.querySelector('ol li [aria-label="Text on the page"]').value === 'OK', 'recorded step in the form');
   const click = writes.find(w => w[0].endsWith('/teach-click'))[1];
   check(click.x === 20 && click.y === 15 && click.seq === 1 && click.rec, 'teach-click ' + JSON.stringify(click));
+`, 'signedIn = true');
+
+browserCase('recording: Add output picks a text in the view, or snapshots the page and limits it to an area', '#/profiles/sample', `
+  (await until(() => button('Record playbook'), 'Record button')).click();
+  await until(() => text().includes('each gesture becomes a step'), 'recording panel');
+  frame(1);
+  const img = await until(() => document.querySelector('#frame:not([hidden])'), 'frame');
+  const rows = () => [...document.querySelectorAll('[aria-label=Recording] ol li')].map(li => li.innerText.replace(/\\s+/g, ' '));
+  const menu = async (label) => {
+    button('Add output').click();
+    (await until(() => [...document.querySelectorAll('[role=menu][data-open] [role=menuitem]')].find(i => i.innerText.startsWith(label)), 'menu item ' + label)).click();
+  };
+  await menu('Text on the page');
+  await until(() => text().includes('Picking an output') && text().includes('Click the text to read.') && button('Cancel pick'), 'pick mode');
+  mouse('mousedown', img); mouse('mouseup', img);
+  await until(() => /^1 Read 48\\.90, Output 1 #total$/.test(rows()[0]), 'text output ' + rows());
+  check(!text().includes('Picking an output') && !writes.some(w => w[0].endsWith('/teach-click')), 'one pick, nothing clicked');
+  await menu('Page snapshot');
+  await until(() => /^2 Snapshot of the page, Output 2 /.test(rows()[1]) && rows()[1].includes('Buy again'), 'snapshot output ' + rows());
+  button('Limit to an area').click();
+  await until(() => text().includes('Picking an area'), 'area pick mode');
+  mouse('mousedown', img); mouse('mouseup', img);
+  await until(() => /^2 Snapshot of an area, Output 2 /.test(rows()[1]) && button('Larger area') && button('Whole page'), 'area ' + rows());
+  const reads = writes.filter(w => w[0].endsWith('/teach-read')).map(w => { const { rec, ...b } = w[1]; return b; });
+  check(JSON.stringify(reads) === JSON.stringify([{ x: 20, y: 15, get_text: {} }, { snapshot: {} }, { x: 20, y: 15, snapshot: {} }]), 'reads ' + JSON.stringify(reads));
 `, 'signedIn = true');
 
 browserCase('gateway admin reveals a new invite link once', '#/members', `
