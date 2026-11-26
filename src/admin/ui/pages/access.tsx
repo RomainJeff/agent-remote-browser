@@ -35,7 +35,7 @@ export function AccessPage() {
             </TableRow></TableHeader>
             <TableBody>{rows.map((r) => (
               <TableRow key={r.kind + r.id}>
-                <TableCell><b className="font-semibold">{r.name}</b>{r.kind === 'clients' ? <Sub>Signed in with OAuth</Sub> : <Sub mono>{r.sub}</Sub>}</TableCell>
+                <TableCell><b className="font-semibold">{r.name}</b><Sub mono>{r.kind === 'clients' && <span className="font-sans">OAuth, </span>}{r.sub}</Sub></TableCell>
                 <TableCell>{r.scope.includes('global') ? <><b className="font-semibold">All profiles</b><Sub>Current and future</Sub></>
                   : r.scope.length ? <span className="font-mono text-[13px]">{r.scope.map((s) => s.replace(/^profile:/, '')).join(', ')}</span>
                   : <span className="text-ink-3">Nothing yet<Sub>Removed after 24 h if never used</Sub></span>}</TableCell>

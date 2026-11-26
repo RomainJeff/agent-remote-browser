@@ -15,8 +15,9 @@ export function driverOf(c: Computer, live?: { control: boolean; recording: bool
   return c.state === 'running' ? 'nobody' : 'stopped';
 }
 
-export const driverLabel = (d: Driver, c: Computer) => ({
-  agent: 'An agent is driving', you: 'You have control', recording: 'You are recording', waiting: 'An agent is waiting',
+/** mine: this page sends the input. Without it, 'you' is a person who took the agent's request, maybe on another page. */
+export const driverLabel = (d: Driver, c: Computer, mine?: boolean) => ({
+  agent: 'An agent is driving', you: mine ? 'You have control' : 'A person has control', recording: 'You are recording', waiting: 'An agent is waiting',
   nobody: 'Nobody', stopped: c.state === 'none' ? 'Never started' : 'Stopped',
 })[d];
 

@@ -98,17 +98,19 @@ function MemberRow({ u, you, refresh, onLink }: { u: GatewayUser; you: boolean; 
       </TableCell>
       <TableCell className={u.twoFactorEnabled ? '' : 'text-ink-2'}>{u.pending ? 'Invite expired' : u.twoFactorEnabled ? 'On' : 'Not set up yet'}</TableCell>
       <TableCell className="w-px text-right whitespace-nowrap">
-        {!u.pending && !you && (
+        {!u.pending && (
           <span className="inline-flex gap-2">
             <ActionButton variant="outline" size="sm" action={async () => {
               const r = await api<{ link: string }>('/api/users/reset-link', 'POST', { email: u.email });
               onLink({ title: 'Password reset link', url: r.link, note: `Send it to ${u.email}. It works once.` });
             }}>Reset password</ActionButton>
-            <ActionButton variant="outline" size="sm" action={async () => {
-              if (!await confirmSensitive({ title: `Remove ${u.email}?`, desc: `Permanently deletes ${plural(u.privateProfileCount, 'private profile')}. Shared profiles stay.`, danger: true, label: 'Remove' })) return false;
-              await api('/api/users/remove', 'POST', { email: u.email });
-              await refresh();
-            }}>Remove…</ActionButton>
+            {!you && <>
+              <ActionButton variant="outline" size="sm" action={async () => {
+                if (!await confirmSensitive({ title: `Remove ${u.email}?`, desc: `Permanently deletes ${plural(u.privateProfileCount, 'private profile')}. Shared profiles stay.`, danger: true, label: 'Remove' })) return false;
+                await api('/api/users/remove', 'POST', { email: u.email });
+                await refresh();
+              }}>Remove…</ActionButton>
+            </>}
           </span>
         )}
       </TableCell>
