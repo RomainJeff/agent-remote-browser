@@ -1,0 +1,4494 @@
+{
+  "version": 3,
+  "tool": {
+    "name": "ui-diff",
+    "version": "2.1.0"
+  },
+  "createdAt": "2026-11-26T09:30:15.883Z",
+  "routes": [
+    {
+      "path": "/",
+      "name": "home",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/access",
+      "name": "/?signed-in#/access",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/members",
+      "name": "/?signed-in#/members",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles",
+      "name": "/?signed-in#/profiles",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop",
+      "name": "/?signed-in#/profiles/shop",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=diagnostics",
+      "name": "profile-diagnostics",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=domains",
+      "name": "profile-domains",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=logins",
+      "name": "profile-logins",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=playbooks",
+      "name": "profile-playbooks",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=settings",
+      "name": "profile-settings",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/profiles/shop?capture=sharing",
+      "name": "profile-sharing",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/?signed-in#/security",
+      "name": "/?signed-in#/security",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/#/invite/preview",
+      "name": "/#/invite/preview",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/#/reset-password/preview",
+      "name": "/#/reset-password/preview",
+      "reasons": [
+        "src/admin/ui/lib/record.ts matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/live-view.tsx matches src/admin/ui/**",
+        "src/admin/ui/pages/profile/recorder.tsx matches src/admin/ui/**"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "detect": {
+    "uiFiles": [
+      "src/admin/teach.ts",
+      "src/admin/ui/lib/record.ts",
+      "src/admin/ui/pages/profile/live-view.tsx",
+      "src/admin/ui/pages/profile/recorder.tsx",
+      "src/host/fake.ts",
+      "src/runner/protocol.ts"
+    ],
+    "unmatched": [
+      "src/admin/teach.ts",
+      "src/host/fake.ts",
+      "src/runner/protocol.ts"
+    ],
+    "skippedRoutes": [],
+    "needsExample": [],
+    "notes": []
+  },
+  "viewports": [
+    "desktop",
+    "mobile"
+  ],
+  "themes": [
+    "light"
+  ],
+  "base": {
+    "label": "main @ ce8fadd",
+    "mode": "worktree",
+    "sha": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+    "shortSha": "ce8fadd",
+    "ref": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681"
+  },
+  "head": {
+    "label": "d966754",
+    "mode": "worktree",
+    "sha": "d966754c02d4157f23d954e3863c901d86bcaef8",
+    "shortSha": "d966754",
+    "ref": "d966754c02d4157f23d954e3863c901d86bcaef8",
+    "includesUncommitted": false
+  },
+  "captures": [
+    {
+      "id": "home__desktop__light",
+      "route": {
+        "path": "/",
+        "name": "home",
+        "slug": "home"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home__desktop__light.png",
+        "head": "captures/head/home__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 24
+        },
+        "head": {
+          "elements": 24
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 19,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home__mobile__light",
+      "route": {
+        "path": "/",
+        "name": "home",
+        "slug": "home"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home__mobile__light.png",
+        "head": "captures/head/home__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 24
+        },
+        "head": {
+          "elements": 24
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 19,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-5__desktop__light",
+      "route": {
+        "path": "/?signed-in#/access",
+        "name": "/?signed-in#/access",
+        "slug": "home-5"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-5__desktop__light.png",
+        "head": "captures/head/home-5__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 41
+        },
+        "head": {
+          "elements": 41
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 9,
+          "medium": 32,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-5__mobile__light",
+      "route": {
+        "path": "/?signed-in#/access",
+        "name": "/?signed-in#/access",
+        "slug": "home-5"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-5__mobile__light.png",
+        "head": "captures/head/home-5__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 32
+        },
+        "head": {
+          "elements": 32
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 9,
+          "medium": 23,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-4__desktop__light",
+      "route": {
+        "path": "/?signed-in#/members",
+        "name": "/?signed-in#/members",
+        "slug": "home-4"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-4__desktop__light.png",
+        "head": "captures/head/home-4__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 11,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 11,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 82
+        },
+        "head": {
+          "elements": 82
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 70,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-4__mobile__light",
+      "route": {
+        "path": "/?signed-in#/members",
+        "name": "/?signed-in#/members",
+        "slug": "home-4"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-4__mobile__light.png",
+        "head": "captures/head/home-4__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 9,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 4
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 9,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 4
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 73
+        },
+        "head": {
+          "elements": 73
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 61,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-2__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles",
+        "name": "/?signed-in#/profiles",
+        "slug": "home-2"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-2__desktop__light.png",
+        "head": "captures/head/home-2__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 11,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 11,
+            "skipped": 5,
+            "skippedWhy": {
+              "hidden": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 84
+        },
+        "head": {
+          "elements": 84
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 72,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-2__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles",
+        "name": "/?signed-in#/profiles",
+        "slug": "home-2"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-2__mobile__light.png",
+        "head": "captures/head/home-2__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 9,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 9,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 75
+        },
+        "head": {
+          "elements": 75
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 63,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-3__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-3__desktop__light.png",
+        "head": "captures/head/home-3__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 2,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 2,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 82
+        },
+        "head": {
+          "elements": 82
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 23,
+          "medium": 59,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-3__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-3__mobile__light.png",
+        "head": "captures/head/home-3__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 10,
+            "skipped": 10,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 10,
+            "skipped": 10,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 50
+        },
+        "head": {
+          "elements": 50
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 19,
+          "medium": 31,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-diagnostics__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=diagnostics",
+        "name": "profile-diagnostics",
+        "slug": "profile-diagnostics"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-diagnostics__desktop__light.png",
+        "head": "captures/head/profile-diagnostics__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 13,
+            "skipped": 13,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 12
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 13,
+            "skipped": 13,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 12
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 91
+        },
+        "head": {
+          "elements": 91
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 19,
+          "medium": 72,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-diagnostics__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=diagnostics",
+        "name": "profile-diagnostics",
+        "slug": "profile-diagnostics"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-diagnostics__mobile__light.png",
+        "head": "captures/head/profile-diagnostics__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 5,
+            "skipped": 14,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 5,
+            "skipped": 14,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 59
+        },
+        "head": {
+          "elements": 59
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 15,
+          "medium": 44,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-domains__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=domains",
+        "name": "profile-domains",
+        "slug": "profile-domains"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-domains__desktop__light.png",
+        "head": "captures/head/profile-domains__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 14,
+            "skippedWhy": {
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 12
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 14,
+            "skippedWhy": {
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 12
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 81
+        },
+        "head": {
+          "elements": 81
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 23,
+          "medium": 58,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-domains__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=domains",
+        "name": "profile-domains",
+        "slug": "profile-domains"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-domains__mobile__light.png",
+        "head": "captures/head/profile-domains__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 10,
+            "skipped": 17,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 3,
+              "focus: not reached with Tab": 7
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 10,
+            "skipped": 17,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 3,
+              "focus: not reached with Tab": 7
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 49
+        },
+        "head": {
+          "elements": 49
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 19,
+          "medium": 30,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-logins__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=logins",
+        "name": "profile-logins",
+        "slug": "profile-logins"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-logins__desktop__light.png",
+        "head": "captures/head/profile-logins__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 10,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 9
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 10,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 9
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 64
+        },
+        "head": {
+          "elements": 64
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 18,
+          "medium": 46,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-logins__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=logins",
+        "name": "profile-logins",
+        "slug": "profile-logins"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-logins__mobile__light.png",
+        "head": "captures/head/profile-logins__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 13,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 4
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 13,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 4
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 32
+        },
+        "head": {
+          "elements": 32
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 14,
+          "medium": 18,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-playbooks__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=playbooks",
+        "name": "profile-playbooks",
+        "slug": "profile-playbooks"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-playbooks__desktop__light.png",
+        "head": "captures/head/profile-playbooks__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 15,
+            "skipped": 11,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 10
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 15,
+            "skipped": 11,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 10
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 60
+        },
+        "head": {
+          "elements": 60
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 18,
+          "medium": 42,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-playbooks__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=playbooks",
+        "name": "profile-playbooks",
+        "slug": "profile-playbooks"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-playbooks__mobile__light.png",
+        "head": "captures/head/profile-playbooks__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 8,
+            "skipped": 14,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 5
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 8,
+            "skipped": 14,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 5
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 28
+        },
+        "head": {
+          "elements": 28
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 14,
+          "medium": 14,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-settings__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=settings",
+        "name": "profile-settings",
+        "slug": "profile-settings"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-settings__desktop__light.png",
+        "head": "captures/head/profile-settings__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 15,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 14
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 15,
+            "skippedWhy": {
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 14
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 61
+        },
+        "head": {
+          "elements": 61
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 18,
+          "medium": 43,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-settings__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=settings",
+        "name": "profile-settings",
+        "slug": "profile-settings"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-settings__mobile__light.png",
+        "head": "captures/head/profile-settings__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 16,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 7
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 16,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 7
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 29
+        },
+        "head": {
+          "elements": 29
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 14,
+          "medium": 15,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-sharing__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=sharing",
+        "name": "profile-sharing",
+        "slug": "profile-sharing"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-sharing__desktop__light.png",
+        "head": "captures/head/profile-sharing__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 16,
+            "skippedWhy": {
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 14
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 17,
+            "skipped": 16,
+            "skippedWhy": {
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 14
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 85
+        },
+        "head": {
+          "elements": 85
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 22,
+          "medium": 63,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "profile-sharing__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop?capture=sharing",
+        "name": "profile-sharing",
+        "slug": "profile-sharing"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/profile-sharing__mobile__light.png",
+        "head": "captures/head/profile-sharing__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 9,
+            "skipped": 17,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 3,
+              "focus: not reached with Tab": 7
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 9,
+            "skipped": 17,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2,
+              "hover: covered by another element": 3,
+              "focus: not reached with Tab": 7
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 53
+        },
+        "head": {
+          "elements": 53
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 18,
+          "medium": 35,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-6__desktop__light",
+      "route": {
+        "path": "/?signed-in#/security",
+        "name": "/?signed-in#/security",
+        "slug": "home-6"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-6__desktop__light.png",
+        "head": "captures/head/home-6__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 96
+        },
+        "head": {
+          "elements": 96
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 84,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-6__mobile__light",
+      "route": {
+        "path": "/?signed-in#/security",
+        "name": "/?signed-in#/security",
+        "slug": "home-6"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-6__mobile__light.png",
+        "head": "captures/head/home-6__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          2190
+        ],
+        "sizeAfter": [
+          780,
+          2190
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 87
+        },
+        "head": {
+          "elements": 87
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 75,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-8__desktop__light",
+      "route": {
+        "path": "/#/invite/preview",
+        "name": "/#/invite/preview",
+        "slug": "home-8"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-8__desktop__light.png",
+        "head": "captures/head/home-8__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 28
+        },
+        "head": {
+          "elements": 28
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 23,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-8__mobile__light",
+      "route": {
+        "path": "/#/invite/preview",
+        "name": "/#/invite/preview",
+        "slug": "home-8"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-8__mobile__light.png",
+        "head": "captures/head/home-8__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 28
+        },
+        "head": {
+          "elements": 28
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 23,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-7__desktop__light",
+      "route": {
+        "path": "/#/reset-password/preview",
+        "name": "/#/reset-password/preview",
+        "slug": "home-7"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-7__desktop__light.png",
+        "head": "captures/head/home-7__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 22
+        },
+        "head": {
+          "elements": 22
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 17,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-7__mobile__light",
+      "route": {
+        "path": "/#/reset-password/preview",
+        "name": "/#/reset-password/preview",
+        "slug": "home-7"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-7__mobile__light.png",
+        "head": "captures/head/home-7__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 22
+        },
+        "head": {
+          "elements": 22
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 17,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-2__mobile__light__flow-account-sheet-open",
+      "route": {
+        "path": "/?signed-in#/profiles",
+        "name": "/?signed-in#/profiles",
+        "slug": "home-2"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "flow": {
+        "name": "account sheet",
+        "checkpoint": "open"
+      },
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-2__mobile__light__flow-account-sheet-open.png",
+        "head": "captures/head/home-2__mobile__light__flow-account-sheet-open.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "ce8fadd7e3eb94244f7dbe1dc6ff14d9f4122681",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "cache": {
+            "hit": true,
+            "key": "base-ce8fadd7e3eb-2b29a23f43a38158"
+          }
+        },
+        "head": {
+          "commit": "d966754c02d4157f23d954e3863c901d86bcaef8",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T09:16:15.715Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared"
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 89
+        },
+        "head": {
+          "elements": 89
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 15,
+          "medium": 74,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    }
+  ],
+  "variants": [],
+  "motion": [],
+  "flows": [
+    {
+      "name": "account sheet",
+      "route": {
+        "path": "/?signed-in#/profiles",
+        "name": "/?signed-in#/profiles",
+        "slug": "home-2"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "steps": [
+        "click button[aria-label='Account']",
+        "wait for [role=dialog]"
+      ],
+      "checkpoints": [
+        {
+          "name": "open",
+          "step": 2,
+          "capture": "home-2__mobile__light__flow-account-sheet-open"
+        }
+      ],
+      "base": {
+        "ms": 1714,
+        "cached": true
+      },
+      "head": {
+        "ms": 1654
+      }
+    },
+    {
+      "name": "record output",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "steps": [
+        "click role=button[name='Record playbook']",
+        "click role=button[name=/^Add output/]",
+        "wait for [role=menu]",
+        "click role=menuitem[name=/^Page snapshot/]",
+        "wait for text=Snapshot of the page",
+        "click role=button[name='Limit to an area']",
+        "wait for text=Picking an area"
+      ],
+      "checkpoints": [
+        {
+          "name": "menu",
+          "step": 3
+        },
+        {
+          "name": "snapshot",
+          "step": 5
+        },
+        {
+          "name": "area pick",
+          "step": 7
+        }
+      ],
+      "base": {
+        "ms": 6112,
+        "stoppedAt": {
+          "step": 3,
+          "action": "wait for [role=menu]",
+          "verb": "wait for",
+          "selector": "[role=menu]",
+          "kind": "missing",
+          "timeoutMs": 5000
+        },
+        "cached": true
+      },
+      "head": {
+        "ms": 2942
+      },
+      "finding": "flow 'record output' stops at step 3 on base: menu 'Add output' not found"
+    },
+    {
+      "name": "record output",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "steps": [
+        "click role=button[name='Record playbook']",
+        "click role=button[name=/^Add output/]",
+        "wait for [role=menu]",
+        "click role=menuitem[name=/^Page snapshot/]",
+        "wait for text=Snapshot of the page",
+        "click role=button[name='Limit to an area']",
+        "wait for text=Picking an area"
+      ],
+      "checkpoints": [
+        {
+          "name": "menu",
+          "step": 3
+        },
+        {
+          "name": "snapshot",
+          "step": 5
+        },
+        {
+          "name": "area pick",
+          "step": 7
+        }
+      ],
+      "base": {
+        "ms": 6111,
+        "stoppedAt": {
+          "step": 3,
+          "action": "wait for [role=menu]",
+          "verb": "wait for",
+          "selector": "[role=menu]",
+          "kind": "missing",
+          "timeoutMs": 5000
+        },
+        "cached": true
+      },
+      "head": {
+        "ms": 3051
+      },
+      "finding": "flow 'record output' stops at step 3 on base: menu 'Add output' not found"
+    }
+  ],
+  "baseCache": {
+    "key": "base-ce8fadd7e3eb-2b29a23f43a38158",
+    "hit": true,
+    "configHash": "ae47c041048e792b",
+    "browser": "chromium 159.0.8154.6",
+    "uiDiffVersion": "2.1.0",
+    "capturedAt": "2026-11-26T09:18:39.091Z"
+  },
+  "warnings": [],
+  "stats": {
+    "captures": 29,
+    "changed": 0,
+    "unchanged": 29,
+    "added": 0,
+    "removed": 0,
+    "errors": 0
+  },
+  "timings": {
+    "totalMs": 70670,
+    "detectMs": 131,
+    "prepare": {
+      "wallMs": 1614,
+      "base": {
+        "mode": "worktree",
+        "cached": true,
+        "totalMs": 0
+      },
+      "head": {
+        "mode": "worktree",
+        "checkoutMs": 83,
+        "install": {
+          "kind": "linked",
+          "ms": 5
+        },
+        "buildMs": 688,
+        "bootMs": 821,
+        "totalMs": 1614
+      }
+    },
+    "browserMs": 175,
+    "capture": {
+      "ms": 67639,
+      "count": 35,
+      "slowest": {
+        "id": "home-3__desktop__light",
+        "side": "head",
+        "ms": 2878
+      }
+    },
+    "diffMs": 970,
+    "extras": {
+      "styleDiffMs": 35,
+      "elementMapMs": 1275,
+      "flowsMs": 7647
+    }
+  }
+}

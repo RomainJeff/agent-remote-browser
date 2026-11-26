@@ -1,0 +1,1885 @@
+{
+  "version": 3,
+  "tool": {
+    "name": "ui-diff",
+    "version": "2.1.0"
+  },
+  "createdAt": "2026-11-26T08:57:53.593Z",
+  "routes": [
+    {
+      "path": "/?signed-in#/profiles/shop",
+      "name": "/?signed-in#/profiles/shop",
+      "reasons": [
+        "requested"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "viewports": [
+    "desktop",
+    "mobile"
+  ],
+  "themes": [
+    "light"
+  ],
+  "base": {
+    "label": "main @ a2c84e1",
+    "mode": "worktree",
+    "sha": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+    "shortSha": "a2c84e1",
+    "ref": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+    "includesUncommitted": false
+  },
+  "head": {
+    "label": "6b5683f",
+    "mode": "worktree",
+    "sha": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+    "shortSha": "6b5683f",
+    "ref": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+    "includesUncommitted": false
+  },
+  "captures": [
+    {
+      "id": "home-3__desktop__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-3__desktop__light.png",
+        "head": "captures/head/home-3__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 18,
+            "skipped": 6,
+            "skippedWhy": {
+              "over states.maxElements": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 2
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-a2c84e15e8c3-05e0615bfdb3b8ca"
+          }
+        },
+        "head": {
+          "commit": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 18,
+            "skipped": 6,
+            "skippedWhy": {
+              "over states.maxElements": 2,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 2
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 103
+        },
+        "head": {
+          "elements": 103
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 30,
+          "medium": 73,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-3__mobile__light",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-3__mobile__light.png",
+        "head": "captures/head/home-3__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 10,
+            "skippedWhy": {
+              "outside the viewport": 6,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 2
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-a2c84e15e8c3-05e0615bfdb3b8ca"
+          }
+        },
+        "head": {
+          "commit": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 14,
+            "skipped": 10,
+            "skippedWhy": {
+              "outside the viewport": 6,
+              "hover: covered by another element": 2,
+              "focus: not reached with Tab": 2
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          3342
+        ],
+        "sizeAfter": [
+          780,
+          3342
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 103
+        },
+        "head": {
+          "elements": 103
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 30,
+          "medium": 73,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-3__desktop__light__flow-record-output-recording",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "status": "changed",
+      "urls": {},
+      "images": {
+        "focus": [
+          "compare/home-3__desktop__light__flow-record-output-recording__focus-1.png"
+        ],
+        "base": "captures/base/home-3__desktop__light__flow-record-output-recording.png",
+        "head": "captures/head/home-3__desktop__light__flow-record-output-recording.png",
+        "diff": "diff/home-3__desktop__light__flow-record-output-recording.png",
+        "compare": "compare/home-3__desktop__light__flow-record-output-recording.png",
+        "pairs": [
+          "compare/home-3__desktop__light__flow-record-output-recording__pair-1.png"
+        ],
+        "blinks": [
+          "compare/home-3__desktop__light__flow-record-output-recording__blink-1.gif"
+        ]
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "cache": {
+            "hit": false,
+            "key": "base-a2c84e15e8c3-05e0615bfdb3b8ca"
+          }
+        },
+        "head": {
+          "commit": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared"
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 162907,
+        "ratio": 0.1590888671875,
+        "regions": [
+          {
+            "x": 0,
+            "y": 512,
+            "width": 1280,
+            "height": 120
+          },
+          {
+            "x": 0,
+            "y": 688,
+            "width": 1280,
+            "height": 112
+          },
+          {
+            "x": 0,
+            "y": 376,
+            "width": 1280,
+            "height": 80
+          }
+        ],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false,
+        "shifted": [
+          {
+            "beforeY": 507,
+            "afterY": 451,
+            "height": 239,
+            "dy": -56
+          }
+        ],
+        "removedHeight": 112,
+        "focusBoxes": [
+          {
+            "x": 0,
+            "y": 306,
+            "width": 1280,
+            "height": 494
+          }
+        ]
+      },
+      "elementMap": {
+        "base": {
+          "elements": 122
+        },
+        "head": {
+          "elements": 121
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 35,
+          "medium": 84,
+          "low": 0
+        },
+        "changes": [
+          {
+            "kind": "removed",
+            "name": "form.flex.flex-wrap",
+            "selector": "form.flex.flex-wrap",
+            "base": 86,
+            "id": "b86:removed",
+            "changes": [],
+            "box": {
+              "x": 925,
+              "y": 382.5625,
+              "width": 290,
+              "height": 76
+            },
+            "deviceBox": {
+              "x": 925,
+              "y": 383,
+              "width": 290,
+              "height": 76
+            },
+            "inside": 2,
+            "magnitude": 70,
+            "verified": true
+          },
+          {
+            "kind": "added",
+            "name": "ChevronDown (svg.lucide.lucide-chevron-down)",
+            "selector": "svg.lucide.lucide-chevron-down",
+            "head": 88,
+            "id": "h88:added",
+            "changes": [],
+            "box": {
+              "x": 1008.140625,
+              "y": 389.5625,
+              "width": 14,
+              "height": 14
+            },
+            "deviceBox": {
+              "x": 1008,
+              "y": 390,
+              "width": 14,
+              "height": 14
+            },
+            "inside": 1,
+            "magnitude": 17,
+            "verified": true
+          },
+          {
+            "kind": "changed",
+            "name": "El 'Replay'",
+            "selector": "div.flex.min-w-0 > div.flex.flex-wrap > button.inline-flex.shrink-0:nth-of-type(2)",
+            "base": 91,
+            "head": 90,
+            "confidence": "high",
+            "reason": "same button named \"Replay\"",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 116px right",
+                "id": "h90:position",
+                "kind": "unexplained"
+              }
+            ],
+            "box": {
+              "x": 1041.140625,
+              "y": 382.5625,
+              "width": 62.984375,
+              "height": 28
+            },
+            "deviceBox": {
+              "x": 1041,
+              "y": 383,
+              "width": 63,
+              "height": 28
+            },
+            "magnitude": 1,
+            "verified": true
+          },
+          {
+            "kind": "changed",
+            "name": "El 'Save as playbook…'",
+            "selector": "div.flex.min-w-0 > div.flex.flex-wrap > button.inline-flex.shrink-0:nth-of-type(3)",
+            "base": 92,
+            "head": 91,
+            "confidence": "high",
+            "reason": "same button named \"Save as playbook…\"",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 71px left, 36px down",
+                "id": "h91:position",
+                "kind": "unexplained"
+              }
+            ],
+            "box": {
+              "x": 925,
+              "y": 418.5625,
+              "width": 138.765625,
+              "height": 28
+            },
+            "deviceBox": {
+              "x": 925,
+              "y": 419,
+              "width": 139,
+              "height": 28
+            },
+            "magnitude": 1,
+            "verified": true
+          },
+          {
+            "kind": "changed",
+            "name": "#root",
+            "selector": "#root",
+            "base": 0,
+            "head": 0,
+            "confidence": "high",
+            "reason": "same id \"root\"",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "1280×1193px",
+                "after": "1280×1137px",
+                "id": "h0:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 1136.9375
+            },
+            "deviceBox": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 1137
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "Zr (div.flex.min-h-screen)",
+            "selector": "div.flex.min-h-screen",
+            "base": 1,
+            "head": 1,
+            "confidence": "medium",
+            "reason": "same place under #root",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "1280×1193px",
+                "after": "1280×1137px",
+                "id": "h1:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 1136.9375
+            },
+            "deviceBox": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 1137
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "main.flex.min-w-0",
+            "selector": "main.flex.min-w-0",
+            "base": 38,
+            "head": 38,
+            "confidence": "medium",
+            "reason": "same place under Xm (div.flex.min-h-screen)",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "1017×1193px",
+                "after": "1017×1137px",
+                "id": "h38:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 262.8125,
+              "y": 0,
+              "width": 1017.1875,
+              "height": 1136.9375
+            },
+            "deviceBox": {
+              "x": 263,
+              "y": 0,
+              "width": 1017,
+              "height": 1137
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "AS (div.grid.items-start)",
+            "selector": "div.grid.items-start",
+            "base": 58,
+            "head": 58,
+            "confidence": "medium",
+            "reason": "same place under main.flex.min-w-0",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "937×971.5px",
+                "after": "937×915.5px",
+                "id": "h58:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 302.8125,
+              "y": 173.5625,
+              "width": 937.1875,
+              "height": 915.375
+            },
+            "deviceBox": {
+              "x": 303,
+              "y": 174,
+              "width": 937,
+              "height": 915
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "div.grid.items-start > div.flex.min-w-0",
+            "selector": "div.grid.items-start > div.flex.min-w-0",
+            "base": 77,
+            "head": 77,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×971.5px",
+                "after": "340×915.5px",
+                "id": "h77:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 900,
+              "y": 173.5625,
+              "width": 340,
+              "height": 915.375
+            },
+            "deviceBox": {
+              "x": 900,
+              "y": 174,
+              "width": 340,
+              "height": 915
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "Wv (div.flex.min-w-0 > section.min-w-0.rounded-xl:nth-of-type(1))",
+            "selector": "div.flex.min-w-0 > section.min-w-0.rounded-xl:nth-of-type(1)",
+            "base": 78,
+            "head": 78,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > div.flex.min-w-0",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×350px",
+                "after": "340×294px",
+                "id": "h78:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 900,
+              "y": 173.5625,
+              "width": 340,
+              "height": 294
+            },
+            "deviceBox": {
+              "x": 900,
+              "y": 174,
+              "width": 340,
+              "height": 294
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "section.min-w-0.rounded-xl:nth-of-type(1) > div.flex.min-w-0",
+            "selector": "section.min-w-0.rounded-xl:nth-of-type(1) > div.flex.min-w-0",
+            "base": 79,
+            "head": 79,
+            "confidence": "medium",
+            "reason": "same place under Dh (div.flex.min-w-0 > section.min-w-0.rounded-xl:nth-of-type(1))",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "338×348px",
+                "after": "338×292px",
+                "id": "h79:size",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 901,
+              "y": 174.5625,
+              "width": 338,
+              "height": 292
+            },
+            "deviceBox": {
+              "x": 901,
+              "y": 175,
+              "width": 338,
+              "height": 292
+            },
+            "magnitude": 2.1
+          },
+          {
+            "kind": "changed",
+            "name": "div.flex.min-w-0 > div.flex.flex-wrap",
+            "selector": "div.flex.min-w-0 > div.flex.flex-wrap",
+            "base": 90,
+            "head": 86,
+            "confidence": "medium",
+            "reason": "same place under section.min-w-0.rounded-xl:nth-of-type(1) > div.flex.min-w-0",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "290×28px",
+                "after": "290×64px",
+                "id": "h86:size",
+                "kind": "effect",
+                "cause": "h88:added"
+              },
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 92px up",
+                "id": "h86:position",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 925,
+              "y": 382.5625,
+              "width": 290,
+              "height": 64
+            },
+            "deviceBox": {
+              "x": 925,
+              "y": 383,
+              "width": 290,
+              "height": 64
+            },
+            "magnitude": 1.9500000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "El 'Add output'",
+            "selector": "#base-ui-_r_6_",
+            "base": 89,
+            "head": 87,
+            "confidence": "high",
+            "reason": "same button named \"Add output\"",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "90×36px",
+                "after": "108×28px",
+                "id": "h87:size",
+                "kind": "effect",
+                "cause": "h88:added"
+              },
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 200px left, 40px up",
+                "id": "h87:position",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 925,
+              "y": 382.5625,
+              "width": 108.140625,
+              "height": 28
+            },
+            "deviceBox": {
+              "x": 925,
+              "y": 383,
+              "width": 108,
+              "height": 28
+            },
+            "magnitude": 0.55
+          },
+          {
+            "kind": "changed",
+            "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(2))",
+            "selector": "section.min-w-0.rounded-xl:nth-of-type(2)",
+            "base": 93,
+            "head": 92,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > div.flex.min-w-0",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 56px up",
+                "id": "h92:position",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 900,
+              "y": 483.5625,
+              "width": 340,
+              "height": 142
+            },
+            "deviceBox": {
+              "x": 900,
+              "y": 484,
+              "width": 340,
+              "height": 142
+            },
+            "magnitude": 0.05
+          },
+          {
+            "kind": "changed",
+            "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(3))",
+            "selector": "section.min-w-0.rounded-xl:nth-of-type(3)",
+            "base": 97,
+            "head": 96,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > div.flex.min-w-0",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 56px up",
+                "id": "h96:position",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 900,
+              "y": 641.5625,
+              "width": 340,
+              "height": 131.125
+            },
+            "deviceBox": {
+              "x": 900,
+              "y": 642,
+              "width": 340,
+              "height": 131
+            },
+            "magnitude": 0.05
+          },
+          {
+            "kind": "changed",
+            "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(4))",
+            "selector": "section.min-w-0.rounded-xl:nth-of-type(4)",
+            "base": 109,
+            "head": 108,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > div.flex.min-w-0",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 56px up",
+                "id": "h108:position",
+                "kind": "effect",
+                "cause": "b86:removed"
+              }
+            ],
+            "box": {
+              "x": 900,
+              "y": 788.6875,
+              "width": 340,
+              "height": 300.25
+            },
+            "deviceBox": {
+              "x": 900,
+              "y": 789,
+              "width": 340,
+              "height": 300
+            },
+            "magnitude": 0.05
+          }
+        ],
+        "regions": [
+          {
+            "region": {
+              "x": 0,
+              "y": 512,
+              "width": 1280,
+              "height": 120
+            },
+            "element": {
+              "name": "#root",
+              "selector": "#root"
+            },
+            "changes": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              13
+            ]
+          },
+          {
+            "region": {
+              "x": 0,
+              "y": 688,
+              "width": 1280,
+              "height": 112
+            },
+            "element": {
+              "name": "#root",
+              "selector": "#root"
+            },
+            "changes": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              14,
+              15
+            ]
+          },
+          {
+            "region": {
+              "x": 0,
+              "y": 376,
+              "width": 1280,
+              "height": 80
+            },
+            "element": {
+              "name": "#root",
+              "selector": "#root"
+            },
+            "changes": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "home-3__mobile__light__flow-record-output-recording",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-3__mobile__light__flow-record-output-recording.png",
+        "head": "captures/head/home-3__mobile__light__flow-record-output-recording.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "a2c84e15e8c3736c1b11058c13b95ab865cd67fe",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "cache": {
+            "hit": false,
+            "key": "base-a2c84e15e8c3-05e0615bfdb3b8ca"
+          }
+        },
+        "head": {
+          "commit": "6b5683f5badfc41cbb7edcc24d92d96143ac5d11",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T08:57:53.593Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared"
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 134
+        },
+        "head": {
+          "elements": 133
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 35,
+          "medium": 96,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    }
+  ],
+  "variants": [],
+  "motion": [],
+  "flows": [
+    {
+      "name": "record output",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "steps": [
+        "click button:has-text('Record playbook')",
+        "wait for text=No steps yet.",
+        "click button:has-text('Add output')",
+        "wait for [role=menu]",
+        "click [role=menuitem]:has-text('Page snapshot')",
+        "wait for text=Snapshot of the page",
+        "click button:has-text('Limit to an area')",
+        "wait for button:has-text('Cancel pick')"
+      ],
+      "checkpoints": [
+        {
+          "name": "recording",
+          "step": 2,
+          "capture": "home-3__desktop__light__flow-record-output-recording"
+        },
+        {
+          "name": "output menu",
+          "step": 4
+        },
+        {
+          "name": "page snapshot",
+          "step": 6
+        },
+        {
+          "name": "picking an area",
+          "step": 8
+        }
+      ],
+      "base": {
+        "ms": 6730,
+        "stoppedAt": {
+          "step": 4,
+          "action": "wait for [role=menu]",
+          "verb": "wait for",
+          "selector": "[role=menu]",
+          "kind": "missing",
+          "timeoutMs": 5000
+        }
+      },
+      "head": {
+        "ms": 3592
+      },
+      "finding": "flow 'record output' stops at step 4 on base: menu 'Add output' not found"
+    },
+    {
+      "name": "record output",
+      "route": {
+        "path": "/?signed-in#/profiles/shop",
+        "name": "/?signed-in#/profiles/shop",
+        "slug": "home-3"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "steps": [
+        "click button:has-text('Record playbook')",
+        "wait for text=No steps yet.",
+        "click button:has-text('Add output')",
+        "wait for [role=menu]",
+        "click [role=menuitem]:has-text('Page snapshot')",
+        "wait for text=Snapshot of the page",
+        "click button:has-text('Limit to an area')",
+        "wait for button:has-text('Cancel pick')"
+      ],
+      "checkpoints": [
+        {
+          "name": "recording",
+          "step": 2,
+          "capture": "home-3__mobile__light__flow-record-output-recording"
+        },
+        {
+          "name": "output menu",
+          "step": 4
+        },
+        {
+          "name": "page snapshot",
+          "step": 6
+        },
+        {
+          "name": "picking an area",
+          "step": 8
+        }
+      ],
+      "base": {
+        "ms": 6744,
+        "stoppedAt": {
+          "step": 4,
+          "action": "wait for [role=menu]",
+          "verb": "wait for",
+          "selector": "[role=menu]",
+          "kind": "missing",
+          "timeoutMs": 5000
+        }
+      },
+      "head": {
+        "ms": 3747
+      },
+      "finding": "flow 'record output' stops at step 4 on base: menu 'Add output' not found"
+    }
+  ],
+  "baseCache": {
+    "key": "base-a2c84e15e8c3-05e0615bfdb3b8ca",
+    "hit": false,
+    "configHash": "03b7d7c5e2953726",
+    "browser": "chromium 159.0.8154.6",
+    "uiDiffVersion": "2.1.0",
+    "stored": true
+  },
+  "warnings": [],
+  "stats": {
+    "captures": 4,
+    "changed": 1,
+    "unchanged": 3,
+    "added": 0,
+    "removed": 0,
+    "errors": 0
+  },
+  "measured": [
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m1",
+      "kind": "cause",
+      "name": "form.flex.flex-wrap",
+      "selector": "form.flex.flex-wrap",
+      "property": "removed",
+      "text": "removed (+2 inside)",
+      "magnitude": 70,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 70,
+          "change": "b86:removed"
+        }
+      ],
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m5",
+      "kind": "effect",
+      "name": "#root",
+      "selector": "#root",
+      "property": "size",
+      "before": "1280×1193px",
+      "after": "1280×1137px",
+      "text": "size 1280×1193px → 1280×1137px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h0:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m6",
+      "kind": "effect",
+      "name": "Zr (div.flex.min-h-screen)",
+      "selector": "div.flex.min-h-screen",
+      "property": "size",
+      "before": "1280×1193px",
+      "after": "1280×1137px",
+      "text": "size 1280×1193px → 1280×1137px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h1:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m7",
+      "kind": "effect",
+      "name": "main.flex.min-w-0",
+      "selector": "main.flex.min-w-0",
+      "property": "size",
+      "before": "1017×1193px",
+      "after": "1017×1137px",
+      "text": "size 1017×1193px → 1017×1137px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h38:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m8",
+      "kind": "effect",
+      "name": "AS (div.grid.items-start)",
+      "selector": "div.grid.items-start",
+      "property": "size",
+      "before": "937×971.5px",
+      "after": "937×915.5px",
+      "text": "size 937×971.5px → 937×915.5px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h58:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m9",
+      "kind": "effect",
+      "name": "div.grid.items-start > div.flex.min-w-0",
+      "selector": "div.grid.items-start > div.flex.min-w-0",
+      "property": "size",
+      "before": "340×971.5px",
+      "after": "340×915.5px",
+      "text": "size 340×971.5px → 340×915.5px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h77:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m10",
+      "kind": "effect",
+      "name": "Wv (div.flex.min-w-0 > section.min-w-0.rounded-xl:nth-of-type(1))",
+      "selector": "div.flex.min-w-0 > section.min-w-0.rounded-xl:nth-of-type(1)",
+      "property": "size",
+      "before": "340×350px",
+      "after": "340×294px",
+      "text": "size 340×350px → 340×294px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h78:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m11",
+      "kind": "effect",
+      "name": "section.min-w-0.rounded-xl:nth-of-type(1) > div.flex.min-w-0",
+      "selector": "section.min-w-0.rounded-xl:nth-of-type(1) > div.flex.min-w-0",
+      "property": "size",
+      "before": "338×348px",
+      "after": "338×292px",
+      "text": "size 338×348px → 338×292px",
+      "magnitude": 2.1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 2.1,
+          "change": "h79:size",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m13",
+      "kind": "effect",
+      "name": "div.flex.min-w-0 > div.flex.flex-wrap",
+      "selector": "div.flex.min-w-0 > div.flex.flex-wrap",
+      "property": "position",
+      "before": "",
+      "after": "moved 92px up",
+      "text": "moved 92px up",
+      "magnitude": 1.9500000000000002,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 1.9500000000000002,
+          "change": "h86:position",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m15",
+      "kind": "effect",
+      "name": "El 'Add output'",
+      "selector": "#base-ui-_r_6_",
+      "property": "position",
+      "before": "",
+      "after": "moved 200px left, 40px up",
+      "text": "moved 200px left, 40px up",
+      "magnitude": 0.55,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.55,
+          "change": "h87:position",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m16",
+      "kind": "effect",
+      "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(2))",
+      "selector": "section.min-w-0.rounded-xl:nth-of-type(2)",
+      "property": "position",
+      "before": "",
+      "after": "moved 56px up",
+      "text": "moved 56px up",
+      "magnitude": 0.05,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h92:position",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m17",
+      "kind": "effect",
+      "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(3))",
+      "selector": "section.min-w-0.rounded-xl:nth-of-type(3)",
+      "property": "position",
+      "before": "",
+      "after": "moved 56px up",
+      "text": "moved 56px up",
+      "magnitude": 0.05,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h96:position",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m18",
+      "kind": "effect",
+      "name": "Wv (section.min-w-0.rounded-xl:nth-of-type(4))",
+      "selector": "section.min-w-0.rounded-xl:nth-of-type(4)",
+      "property": "position",
+      "before": "",
+      "after": "moved 56px up",
+      "text": "moved 56px up",
+      "magnitude": 0.05,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h108:position",
+          "cause": "b86:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m2",
+      "kind": "cause",
+      "name": "ChevronDown (svg.lucide.lucide-chevron-down)",
+      "selector": "svg.lucide.lucide-chevron-down",
+      "property": "added",
+      "text": "added (+1 inside)",
+      "magnitude": 17,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 17,
+          "change": "h88:added"
+        }
+      ],
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m12",
+      "kind": "effect",
+      "name": "div.flex.min-w-0 > div.flex.flex-wrap",
+      "selector": "div.flex.min-w-0 > div.flex.flex-wrap",
+      "property": "size",
+      "before": "290×28px",
+      "after": "290×64px",
+      "text": "size 290×28px → 290×64px",
+      "magnitude": 1.9500000000000002,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 1.9500000000000002,
+          "change": "h86:size",
+          "cause": "h88:added"
+        }
+      ],
+      "cause": "m2",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m14",
+      "kind": "effect",
+      "name": "El 'Add output'",
+      "selector": "#base-ui-_r_6_",
+      "property": "size",
+      "before": "90×36px",
+      "after": "108×28px",
+      "text": "size 90×36px → 108×28px",
+      "magnitude": 0.55,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.55,
+          "change": "h87:size",
+          "cause": "h88:added"
+        }
+      ],
+      "cause": "m2",
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m3",
+      "kind": "unexplained",
+      "name": "El 'Replay'",
+      "selector": "div.flex.min-w-0 > div.flex.flex-wrap > button.inline-flex.shrink-0:nth-of-type(2)",
+      "property": "position",
+      "before": "",
+      "after": "moved 116px right",
+      "text": "moved 116px right",
+      "magnitude": 1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 1,
+          "change": "h90:position"
+        }
+      ],
+      "where": "desktop"
+    },
+    {
+      "route": "/?signed-in#/profiles/shop",
+      "flow": {
+        "name": "record output",
+        "checkpoint": "recording"
+      },
+      "id": "m4",
+      "kind": "unexplained",
+      "name": "El 'Save as playbook…'",
+      "selector": "div.flex.min-w-0 > div.flex.flex-wrap > button.inline-flex.shrink-0:nth-of-type(3)",
+      "property": "position",
+      "before": "",
+      "after": "moved 71px left, 36px down",
+      "text": "moved 71px left, 36px down",
+      "magnitude": 1,
+      "variants": [
+        {
+          "capture": "home-3__desktop__light__flow-record-output-recording",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 1,
+          "change": "h91:position"
+        }
+      ],
+      "where": "desktop"
+    }
+  ],
+  "timings": {
+    "totalMs": 34697,
+    "detectMs": 33,
+    "prepare": {
+      "wallMs": 1621,
+      "base": {
+        "mode": "worktree",
+        "checkoutMs": 104,
+        "install": {
+          "kind": "linked",
+          "ms": 6
+        },
+        "buildMs": 674,
+        "bootMs": 818,
+        "totalMs": 1621
+      },
+      "head": {
+        "mode": "worktree",
+        "checkoutMs": 111,
+        "install": {
+          "kind": "linked",
+          "ms": 5
+        },
+        "buildMs": 674,
+        "bootMs": 813,
+        "totalMs": 1620
+      }
+    },
+    "browserMs": 65,
+    "capture": {
+      "ms": 32484,
+      "count": 14,
+      "slowest": {
+        "id": "home-3__desktop__light",
+        "side": "base",
+        "ms": 3019
+      }
+    },
+    "diffMs": 470,
+    "extras": {
+      "styleDiffMs": 13,
+      "elementMapMs": 513,
+      "flowsMs": 20813
+    }
+  }
+}

@@ -1,0 +1,1608 @@
+{
+  "version": 3,
+  "tool": {
+    "name": "ui-diff",
+    "version": "2.1.0"
+  },
+  "createdAt": "2026-11-26T10:03:10.163Z",
+  "routes": [
+    {
+      "path": "/?signed-in#/security",
+      "name": "/?signed-in#/security",
+      "reasons": [
+        "requested"
+      ],
+      "confidence": "high"
+    },
+    {
+      "path": "/#/invite/preview",
+      "name": "/#/invite/preview",
+      "reasons": [
+        "requested"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "viewports": [
+    "desktop",
+    "mobile"
+  ],
+  "themes": [
+    "light"
+  ],
+  "base": {
+    "label": "main @ 3b6d1eb",
+    "mode": "worktree",
+    "sha": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+    "shortSha": "3b6d1eb",
+    "ref": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+    "includesUncommitted": false
+  },
+  "head": {
+    "label": "e9bc5a2",
+    "mode": "worktree",
+    "sha": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+    "shortSha": "e9bc5a2",
+    "ref": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+    "includesUncommitted": false
+  },
+  "captures": [
+    {
+      "id": "home-6__desktop__light",
+      "route": {
+        "path": "/?signed-in#/security",
+        "name": "/?signed-in#/security",
+        "slug": "home-6"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "changed",
+      "urls": {},
+      "images": {
+        "focus": [
+          "compare/home-6__desktop__light__focus-1.png"
+        ],
+        "base": "captures/base/home-6__desktop__light.png",
+        "head": "captures/head/home-6__desktop__light.png",
+        "diff": "diff/home-6__desktop__light.png",
+        "compare": "compare/home-6__desktop__light.png",
+        "pairs": [
+          "compare/home-6__desktop__light__pair-1.png"
+        ],
+        "blinks": [
+          "compare/home-6__desktop__light__blink-1.gif"
+        ]
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-3b6d1ebf8f05-5b51d0f479a21b3b"
+          }
+        },
+        "head": {
+          "commit": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 7,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "hover: covered by another element": 1,
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 8315,
+        "ratio": 0.0081201171875,
+        "regions": [
+          {
+            "x": 0,
+            "y": 168,
+            "width": 1280,
+            "height": 128
+          },
+          {
+            "x": 0,
+            "y": 320,
+            "width": 1280,
+            "height": 16
+          }
+        ],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false,
+        "shifted": [
+          {
+            "beforeY": 223,
+            "afterY": 222,
+            "height": 113,
+            "dy": -1
+          }
+        ],
+        "removedHeight": 5,
+        "focusBoxes": [
+          {
+            "x": 0,
+            "y": 122,
+            "width": 1280,
+            "height": 316
+          }
+        ]
+      },
+      "elementMap": {
+        "base": {
+          "elements": 96
+        },
+        "head": {
+          "elements": 94
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 82,
+          "low": 0
+        },
+        "changes": [
+          {
+            "kind": "removed",
+            "name": "span 'The link holds the secret. Never paste …'",
+            "selector": "ul > li.grid.border-b:nth-of-type(2) > span",
+            "base": 84,
+            "id": "b84:removed",
+            "changes": [],
+            "box": {
+              "x": 923,
+              "y": 170,
+              "width": 324,
+              "height": 41
+            },
+            "deviceBox": {
+              "x": 923,
+              "y": 170,
+              "width": 324,
+              "height": 41
+            },
+            "inside": 1,
+            "magnitude": 67.62811813689564,
+            "verified": true
+          },
+          {
+            "kind": "changed",
+            "name": "div.grid.items-start > aside.flex.flex-col",
+            "selector": "div.grid.items-start > aside.flex.flex-col",
+            "base": 77,
+            "head": 77,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×263.5px",
+                "after": "340×262.5px",
+                "id": "h77:size",
+                "kind": "effect",
+                "cause": "b84:removed"
+              }
+            ],
+            "box": {
+              "x": 907,
+              "y": 89,
+              "width": 340,
+              "height": 262.28125
+            },
+            "deviceBox": {
+              "x": 907,
+              "y": 89,
+              "width": 340,
+              "height": 262
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "ul",
+            "selector": "ul",
+            "base": 79,
+            "head": 79,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > aside.flex.flex-col",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×196px",
+                "after": "340×195px",
+                "id": "h79:size",
+                "kind": "effect",
+                "cause": "b84:removed"
+              }
+            ],
+            "box": {
+              "x": 907,
+              "y": 113,
+              "width": 340,
+              "height": 195
+            },
+            "deviceBox": {
+              "x": 907,
+              "y": 113,
+              "width": 340,
+              "height": 195
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "Ry 'The QR code and setup key hold the secr…'",
+            "selector": "ul > li.grid.border-b:nth-of-type(2)",
+            "base": 82,
+            "head": 82,
+            "confidence": "medium",
+            "reason": "same place under ul",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×66px",
+                "after": "340×65px",
+                "id": "h82:size",
+                "kind": "effect",
+                "cause": "b84:removed"
+              }
+            ],
+            "box": {
+              "x": 907,
+              "y": 158,
+              "width": 340,
+              "height": 65
+            },
+            "deviceBox": {
+              "x": 907,
+              "y": 158,
+              "width": 340,
+              "height": 65
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "Ry 'Changing domains, saved logins, keys or…'",
+            "selector": "ul > li.grid.border-b:nth-of-type(3)",
+            "base": 86,
+            "head": 84,
+            "confidence": "medium",
+            "reason": "same text \"Changing domains, saved logins, keys or…\"",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 1px up",
+                "id": "h84:position",
+                "kind": "effect",
+                "cause": "b84:removed"
+              }
+            ],
+            "box": {
+              "x": 907,
+              "y": 223,
+              "width": 340,
+              "height": 85
+            },
+            "deviceBox": {
+              "x": 907,
+              "y": 223,
+              "width": 340,
+              "height": 85
+            },
+            "magnitude": 0.05
+          },
+          {
+            "kind": "changed",
+            "name": "details.py-3",
+            "selector": "details.py-3",
+            "base": 88,
+            "head": 86,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > aside.flex.flex-col",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 1px up",
+                "id": "h86:position",
+                "kind": "effect",
+                "cause": "b84:removed"
+              }
+            ],
+            "box": {
+              "x": 907,
+              "y": 308,
+              "width": 340,
+              "height": 43.28125
+            },
+            "deviceBox": {
+              "x": 907,
+              "y": 308,
+              "width": 340,
+              "height": 43
+            },
+            "magnitude": 0.05
+          }
+        ],
+        "regions": [
+          {
+            "region": {
+              "x": 0,
+              "y": 168,
+              "width": 1280,
+              "height": 128
+            },
+            "element": {
+              "name": "#root",
+              "selector": "#root"
+            },
+            "changes": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "region": {
+              "x": 0,
+              "y": 320,
+              "width": 1280,
+              "height": 16
+            },
+            "element": {
+              "name": "#root",
+              "selector": "#root"
+            },
+            "changes": [
+              1,
+              5
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "home-6__mobile__light",
+      "route": {
+        "path": "/?signed-in#/security",
+        "name": "/?signed-in#/security",
+        "slug": "home-6"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "changed",
+      "urls": {},
+      "images": {
+        "focus": [
+          "compare/home-6__mobile__light__focus-1.png"
+        ],
+        "base": "captures/base/home-6__mobile__light.png",
+        "head": "captures/head/home-6__mobile__light.png",
+        "diff": "diff/home-6__mobile__light.png",
+        "compare": "compare/home-6__mobile__light.png",
+        "pairs": [
+          "compare/home-6__mobile__light__pair-1.png"
+        ],
+        "blinks": [
+          "compare/home-6__mobile__light__blink-1.gif"
+        ]
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-3b6d1ebf8f05-5b51d0f479a21b3b"
+          }
+        },
+        "head": {
+          "commit": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 6,
+            "skipped": 7,
+            "skippedWhy": {
+              "hidden": 5,
+              "outside the viewport": 2
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 16,
+        "ratio": 0.000009366584709050463,
+        "regions": [
+          {
+            "x": 0,
+            "y": 1680,
+            "width": 780,
+            "height": 16
+          }
+        ],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          2190
+        ],
+        "sizeAfter": [
+          780,
+          2188
+        ],
+        "sizeChanged": true,
+        "shifted": [
+          {
+            "beforeY": 847,
+            "afterY": 846,
+            "height": 248,
+            "dy": -1
+          }
+        ],
+        "removedHeight": 1,
+        "focusBoxes": [
+          {
+            "x": 0,
+            "y": 734,
+            "width": 390,
+            "height": 220
+          }
+        ]
+      },
+      "elementMap": {
+        "base": {
+          "elements": 87
+        },
+        "head": {
+          "elements": 85
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 12,
+          "medium": 73,
+          "low": 0
+        },
+        "changes": [
+          {
+            "kind": "removed",
+            "name": "span 'The link holds the secret. Never paste …'",
+            "selector": "ul > li.grid.border-b:nth-of-type(2) > span",
+            "base": 54,
+            "id": "b54:removed",
+            "changes": [],
+            "box": {
+              "x": 41,
+              "y": 807.84375,
+              "width": 324,
+              "height": 41
+            },
+            "deviceBox": {
+              "x": 82,
+              "y": 1616,
+              "width": 648,
+              "height": 82
+            },
+            "inside": 1,
+            "magnitude": 67.62811813689564,
+            "verified": true
+          },
+          {
+            "kind": "changed",
+            "name": "#root",
+            "selector": "#root",
+            "base": 0,
+            "head": 0,
+            "confidence": "high",
+            "reason": "same id \"root\"",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "390×1095px",
+                "after": "390×1094px",
+                "id": "h0:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 1094.125
+            },
+            "deviceBox": {
+              "x": 0,
+              "y": 0,
+              "width": 780,
+              "height": 2188
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "Tv (div.flex.min-h-screen)",
+            "selector": "div.flex.min-h-screen",
+            "base": 1,
+            "head": 1,
+            "confidence": "medium",
+            "reason": "same place under #root",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "390×1095px",
+                "after": "390×1094px",
+                "id": "h1:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 1094.125
+            },
+            "deviceBox": {
+              "x": 0,
+              "y": 0,
+              "width": 780,
+              "height": 2188
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "main.m-2.flex",
+            "selector": "main.m-2.flex",
+            "base": 2,
+            "head": 2,
+            "confidence": "medium",
+            "reason": "same place under Tv (div.flex.min-h-screen)",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "374×1023px",
+                "after": "374×1022px",
+                "id": "h2:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 8,
+              "y": 8,
+              "width": 374,
+              "height": 1022.125
+            },
+            "deviceBox": {
+              "x": 16,
+              "y": 16,
+              "width": 748,
+              "height": 2044
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "div.grid.items-start",
+            "selector": "div.grid.items-start",
+            "base": 8,
+            "head": 8,
+            "confidence": "medium",
+            "reason": "same place under main.m-2.flex",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×901px",
+                "after": "340×900px",
+                "id": "h8:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 89,
+              "width": 340,
+              "height": 900.125
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 178,
+              "width": 680,
+              "height": 1800
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "div.grid.items-start > aside.flex.flex-col",
+            "selector": "div.grid.items-start > aside.flex.flex-col",
+            "base": 47,
+            "head": 47,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×263.5px",
+                "after": "340×262.5px",
+                "id": "h47:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 726.84375,
+              "width": 340,
+              "height": 262.28125
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 1454,
+              "width": 680,
+              "height": 525
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "ul",
+            "selector": "ul",
+            "base": 49,
+            "head": 49,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > aside.flex.flex-col",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×196px",
+                "after": "340×195px",
+                "id": "h49:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 750.84375,
+              "width": 340,
+              "height": 195
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 1502,
+              "width": 680,
+              "height": 390
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "Ry 'The QR code and setup key hold the secr…'",
+            "selector": "ul > li.grid.border-b:nth-of-type(2)",
+            "base": 52,
+            "head": 52,
+            "confidence": "medium",
+            "reason": "same place under ul",
+            "changes": [
+              {
+                "property": "size",
+                "group": "box",
+                "before": "340×66px",
+                "after": "340×65px",
+                "id": "h52:size",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 795.84375,
+              "width": 340,
+              "height": 65
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 1592,
+              "width": 680,
+              "height": 130
+            },
+            "magnitude": 0.15000000000000002
+          },
+          {
+            "kind": "changed",
+            "name": "Ry 'Changing domains, saved logins, keys or…'",
+            "selector": "ul > li.grid.border-b:nth-of-type(3)",
+            "base": 56,
+            "head": 54,
+            "confidence": "medium",
+            "reason": "same text \"Changing domains, saved logins, keys or…\"",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 1px up",
+                "id": "h54:position",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 860.84375,
+              "width": 340,
+              "height": 85
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 1722,
+              "width": 680,
+              "height": 170
+            },
+            "magnitude": 0.05
+          },
+          {
+            "kind": "changed",
+            "name": "details.py-3",
+            "selector": "details.py-3",
+            "base": 58,
+            "head": 56,
+            "confidence": "medium",
+            "reason": "same place under div.grid.items-start > aside.flex.flex-col",
+            "changes": [
+              {
+                "property": "position",
+                "group": "box",
+                "before": "",
+                "after": "moved 1px up",
+                "id": "h56:position",
+                "kind": "effect",
+                "cause": "b54:removed"
+              }
+            ],
+            "box": {
+              "x": 25,
+              "y": 945.84375,
+              "width": 340,
+              "height": 43.28125
+            },
+            "deviceBox": {
+              "x": 50,
+              "y": 1892,
+              "width": 680,
+              "height": 87
+            },
+            "magnitude": 0.05
+          }
+        ],
+        "regions": [
+          {
+            "region": {
+              "x": 0,
+              "y": 1680,
+              "width": 780,
+              "height": 16
+            },
+            "element": {
+              "name": "nav 'Main navigation'",
+              "selector": "nav.fixed.inset-x-0"
+            },
+            "changes": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "home-8__desktop__light",
+      "route": {
+        "path": "/#/invite/preview",
+        "name": "/#/invite/preview",
+        "slug": "home-8"
+      },
+      "viewport": "desktop",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-8__desktop__light.png",
+        "head": "captures/head/home-8__desktop__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-3b6d1ebf8f05-5b51d0f479a21b3b"
+          }
+        },
+        "head": {
+          "commit": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+          "viewport": {
+            "width": 1280,
+            "height": 800,
+            "deviceScaleFactor": 1,
+            "isMobile": false
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/159.0.8154.6 Safari/537.36"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 1,
+        "sizeBefore": [
+          1280,
+          800
+        ],
+        "sizeAfter": [
+          1280,
+          800
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 28
+        },
+        "head": {
+          "elements": 28
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 23,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    },
+    {
+      "id": "home-8__mobile__light",
+      "route": {
+        "path": "/#/invite/preview",
+        "name": "/#/invite/preview",
+        "slug": "home-8"
+      },
+      "viewport": "mobile",
+      "theme": "light",
+      "status": "unchanged",
+      "urls": {},
+      "images": {
+        "focus": [],
+        "base": "captures/base/home-8__mobile__light.png",
+        "head": "captures/head/home-8__mobile__light.png"
+      },
+      "warnings": [],
+      "truncated": false,
+      "fingerprint": {
+        "base": {
+          "commit": "3b6d1ebf8f05cf7b5b5966e5c07067592681a96e",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          },
+          "cache": {
+            "hit": false,
+            "key": "base-3b6d1ebf8f05-5b51d0f479a21b3b"
+          }
+        },
+        "head": {
+          "commit": "e9bc5a28dbf15a8741e37e17e63e1090b3f214dd",
+          "viewport": {
+            "width": 390,
+            "height": 844,
+            "deviceScaleFactor": 2,
+            "isMobile": true
+          },
+          "browser": {
+            "name": "chromium",
+            "version": "159.0.8154.6",
+            "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          },
+          "fonts": {
+            "loaded": [
+              "Instrument Sans Variable"
+            ],
+            "failed": [],
+            "pending": []
+          },
+          "freeze": {
+            "clock": "2026-11-26T10:03:10.163Z",
+            "seed": 795556381,
+            "animations": true,
+            "fonts": true
+          },
+          "media": {
+            "reducedMotion": "reduce",
+            "colorScheme": "light",
+            "locale": "en-US",
+            "timezone": "UTC"
+          },
+          "data": "not declared",
+          "states": {
+            "checked": 3,
+            "skipped": 1,
+            "skippedWhy": {
+              "focus: not reached with Tab": 1
+            }
+          }
+        },
+        "differences": []
+      },
+      "diff": {
+        "changedPixels": 0,
+        "ratio": 0,
+        "regions": [],
+        "scale": 2,
+        "sizeBefore": [
+          780,
+          1688
+        ],
+        "sizeAfter": [
+          780,
+          1688
+        ],
+        "sizeChanged": false
+      },
+      "elementMap": {
+        "base": {
+          "elements": 28
+        },
+        "head": {
+          "elements": 28
+        }
+      },
+      "styleDiff": {
+        "matched": {
+          "high": 5,
+          "medium": 23,
+          "low": 0
+        },
+        "changes": [],
+        "regions": []
+      }
+    }
+  ],
+  "variants": [],
+  "motion": [],
+  "baseCache": {
+    "key": "base-3b6d1ebf8f05-5b51d0f479a21b3b",
+    "hit": false,
+    "configHash": "c390b26cdcaaefcc",
+    "browser": "chromium 159.0.8154.6",
+    "uiDiffVersion": "2.1.0",
+    "stored": true
+  },
+  "warnings": [],
+  "stats": {
+    "captures": 4,
+    "changed": 2,
+    "unchanged": 2,
+    "added": 0,
+    "removed": 0,
+    "errors": 0
+  },
+  "measured": [
+    {
+      "route": "/?signed-in#/security",
+      "id": "m1",
+      "kind": "cause",
+      "name": "span 'The link holds the secret. Never paste …'",
+      "selector": "ul > li.grid.border-b:nth-of-type(2) > span",
+      "property": "removed",
+      "text": "removed (+1 inside)",
+      "magnitude": 67.62811813689564,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 67.62811813689564,
+          "change": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 67.62811813689564,
+          "change": "b54:removed"
+        }
+      ],
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m2",
+      "kind": "effect",
+      "name": "div.grid.items-start > aside.flex.flex-col",
+      "selector": "div.grid.items-start > aside.flex.flex-col",
+      "property": "size",
+      "before": "340×263.5px",
+      "after": "340×262.5px",
+      "text": "size 340×263.5px → 340×262.5px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h77:size",
+          "cause": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h47:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m3",
+      "kind": "effect",
+      "name": "ul",
+      "selector": "ul",
+      "property": "size",
+      "before": "340×196px",
+      "after": "340×195px",
+      "text": "size 340×196px → 340×195px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h79:size",
+          "cause": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h49:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m4",
+      "kind": "effect",
+      "name": "Ry 'The QR code and setup key hold the secr…'",
+      "selector": "ul > li.grid.border-b:nth-of-type(2)",
+      "property": "size",
+      "before": "340×66px",
+      "after": "340×65px",
+      "text": "size 340×66px → 340×65px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h82:size",
+          "cause": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h52:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m5",
+      "kind": "effect",
+      "name": "Ry 'Changing domains, saved logins, keys or…'",
+      "selector": "ul > li.grid.border-b:nth-of-type(3)",
+      "property": "position",
+      "before": "",
+      "after": "moved 1px up",
+      "text": "moved 1px up",
+      "magnitude": 0.05,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h84:position",
+          "cause": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h54:position",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m6",
+      "kind": "effect",
+      "name": "details.py-3",
+      "selector": "details.py-3",
+      "property": "position",
+      "before": "",
+      "after": "moved 1px up",
+      "text": "moved 1px up",
+      "magnitude": 0.05,
+      "variants": [
+        {
+          "capture": "home-6__desktop__light",
+          "viewport": "desktop",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h86:position",
+          "cause": "b84:removed"
+        },
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.05,
+          "change": "h56:position",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "desktop, mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m7",
+      "kind": "effect",
+      "name": "#root",
+      "selector": "#root",
+      "property": "size",
+      "before": "390×1095px",
+      "after": "390×1094px",
+      "text": "size 390×1095px → 390×1094px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h0:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m8",
+      "kind": "effect",
+      "name": "Tv (div.flex.min-h-screen)",
+      "selector": "div.flex.min-h-screen",
+      "property": "size",
+      "before": "390×1095px",
+      "after": "390×1094px",
+      "text": "size 390×1095px → 390×1094px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h1:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m9",
+      "kind": "effect",
+      "name": "main.m-2.flex",
+      "selector": "main.m-2.flex",
+      "property": "size",
+      "before": "374×1023px",
+      "after": "374×1022px",
+      "text": "size 374×1023px → 374×1022px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h2:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "mobile"
+    },
+    {
+      "route": "/?signed-in#/security",
+      "id": "m10",
+      "kind": "effect",
+      "name": "div.grid.items-start",
+      "selector": "div.grid.items-start",
+      "property": "size",
+      "before": "340×901px",
+      "after": "340×900px",
+      "text": "size 340×901px → 340×900px",
+      "magnitude": 0.15000000000000002,
+      "variants": [
+        {
+          "capture": "home-6__mobile__light",
+          "viewport": "mobile",
+          "theme": "light",
+          "magnitude": 0.15000000000000002,
+          "change": "h8:size",
+          "cause": "b54:removed"
+        }
+      ],
+      "cause": "m1",
+      "where": "mobile"
+    }
+  ],
+  "timings": {
+    "totalMs": 18176,
+    "detectMs": 42,
+    "prepare": {
+      "wallMs": 1861,
+      "base": {
+        "mode": "worktree",
+        "checkoutMs": 126,
+        "install": {
+          "kind": "linked",
+          "ms": 7
+        },
+        "buildMs": 884,
+        "bootMs": 821,
+        "totalMs": 1861
+      },
+      "head": {
+        "mode": "worktree",
+        "checkoutMs": 136,
+        "install": {
+          "kind": "linked",
+          "ms": 6
+        },
+        "buildMs": 882,
+        "bootMs": 815,
+        "totalMs": 1860
+      }
+    },
+    "browserMs": 203,
+    "capture": {
+      "ms": 15205,
+      "count": 8,
+      "slowest": {
+        "id": "home-6__desktop__light",
+        "side": "base",
+        "ms": 2177
+      }
+    },
+    "diffMs": 846,
+    "extras": {
+      "styleDiffMs": 9,
+      "elementMapMs": 182
+    }
+  }
+}
