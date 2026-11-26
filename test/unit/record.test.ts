@@ -1,7 +1,7 @@
 // The admin page's record draft (src/admin/ui/lib/record.ts), with the API stubbed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canSave, createRecorder, recBody } from '../../src/admin/ui/lib/record.ts';
+import { canSave, createRecorder, larger, recBody } from '../../src/admin/ui/lib/record.ts';
 
 function page() {
   const ctx: Record<string, any> = { toasts: [], calls: [], bodies: [], replies: {} };
@@ -13,7 +13,7 @@ function page() {
       const r = ctx.replies[a]; if (r instanceof Error) throw r; return structuredClone(r);
     },
   });
-  const T = { get rec() { return R.rec; }, withBuf: R.withBuf, addStep: R.addStep, addBuf: R.addBuf, tcall: R.tcall, recBody };
+  const T = { get rec() { return R.rec; }, withBuf: R.withBuf, addStep: R.addStep, addBuf: R.addBuf, tcall: R.tcall, choose: R.choose, snapshot: R.snapshot, recBody };
   const start = (id = 'p') => { R.start(id); return R.rec as any; };
   const click = () => R.click({ x: 1, y: 1 });
   return { ctx, T, start, click };
@@ -139,4 +139,33 @@ test('record: Save and Replay take the draft after the typing buffer went throug
   g.buf = 'me@x.test'; let body = '';
   T.withBuf(async (g: any) => { body = T.recBody(g).body; }); await settle();
   assert.match(body, /me@x\.test/);
+});
+
+test('record: Text on the page reads the next click instead of clicking it, after the typing; one pick, then clicks again', async () => {
+  const { ctx, T, start, click } = page(), g = start();
+  ctx.replies.type = fill('Email', 'me'); ctx.replies.click = OK;
+  ctx.replies.read = { step: { get_text: { selector: '#total' }, keep: true }, text: '€48.90' };
+  T.choose('text'); g.buf = 'me'; click(); click(); await settle();
+  assert.deepEqual(ctx.calls, ['type', 'read', 'click']);
+  assert.deepEqual({ ...ctx.bodies[1] }, { get_text: {}, x: 1, y: 1, rec: g.rid }, 'no seq: a read moves no focus');
+  assert.deepEqual([g.choosing, g.steps.map((x: any) => x.step), g.steps[1].text], [null, [fill('Email', 'me').step, ctx.replies.read.step, OK.step], '€48.90']);
+  assert.equal(g.out, '', 'the value shows in its row only');
+});
+
+test('record: a page snapshot is one row that Limit to an area, Larger area and Whole page read again in place', async () => {
+  const { ctx, T, start, click } = page(), g = start();
+  const snap = (scope?: string, text = 'x') => ({ step: { snapshot: scope ? { scope } : {}, keep: true }, text });
+  ctx.replies.read = snap(); T.snapshot(); await settle();
+  const row = g.steps[0];
+  ctx.replies.read = snap('#items > ul:nth-of-type(1)', 'area'); T.choose(row); click(); await settle();
+  assert.deepEqual([g.steps.length, g.steps[0] === row, row.step, row.text, g.choosing], [1, true, snap('#items > ul:nth-of-type(1)').step, 'area', null]);
+  ctx.replies.read = snap('#items'); T.snapshot(larger(row.step.snapshot.scope)!, row); await settle();
+  assert.equal(larger('#items'), null, 'no Larger area past the anchor');
+  ctx.replies.read = snap(); T.snapshot(undefined, row); await settle();
+  assert.deepEqual(ctx.bodies.map((b: any) => { const { rec, ...rest } = b; return rest; }),
+    [{ snapshot: {} }, { snapshot: {}, x: 1, y: 1 }, { snapshot: { scope: '#items' } }, { snapshot: {} }]);
+  assert.match(T.recBody(g).body, /"snapshot": \{\},\s+"keep": true/);
+  // A row removed while its area is read: nothing comes back to the draft.
+  T.snapshot('#items', row); g.steps.length = 0; await settle();
+  assert.deepEqual(g.steps, []);
 });

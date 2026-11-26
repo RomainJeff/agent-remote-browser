@@ -9,15 +9,18 @@
 // seq: the last gesture that may move the focus; typing names it (after) and this recording (rid, every call), so the
 // gateway refuses text that follows a gesture it did not run, or one of another tab's recording.
 // pick: the saved logins of the site to pick from, for a password field; Save and Replay wait for it.
+// choosing: the next left click in the view picks an output instead of clicking ('text': a get_text of the element
+// there; a snapshot's RecStep: that snapshot scoped to the area there). Nothing is clicked on the page.
 // The first character typed into an empty buffer queues teach-focus: the gateway notes the field focused then and fills
 // only that field on the flush, so text typed after a Tab is dropped if the page moved the focus in between.
 // ponytail: no idle flush; add a timer if typing never followed by a click or a key turns out to matter.
 
 type Step = Record<string, any>;
-/** field: a click that focused a text field. typed: what was typed, for a fill. param/pname: the fill becomes {pname}. */
+/** field: a click that focused a text field. typed: what was typed, for a fill. param/pname: the fill becomes {pname}.
+ *  text: what an output step read when recorded. */
 export type RecStep = { step: Step; field?: boolean; typed?: string; param?: boolean; pname?: string; text?: string };
 export type Pick = { site: string; username: string }[];
-export type Rec = { id: string; rid: string; steps: RecStep[]; buf: string; q: Promise<unknown>; lost: boolean; seq?: number; pick?: Pick | null; out: string };
+export type Rec = { id: string; rid: string; steps: RecStep[]; buf: string; q: Promise<unknown>; lost: boolean; seq?: number; pick?: Pick | null; choosing: null | 'text' | RecStep; out: string };
 type Reply = RecStep & { pick?: Pick; ok?: boolean; text?: string };
 export type Api = (path: string, method: 'POST', body: unknown) => Promise<unknown>;
 export type Key = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean };
@@ -29,6 +32,9 @@ const slug = (l: Step) => {
   const s = String(l.name || l.placeholder || l.label || l.text || 'value').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
   return /^[a-z_]/.test(s) ? s : 'p_' + s;
 };
+
+/** A snapshot scope one element up (its last ` > ` segment dropped); null at the anchor (#id, [data-testid], body). */
+export const larger = (scope: string) => { const i = scope.lastIndexOf(' > '); return i < 0 ? null : scope.slice(0, i); };
 
 /** Save and Replay: on once there is a step or typing (they send it first), off while a login is to pick. */
 export const canSave = (g: Rec) => !g.pick && (g.steps.length > 0 || !!g.buf);
@@ -83,6 +89,13 @@ export function createRecorder({ api, toast, changed }: { api: Api; toast: (msg:
     changed();
   }
 
+  /** An output step read again (another scope): same row, new step and text. Gone from the draft: nothing. */
+  function replace(g: Rec, s: RecStep, r: Reply) {
+    if (rec !== g || !g.steps.includes(s)) return;
+    s.step = r.step; s.text = r.text;
+    changed();
+  }
+
   /** Takes the typing buffer now (it belongs to the field focused before this gesture), sends it, then fn(g, fill or login step).
    *  draft (Save, Replay): a login still to pick stops it, else the draft would miss the login; a gesture in the view drops the pick. */
   function withBuf(fn: (g: Rec, r: Reply | null) => Promise<unknown>, draft = false) {
@@ -119,12 +132,27 @@ export function createRecorder({ api, toast, changed }: { api: Api; toast: (msg:
 
   return {
     get rec() { return rec; },
-    start(id: string) { rec = { id, rid: crypto.getRandomValues(new Uint32Array(4)).join('-'), steps: [], buf: '', q: Promise.resolve(), lost: false, out: '' }; changed(); },
+    start(id: string) { rec = { id, rid: crypto.getRandomValues(new Uint32Array(4)).join('-'), steps: [], buf: '', q: Promise.resolve(), lost: false, choosing: null, out: '' }; changed(); },
     stop() { if (rec) { rec = null; changed(); } },
     tcall, addStep, withBuf, addBuf,
-    click: (p: { x: number; y: number }) => withBuf(async (g) => addStep(g, await tcall(g, 'click', p))),
+    /** A left click in the view: a step, or the output being picked (one pick, then clicks are steps again). */
+    click(p: { x: number; y: number }) {
+      const c = rec?.choosing;
+      if (!c) return withBuf(async (g) => addStep(g, await tcall(g, 'click', p)));
+      rec!.choosing = null;
+      withBuf(async (g) => {
+        const r = await tcall(g, 'read', c === 'text' ? { get_text: {}, ...p } : { snapshot: {}, ...p });
+        if (c === 'text') addStep(g, r); else replace(g, c, r);
+      });
+    },
+    /** Add output > Text on the page ('text'), Limit to an area (the snapshot's step), Cancel pick (null). */
+    choose(c: null | 'text' | RecStep) { if (rec) { rec.choosing = c; changed(); } },
+    /** Add output > Page snapshot (no s), Larger area and Whole page (s: that snapshot, read again with this scope). */
+    snapshot: (scope?: string, s?: RecStep) => withBuf(async (g) => {
+      const r = await tcall(g, 'read', { snapshot: scope ? { scope } : {} });
+      if (s) replace(g, s, r); else addStep(g, r);
+    }),
     open: (url: string) => withBuf(async (g) => addStep(g, await tcall(g, 'open', { url }))),
-    read: (q: { selector?: string; contains?: string }) => withBuf(async (g) => { const r = await tcall(g, 'read', q); addStep(g, r); g.out = r.text ?? ''; changed(); }),
     replay: () => withBuf(async (g) => {
       g.out = 'Replaying…'; changed();
       const r = await tcall(g, 'replay', recBody(g));

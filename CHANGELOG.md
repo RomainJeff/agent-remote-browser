@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26
+
+- Recording a playbook: **Add output** now picks the output in the live view instead of asking for a CSS selector. **Text on the page** reads the element you click (nothing is clicked on the page); **Page snapshot** returns the links, buttons and fields the agent can act on next, for the whole page or an area you pick. Every recorded output is kept, so a playbook with several outputs returns them all.
+
 ## 2026-11-25
 
 - Fixed: on a device trusted for 30 days, admin sign-in now skips the authenticator code instead of failing with "2FA is not set up".

@@ -70,19 +70,20 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
     await pc.ensure(id);
     const r = await driver.exec(id, ['node', '-e', HIT, ...args], { timeoutMs: 10_000 });
     if (r.code !== 0) throw new BrowserError((r.stderr || `exit ${r.code}`).trim().slice(0, 300));
-    return JSON.parse(r.stdout) as { url: string; chain: AX[]; live?: string };
+    return JSON.parse(r.stdout) as { url: string; chain: AX[]; live?: string; selector?: string | null };
   }
-  /** Runs a step built here; Step checks it first, as run_steps would. */
+  /** Runs a step built here; Step checks it first, as run_steps would. An output step comes back with its text. */
   async function run(id: ProfileId, step: unknown, extra: object = {}): Promise<Reply> {
     const s = Step.safeParse(step);
     if (!s.success) return [400, { error: `Not a valid step: ${s.error.issues[0].message}` }];
     const d = await pc.ab(id, stepArgv(s.data)!);
-    return [200, { step, ...extra, ...('get_text' in s.data && { text: clip(readOut(s.data, d).text, 2000).text }) }];
+    return [200, { step, ...extra, ...(('get_text' in s.data || 'snapshot' in s.data) && { text: clip(readOut(s.data, d).text, 2000).text }) }];
   }
+  const point = (b: Record<string, any>) => [b.x, b.y].every((n) => Number.isInteger(n) && n >= 0 && n <= 99_999);
 
   async function act(act: string, id: ProfileId, p: Profile, b: Record<string, any>): Promise<Reply> {
     if (act === 'teach-click') {
-      if (![b.x, b.y].every((n) => Number.isInteger(n) && n >= 0 && n <= 99_999)) return [400, { error: 'x, y: CSS pixels' }];
+      if (!point(b)) return [400, { error: 'x, y: CSS pixels' }];
       const { chain } = await hit(id, ['at', String(b.x), String(b.y)]), l = locate(chain);
       if (!l) return NONE;
       // field: a click that only focuses a field, dropped by the page when a fill or a login follows.
@@ -137,8 +138,15 @@ export function teacher(ctx: Pick<Ctx, 'computers' | 'driver' | 'store'>) {
       return run(id, { open: b.url });
     }
     if (act === 'teach-read') {
-      const a = { ...(b.selector && { selector: b.selector }), ...(b.contains && { contains: b.contains }) };
-      return run(id, { get_text: a });
+      // One output, always kept: a playbook with several outputs returns them all. With x, y, the element there names
+      // what to read (get_text) or the area to keep (snapshot); nothing is clicked.
+      const { rec, x, y, ...rest } = b, [kind, ...more] = Object.keys(rest), o = rest[kind];
+      if ((kind !== 'get_text' && kind !== 'snapshot') || more.length || !o || typeof o !== 'object' || Array.isArray(o)) return [400, { error: 'Body: {get_text: {...}} or {snapshot: {...}}, and x, y to pick' }];
+      if (x === undefined && y === undefined) return run(id, { [kind]: o, keep: true });
+      if (!point(b)) return [400, { error: 'x, y: CSS pixels' }];
+      const { selector } = await hit(id, ['at', String(x), String(y)]);
+      if (!selector || selector.length > 500) return [422, { error: 'Inside a frame or shadow root: not recorded' }];
+      return run(id, { [kind]: { ...o, [kind === 'get_text' ? 'selector' : 'scope']: selector }, keep: true });
     }
     // teach-replay: the draft as a playbook body, through run_playbook's path.
     if (typeof b.body !== 'string' || b.body.length > 64 * 1024) return [400, { error: 'Body required' }];

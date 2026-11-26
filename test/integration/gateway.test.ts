@@ -791,10 +791,24 @@ test('teach: each admin gesture runs as a semantic step and comes back as one; a
     assert.equal((await teach('press', { key: 'a' })).status, 400);
     assert.equal((await teach('open', { url: 'https://example.org/' })).status, 400);
     assert.deepEqual((await teach('open', { url: 'https://example.com/usage' })).json, { step: { open: 'https://example.com/usage' } });
-    r = await teach('read', { selector: '#usage', contains: 'hell' });
-    assert.deepEqual(r.json, { step: { get_text: { selector: '#usage', contains: 'hell' } }, text: 'hello' });
-    assert.deepEqual(abs().at(-1), ['get', 'text', '#usage']);
-    assert.equal((await teach('read', { selector: '-x' })).status, 400);
+    // Outputs: always kept; a point names the element to read or the area to keep (HIT's selector), nothing is clicked.
+    const sel = '#main > button:nth-of-type(1)';
+    r = await teach('read', { get_text: { contains: 'hell' } });
+    assert.deepEqual([r.json, abs().at(-1)], [{ step: { get_text: { contains: 'hell' }, keep: true }, text: 'hello' }, ['get', 'text', 'body']]);
+    r = await teach('read', { get_text: {}, x: 3, y: 4 });
+    assert.deepEqual([r.json, hits().at(-1), abs().at(-1)], [{ step: { get_text: { selector: sel }, keep: true }, text: 'hello' }, ['at', '3', '4'], ['get', 'text', sel]]);
+    r = await teach('read', { snapshot: {}, x: 3, y: 4 });
+    assert.deepEqual([r.json, abs().at(-1)], [{ step: { snapshot: { scope: sel }, keep: true }, text: '- button "OK" [ref=e1]' }, ['snapshot', '-i', '-c', '-s', sel]]);
+    assert.deepEqual((await teach('read', { snapshot: {} })).json.step, { snapshot: {}, keep: true });
+    k = abs().length;
+    for (const selector of [null, 'body > ' + 'div:nth-of-type(1) > '.repeat(25) + 'span:nth-of-type(1)']) {
+      fake.hit.at = { ...(defaults.at as object), selector }; // inside a frame or a shadow root; or too long for a step
+      r = await teach('read', { get_text: {}, x: 3, y: 4 });
+      assert.deepEqual([r.status, r.json.error, abs().length], [422, 'Inside a frame or shadow root: not recorded', k]);
+    }
+    fake.hit.at = defaults.at;
+    for (const b of [{ selector: '#usage' }, { get_text: {}, snapshot: {} }, { get_text: {}, keep: false }, { get_text: 'body' }, { get_text: {}, x: 1 }, { get_text: { selector: '-x' } }])
+      assert.equal((await teach('read', b)).status, 400, JSON.stringify(b));
 
     // Replay: the draft as a playbook body, run like run_playbook.
     const body = '# Draft\n```json\n{"steps": [{"open": "https://example.com/{ws}"}, {"get_text": {}}]}\n```';

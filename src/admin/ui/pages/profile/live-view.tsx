@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Crosshair } from 'lucide-react';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { askNote } from '@/components/confirm';
@@ -23,6 +24,8 @@ export function LiveView({ c }: { c: Computer }) {
   const h = c.handoff, locked = !!c.leasedUntil && h?.state !== 'taken';
   const up = c.state === 'running', viewer = c.role === 'viewer';
   const view = l.view?.id === c.id ? l.view : null, frame = l.frame?.id === c.id ? l.frame : null, ctl = !!view?.control, recording = recorder.rec?.id === c.id;
+  // Picking an output: the next click in the view reads the element there instead of clicking it.
+  const choosing = recording && ctl ? recorder.rec!.choosing : null;
   const lost = !!view?.control && (locked || (viewer && h?.state !== 'taken'));
   useEffect(() => { if (lost) openView(c.id, false); }, [lost, c.id]);
   useEffect(() => { if (live.focusTakeOver) { live.focusTakeOver = false; takeOverRef.current?.focus(); } }, []);
@@ -107,7 +110,17 @@ export function LiveView({ c }: { c: Computer }) {
         <span className="text-xs text-muted-foreground">{l.fps}</span>
       </div>
       {!viewer && <UrlBar c={c} url={view?.url} />}
-      <div className={cn('rounded-xl bg-[#2A2F35] p-2', ctl && 'bezel-control p-1.5')}>
+      {choosing && (
+        <div className="-mb-3 flex flex-wrap items-end gap-x-3 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 rounded-t-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground">
+            <Crosshair className="size-3.5" />{choosing === 'text' ? 'Picking an output' : 'Picking an area'}
+          </span>
+          <span className="pb-1.5 text-[13px] text-muted-foreground">
+            {choosing === 'text' ? 'Click the text to read.' : 'Click inside the area to keep.'} Nothing is clicked on the page.
+          </span>
+        </div>
+      )}
+      <div className={cn('rounded-xl bg-[#2A2F35] p-2', choosing ? 'rounded-tl-none bg-primary p-1.5' : ctl && 'bezel-control p-1.5')}>
         <div className={cn('screen relative min-h-[120px] overflow-hidden rounded-md bg-[#0D1116]', loading() && 'loading')}>
           {frame && <Frame c={c} src={frame.src} seq={frame.seq} control={ctl} hidden={!!view && !view.seen} />}
           {(!frame || (view && !view.seen)) && (view

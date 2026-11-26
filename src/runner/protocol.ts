@@ -24,7 +24,10 @@ export const SELECTION = "(e=>e&&e.type!=='password'&&e.selectionEnd>e.selection
  *  case-insensitive) and `exact` (same name); `ids` and `names`: the page's own count for the css `#id` and
  *  `tag[name="…"]` teach.ts emits (quirks mode matches ids case-insensitively); `ph` (placeholder contains it,
  *  case-insensitive). Names are cut at 300. `focus` adds `live` (the focused element, through shadow roots: "password"
- *  by its type property, "frame", else ""). Prints { url, chain, live? } as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
+ *  by its type property, "frame", else ""). `at` adds `selector`, a CSS selector of the element (its parent for a text
+ *  node) that the page's querySelectorAll matches to that element only: `tag:nth-of-type(n)` segments joined by ` > `
+ *  from the nearest ancestor with a unique id or data-testid (CSS.escape'd, so ` > ` only separates segments) or from
+ *  body; never its text. Null inside a frame or a shadow root. Prints { url, chain, live?, selector? } as JSON. Refuses unless exactly one page target exists: agent-browser may drive another tab than the one hit-tested.
  *  ponytail: iframes and shadow DOM are not looked into. */
 export const HIT = `const [mode, x, y] = process.argv.slice(1);
 // Run in the page: elements the #id, tag[name="…"] (the selectors teach.ts emits) or placeholder locator would match.
@@ -32,6 +35,25 @@ const COUNT = (id, tag, name, ph) => {
   const q = (s) => { try { return document.querySelectorAll(s).length; } catch { return undefined; } };
   return { ids: id ? q('#' + id) : undefined, names: name ? q(tag + '[name="' + name + '"]') : undefined,
     ph: ph ? [...document.querySelectorAll('[placeholder]')].filter((x) => x.getAttribute('placeholder').toLowerCase().includes(ph.toLowerCase())).length : undefined };
+};
+// Run in the page on the hit element (this): its selector, as described above.
+const SELECTOR = function () {
+  const el = this.nodeType === 1 ? this : this.parentElement;
+  const one = (s) => { try { const m = document.querySelectorAll(s); return m.length === 1 && m[0]; } catch { return null; } };
+  if (window !== top || !el) return null;
+  const parts = [];
+  for (let e = el; e; e = e.parentElement) {
+    if (e === document.body) { parts.unshift('body'); break; }
+    const id = e.getAttribute('id'), t = e.getAttribute('data-testid');
+    const anchor = id && one('#' + CSS.escape(id)) === e ? '#' + CSS.escape(id)
+      : t && one('[data-testid="' + CSS.escape(t) + '"]') === e ? '[data-testid="' + CSS.escape(t) + '"]' : '';
+    if (anchor) { parts.unshift(anchor); break; }
+    let n = 1;
+    for (let s = e.previousElementSibling; s; s = s.previousElementSibling) if (s.localName === e.localName) n++;
+    parts.unshift(CSS.escape(e.localName) + ':nth-of-type(' + n + ')');
+  }
+  const s = parts.join(' > ');
+  return one(s) === el ? s : null;
 };
 const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;return !e?'':e.type==='password'?'password':/^i?frame$/.test(e.localName)?'frame':''})(document.activeElement)";
 (async () => {
@@ -52,6 +74,9 @@ const LIVE = "(e=>{while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowR
   const out = { url: page.url, chain: [] };
   if (mode === 'focus') {
     out.live = (await call('Runtime.evaluate', { expression: LIVE, returnByValue: true })).result.value;
+  } else {
+    const { objectId } = (await call('DOM.resolveNode', { backendNodeId: node })).object;
+    out.selector = (await call('Runtime.callFunctionOn', { objectId, functionDeclaration: String(SELECTOR), returnByValue: true })).result.value;
   }
   const { nodes } = await call('Accessibility.getPartialAXTree', { backendNodeId: node, fetchRelatives: true });
   const root = (await call('DOM.getDocument', { depth: 0 })).root.backendNodeId, byId = new Map(nodes.map((a) => [a.nodeId, a])), names = {}, chain = out.chain;
@@ -167,7 +192,8 @@ export const Request = z.discriminatedUnion('op', [
   op('ensure', { id }),
   op('exec', {
     id,
-    argv: z.array(z.string().max(5000)).max(16).refine(argvAllowed, 'argv not allowed'),
+    // HIT is the longest argument; each shape caps its own values (a fill at 5000).
+    argv: z.array(z.string().max(8000)).max(16).refine(argvAllowed, 'argv not allowed'),
     stdin: z.string().max(4096).optional(),
     timeoutMs: z.int().min(1000).max(120_000),
   }),

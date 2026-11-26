@@ -43,6 +43,7 @@ window.fetch = async (path, options = {}) => {
     if (act === 'handoff-take') { computers = computers.map(c => c.id === id ? { ...c, handoff: { ...c.handoff, state: 'taken' } } : c); return json({ state: 'taken' }); }
     if (act === 'handoff-done') { computers = computers.map(c => c.id === id ? { ...c, handoff: null } : c); return json({}); }
     if (act === 'teach-click') return json({ step: { click: { text: 'OK' } }, field: false });
+    if (act === 'teach-read') return json({ step: { get_text: { selector: '#total' }, keep: true }, text: '48.90 EUR' });
     throw Error(path);
   }
   switch (path) {
@@ -327,6 +328,13 @@ browserCase('recording: a click in the view becomes a step, saved through the pl
   mouse('mousedown', img); mouse('mouseup', img);
   await until(() => text().includes('{"click":{"text":"OK"}}'), 'step listed');
   check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'the click went to the gateway, not the stream');
+  button('Add output').click();
+  (await until(() => [...document.querySelectorAll('[role=menuitem]')].find(m => m.textContent.startsWith('Text on the page')), 'output menu')).click();
+  await until(() => text().includes('Picking an output') && button('Cancel pick'), 'pick mode');
+  mouse('mousedown', img); mouse('mouseup', img);
+  await until(() => text().includes('Read 48.90 EUR · Output 1') && button('Add output'), 'output row, pick mode over');
+  const read = writes.find(w => w[0].endsWith('/teach-read'))[1];
+  check(JSON.stringify(read.get_text) === '{}' && read.x === 20 && read.y === 15, 'teach-read ' + JSON.stringify(read));
   button('Save as playbook…').click();
   await until(() => document.activeElement === field('name'), 'playbook editor, name focused');
   check(document.querySelector('ol li [aria-label="Text on the page"]').value === 'OK', 'recorded step in the form');
