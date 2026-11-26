@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { KeyRoundIcon, LayoutListIcon, LogOutIcon, ShieldIcon, UsersIcon } from 'lucide-react';
 import { Brand } from '@/components/brand';
+import { Avatar } from '@/components/page';
 import { driverOf } from '@/components/state';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -36,7 +37,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/security" icon={<ShieldIcon />}>Security</NavLink>
         </nav>
         <div className="mt-auto flex items-center gap-2.5 pl-2 text-[13px] text-ink-2">
-          <span className="grid size-6 flex-none place-items-center rounded-full bg-line text-[10.5px] font-bold text-ink">{(email || 'AD').slice(0, 2).toUpperCase()}</span>
+          <Avatar email={email || 'AD'} className="size-6 text-[10.5px]" />
           <span className="min-w-0 flex-1 truncate">{email}</span>
           <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOutIcon /></Button>
         </div>

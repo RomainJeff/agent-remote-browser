@@ -2,58 +2,69 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShieldCheckIcon } from 'lucide-react';
 import { CopyButton } from '@/components/mcp-url';
-import { Hint, PageHead, Panel } from '@/components/page';
+import { PageHead, Section } from '@/components/page';
+import { NumberedStep } from '@/components/step-text';
 import { sessionQuery } from '@/lib/session';
-import { cn } from '@/lib/utils';
 
-const Term = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <pre className={cn('overflow-auto rounded-lg bg-[#1F2226] p-3 font-mono text-xs whitespace-pre-wrap text-[#E9EBEC] [overflow-wrap:anywhere]', className)}>{children}</pre>
+/** A command to run on the host, in a dark block with Copy. */
+const Command = ({ text }: { text: string }) => (
+  <div className="flex items-stretch overflow-hidden rounded-xl bg-ink">
+    <pre className="min-w-0 flex-auto px-4 py-3.5 font-mono text-[12.5px] leading-5 whitespace-pre-wrap text-canvas [overflow-wrap:anywhere]"><span className="text-ink-3 select-none">$ </span>{text}</pre>
+    <CopyButton text={text} className="h-auto w-[76px] flex-none rounded-none border-0 border-l border-l-white/15 bg-transparent text-canvas hover:bg-white/10 hover:text-white" />
+  </div>
 );
 
-/** 2FA is managed on the host (CLI): this page only explains how. */
+const Tip = ({ children }: { children: ReactNode }) => (
+  <li className="grid grid-cols-[6px_minmax(0,1fr)] gap-2.5 border-b border-line-soft py-3 text-[13.5px] leading-5">
+    <i aria-hidden className="mt-[7px] size-1.5 rounded-full bg-line-strong" />{children}
+  </li>
+);
+
+/** Two-step sign-in is managed on the host (CLI): this page says it is on and how to reset it. */
 export function SecurityPage() {
   const { data: session } = useQuery(sessionQuery);
   const email = session?.email || 'admin@example.com', reset = `docker compose exec gateway node src/cli.ts admin reset-2fa ${email}`;
   return (
     <>
-      <PageHead title="Account security" sub="Two-factor authentication is managed from the host machine, on the command line. Access to the server's terminal proves it's you." />
-      <section className="flex flex-wrap items-center gap-5 rounded-xl border bg-card px-6 py-5">
-        <span className="flex size-12 items-center justify-center rounded-xl bg-secondary text-primary"><ShieldCheckIcon className="size-6" /></span>
-        <div className="flex min-w-0 flex-[1_1_260px] flex-col">
-          <h2 className="text-base font-extrabold">Two-factor authentication is on</h2>
-          <span className="text-sm text-muted-foreground">Authenticator app (TOTP) · {email}</span>
+      <PageHead title="Security" />
+      <div className="grid max-w-[1140px] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-7">
+          <section className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border p-[18px]">
+            <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
+              <h2 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheckIcon aria-hidden className="size-4" />Two-step sign-in is on</h2>
+              <p className="text-[13.5px] text-ink-2">Authenticator app, {email}</p>
+            </div>
+            <dl className="flex gap-8">
+              {[['Backup codes', '10, single use'], ['Lockout', '5 tries, then 15 min']].map(([t, d]) => (
+                <div key={t}><dt className="text-[13px] text-ink-3">{t}</dt><dd className="mt-0.5 font-medium">{d}</dd></div>
+              ))}
+            </dl>
+          </section>
+          <Section title="New phone or new backup codes" lead="Done on the server, not in the browser: access to its terminal proves it's you. Also works if you lost both your phone and your codes.">
+            <Command text={reset} />
+            <ol className="-mt-1 border-t border-line-soft">
+              <NumberedStep n={1}>Choose a new password, 12 characters minimum</NumberedStep>
+              <NumberedStep n={2}>Scan the QR code in the terminal with your authenticator app</NumberedStep>
+              <NumberedStep n={3}>Enter a first code, then save the 10 new backup codes</NumberedStep>
+              <NumberedStep n={4}>All admin sessions end. <b className="font-semibold">You will be signed out here.</b></NumberedStep>
+            </ol>
+          </Section>
         </div>
-        <dl className="flex flex-wrap gap-x-8 gap-y-2">
-          {[['Enabled', 'by the CLI, when the account was created'], ['Backup codes', '10 generated, single use'], ['Lockout', '5 attempts, then 15 min']].map(([t, d]) => (
-            <div key={t}><dt className="text-xs font-bold text-muted-foreground">{t}</dt><dd className="font-semibold">{d}</dd></div>
-          ))}
-        </dl>
-      </section>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-6">
-        <Panel pad title="Change phone or regenerate codes">
-          <p className="-mt-3 text-muted-foreground">Also if you have lost both your phone and your backup codes.</p>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold text-muted-foreground">On the host machine</span>
-            <div className="flex gap-2"><Term className="flex-auto">{reset}</Term><CopyButton text={reset} /></div>
-          </div>
-          <ol className="flex list-decimal flex-col gap-2 pl-5">
-            <li>Asks for a new password (12 characters minimum)</li>
-            <li>Shows a QR code to scan with your authenticator app, once</li>
-            <li>Checks a first code, then shows 10 new backup codes</li>
-            <li>Ends all admin sessions: <strong>you will be signed out here</strong></li>
-          </ol>
-        </Panel>
-        <Panel pad title="Good practices">
-          <p>Keep backup codes offline, somewhere other than your phone.</p>
-          <p>The otpauth:// link contains the secret: never paste it into a chat or a ticket.</p>
-          <p>No server access? Nobody can reset 2FA from the browser. That is by design.</p>
-          <p>Sensitive actions (domains, saved logins, keys, deletion) ask for a code again every 15 min. Five wrong codes end the session.</p>
-          <details className="border-t border-muted pt-2">
-            <summary className="cursor-pointer font-semibold text-primary">Fresh install: create the admin</summary>
-            <Term className="mt-2.5">docker compose exec gateway node src/cli.ts admin create you@example.com</Term>
-            <Hint className="mt-1.5 block">One admin per gateway. Same steps: password, QR code, first code, backup codes.</Hint>
+        <aside aria-labelledby="tips" className="flex flex-col">
+          <h2 id="tips" className="pb-1 text-sm font-semibold">Good to know</h2>
+          <ul>
+            <Tip>Keep backup codes offline, away from your phone.</Tip>
+            <Tip><span>The <code className="font-mono text-[12.5px]">otpauth://</code> link holds the secret. Never paste it in a chat or a ticket.</span></Tip>
+            <Tip>Changing domains, saved logins, keys or deleting asks for a code again after 15 min. Five wrong codes end the session.</Tip>
+          </ul>
+          <details className="py-3 text-[13.5px]">
+            <summary className="cursor-pointer font-medium text-ink-2">Fresh install: create the admin</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              <Command text="docker compose exec gateway node src/cli.ts admin create you@example.com" />
+              <p className="text-[13px] text-ink-3">Only on an empty gateway. Same steps: password, QR code, first code, backup codes.</p>
+            </div>
           </details>
-        </Panel>
+        </aside>
       </div>
     </>
   );

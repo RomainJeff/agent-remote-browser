@@ -1,10 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Brand } from '@/components/brand';
-import { AuthLayout, FormError } from '@/components/auth-layout';
+import { AuthLayout, AuthTitle, FormError } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -58,48 +56,42 @@ export function LoginPage() {
   });
 
   return (
-    <AuthLayout>
-      <Brand large />
-      <Card className="w-full max-w-[420px] gap-5 p-8">
-        {step === 'password' ? (
-          <form className="flex flex-col gap-4" onSubmit={signIn}>
-            <div><StepLabel>Step 1 of 2</StepLabel><h1 className="text-2xl font-extrabold">Sign in</h1></div>
-            <Field><FieldLabel htmlFor="email">Email</FieldLabel><Input id="email" name="email" type="email" autoComplete="username" required autoFocus /></Field>
-            <Field><FieldLabel htmlFor="password">Password</FieldLabel><Input id="password" name="password" type="password" autoComplete="current-password" required /></Field>
-            <Button type="submit" size="lg" disabled={busy}>Continue</Button>
-          </form>
-        ) : (
-          <form className="flex flex-col gap-4" onSubmit={verify}>
-            <div><StepLabel>Step 2 of 2</StepLabel><h1 className="text-2xl font-extrabold">Authenticator code</h1></div>
-            <p className="text-muted-foreground">Open your authenticator app and enter the 6-digit code.</p>
-            {backup ? (
-              <Field key="backup">
-                <FieldLabel htmlFor="code">Backup code</FieldLabel>
-                <Input id="code" name="code" className="font-mono" maxLength={32} autoComplete="off" required autoFocus />
-                <FieldDescription>Each code works only once.</FieldDescription>
-              </Field>
-            ) : (
-              <Field key="totp">
-                <FieldLabel htmlFor="code">6-digit code</FieldLabel>
-                <Input id="code" name="code" className="h-12 text-center font-mono text-[22px]! font-semibold tracking-[.3em]" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required autoFocus />
-              </Field>
-            )}
-            <Button type="button" variant="link" className="self-start px-0" onClick={() => setBackup(!backup)}>{backup ? 'Use the authenticator code' : 'Use a backup code'}</Button>
-            <Field orientation="horizontal">
-              <Checkbox id="trust" name="trust" />
-              <FieldLabel htmlFor="trust" className="flex-col items-start gap-0 font-normal">Trust this device for 30 days<FieldDescription>Admin port only. Sensitive actions still ask for a code.</FieldDescription></FieldLabel>
+    <AuthLayout foot={<p className="max-w-[420px] text-center text-[13px] leading-5 text-ink-3">Lost your phone and your backup codes? Two-step sign-in is reset on the server, with <code className="font-mono text-xs text-ink">admin reset-2fa</code>.</p>}>
+      {step === 'password' ? (
+        <form className="flex flex-col gap-[18px]" onSubmit={signIn}>
+          <div className="flex flex-col gap-1"><span className="text-[13px] text-ink-3">Step 1 of 2</span><AuthTitle title="Sign in" /></div>
+          <Field><FieldLabel htmlFor="email">Email</FieldLabel><Input id="email" name="email" type="email" className="h-[38px]" autoComplete="username" required autoFocus /></Field>
+          <Field><FieldLabel htmlFor="password">Password</FieldLabel><Input id="password" name="password" type="password" className="h-[38px]" autoComplete="current-password" required /></Field>
+          <FormError>{error}</FormError>
+          <Button type="submit" className="h-[38px]" disabled={busy}>Continue</Button>
+        </form>
+      ) : (
+        <form className="flex flex-col gap-[18px]" onSubmit={verify}>
+          <div className="flex flex-col gap-1"><span className="text-[13px] text-ink-3">Step 2 of 2</span>
+            <AuthTitle title="Enter your code" lead={backup ? 'One of the backup codes you saved. Each works once.' : 'From the authenticator app on your phone.'} /></div>
+          {backup ? (
+            <Field key="backup">
+              <FieldLabel htmlFor="code">Backup code</FieldLabel>
+              <Input id="code" name="code" className="h-[38px] font-mono" maxLength={32} autoComplete="off" required autoFocus />
             </Field>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" size="lg" onClick={() => { setError(''); setStep('password'); }}>Back</Button>
-              <Button type="submit" size="lg" disabled={busy}>Verify</Button>
-            </div>
-          </form>
-        )}
-        <FormError>{error}</FormError>
-      </Card>
-      <p className="max-w-[420px] text-center text-xs text-muted-foreground">Lost your 2FA and have no backup code? On the host machine, run <code className="font-mono">node src/cli.ts admin reset-2fa</code>.</p>
+          ) : (
+            <Field key="totp">
+              <FieldLabel htmlFor="code">6-digit code</FieldLabel>
+              <Input id="code" name="code" className="h-[50px] text-center font-mono text-2xl! font-medium tracking-[.28em]" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required autoFocus />
+            </Field>
+          )}
+          <Field orientation="horizontal">
+            <Checkbox id="trust" name="trust" />
+            <FieldLabel htmlFor="trust" className="flex-col items-start gap-0 font-normal">Trust this device for 30 days<FieldDescription>Sensitive actions still ask for a code.</FieldDescription></FieldLabel>
+          </Field>
+          <FormError>{error}</FormError>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="h-[38px]" onClick={() => { setError(''); setStep('password'); }}>Back</Button>
+            <Button type="submit" className="h-[38px] flex-1" disabled={busy}>Verify</Button>
+          </div>
+          <Button type="button" variant="link" className="-mt-1.5 self-center px-1 text-[13px] text-ink-2 underline underline-offset-[3px]" onClick={() => { setError(''); setBackup(!backup); }}>{backup ? 'Use the authenticator code' : 'Use a backup code'}</Button>
+        </form>
+      )}
     </AuthLayout>
   );
 }
-
-const StepLabel = ({ children }: { children: string }) => <div className="text-xs font-bold tracking-wider text-primary uppercase">{children}</div>;
