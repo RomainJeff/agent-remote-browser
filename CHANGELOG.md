@@ -2,7 +2,7 @@
 
 ## 2026-11-26
 
-- Redesigned the admin UI around who is driving each browser. Every live view sits in a frame whose tab names the driver: teal while an agent drives, ink while you have control or record, dashed amber while an agent waits for you. The profiles list groups profiles by who needs you, and an agent's help request opens as a banner with its words quoted. Recordings and playbooks read as numbered sentences, with inputs marked. Profile tabs, Members (invites listed with members, role picked when inviting), Agent access (one table, with "Connect an agent" for OAuth or an API key), Security and the sign-in, invite and password screens follow the same layout. The font is Instrument Sans, self-hosted. The Domains URL tester and the logins' last use are no longer shown.
+- Redesigned the admin UI around who is driving each browser. Every live view sits in a frame whose tab names the driver: teal while an agent drives, ink while you have control or record, dashed amber while an agent waits for you. The profiles list groups profiles by who needs you, and an agent's help request opens as a banner with its words quoted. Recordings and playbooks read as numbered sentences, with inputs marked. Profile tabs, Members (invites listed with members, role picked when inviting), Agent access (one table, with "Connect an agent" for OAuth or an API key), Security and the sign-in, invite and password screens follow the same layout. The font is Instrument Sans, self-hosted. On a phone, the sidebar becomes a tab bar at the bottom, and the account opens from the avatar in the header. The Domains URL tester and the logins' last use are no longer shown.
 
 ## 2026-11-25
 

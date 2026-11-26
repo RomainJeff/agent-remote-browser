@@ -93,8 +93,8 @@ const frame = (seq) => {
 const mouse = (type, el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); };`;
 
 /** Serves the build with the fixture (then `setup`) first in <head>, runs the scenario once the page loaded; PASS or
- *  the failure comes back as data-result on <html>. */
-function browserCase(name: string, hash: string, scenario: string, setup = '') {
+ *  the failure comes back as data-result on <html>. A desktop window unless `size` says otherwise. */
+function browserCase(name: string, hash: string, scenario: string, setup = '', size = '1280,900') {
   test(name, { skip: !chrome && 'Chrome or Chromium required' }, async () => {
     const index = readFileSync(new URL('index.html', dist), 'utf8').replace('<head>', () => `<head><script>${fixture}
       ${setup};
@@ -114,7 +114,7 @@ function browserCase(name: string, hash: string, scenario: string, setup = '') {
     try {
       const out = await new Promise<string>((resolve, reject) => {
         const p = spawn(chrome!, ['--headless', '--disable-gpu', '--disable-background-networking', '--user-data-dir=' + join(dir, 'browser'),
-          '--dump-dom', '--virtual-time-budget=10000', `http://127.0.0.1:${(server.address() as AddressInfo).port}/${hash}`]);
+          '--dump-dom', '--virtual-time-budget=10000', '--window-size=' + size, `http://127.0.0.1:${(server.address() as AddressInfo).port}/${hash}`]);
         let stdout = '';
         p.stdout.on('data', (d) => { stdout += d; });
         p.on('error', reject);
@@ -353,6 +353,24 @@ browserCase('gateway admin confirms the private profile count before removing an
   await until(() => !text().includes('other@example.test'), 'removed');
   check(sent() === JSON.stringify([['/api/users/remove', { email: 'other@example.test' }]]), 'requests ' + sent());
 `, "signedIn = true; stepUpLeft = 900; users.push(user('other@example.test', { privateProfileCount: 2 }), user('pending@example.test', { pending: true }))");
+
+browserCase('on a phone the navigation is a tab bar, hidden in a profile, and the account opens from the header', '#/profiles', `
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'profiles');
+  const shown = (el) => !!el && el.getClientRects().length > 0;
+  const tabs = () => [...document.querySelectorAll('nav[aria-label="Main navigation"]')].filter(shown);
+  check(!shown(document.querySelector('aside')) && tabs().length === 1, 'tab bar instead of the sidebar');
+  check(tabs()[0].querySelector('[aria-current=page]').textContent.endsWith('Profiles') && tabs()[0].textContent.includes('Members'), 'tabs');
+  location.hash = '#/profiles/sample';
+  await until(() => document.querySelector('h1')?.textContent === 'sample', 'profile');
+  check(tabs().length === 0 && !document.querySelector('[aria-label=Account]'), 'no tab bar or account in a profile');
+  history.back();
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'back to profiles');
+  document.querySelector('[aria-label=Account]').click();
+  const sheet = await until(() => document.querySelector('[role=dialog]'), 'account sheet');
+  check(sheet.textContent.includes('admin@example.test'), 'account email');
+  button('Sign out', sheet).click();
+  await until(() => field('password'), 'back to sign-in');
+`, 'signedIn = true', '390,844');
 
 browserCase('a member without gateway admin is sent from Members to the profiles', '#/members', `
   await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'profiles');
