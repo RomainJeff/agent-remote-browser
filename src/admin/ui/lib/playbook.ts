@@ -72,3 +72,49 @@ export function serialize(m: Model) {
 /** The {placeholders} of the recipe: what the agent fills in. */
 export const placeholders = (body: string) => [...new Set([...(body.match(RECIPE)?.[1] ?? '').matchAll(/\{([A-Za-z_]\w*)\}/g)].map((x) => x[1]))];
 export const toolName = (name: string) => 'pb_' + name.replaceAll('-', '_');
+
+/** A piece of a step sentence: plain text, code (URL, selector, key), an element on the page, a typed value, or an
+ *  input the agent fills ({name}). */
+export type Part = string | { code: string } | { el: string } | { val: string } | { input: string };
+export const partText = (parts: Part[]) => parts.map((p) => typeof p === 'string' ? p : Object.values(p)[0]).join('');
+
+const shortUrl = (u: string) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
+const value = (v: unknown): Part => { const s = String(v ?? ''), m = s.match(/^\{([A-Za-z_]\w*)\}$/); return m ? { input: m[1] } : { val: s }; };
+const target = (l: any): Part => {
+  if (!l || typeof l !== 'object') return { code: JSON.stringify(l) };
+  if ('role' in l) return l.name ? { el: l.name } : { code: l.role };
+  const k = LOCATORS.find((k) => k in l);
+  return !k ? { code: JSON.stringify(l) } : ['css', 'ref', 'testid'].includes(k) ? { code: l[k] } : { el: String(l[k]) };
+};
+
+/** One step as a sentence, for the recorder and the playbook detail. A shape it does not know comes back as its JSON. */
+export function describeStep(s: Step): Part[] {
+  try { return sentence(s); } catch { return [{ code: JSON.stringify(s) }]; }
+}
+
+// Throws on a shape it does not expect (a raw step can hold anything, such as {"wait": 5}): describeStep falls back to the JSON.
+function sentence(s: Step): Part[] {
+  const a = (Object.keys(ACTIONS) as Action[]).find((k) => k in s), x = a && s[a];
+  switch (a) {
+    case 'open': return ['Open ', { code: shortUrl(String(x)) }];
+    case 'login': return ['Sign in with the saved login ', { code: String(x) }, ...(s.if_needed ? [', if asked'] : [])];
+    case 'click': return ['Click ', target(x)];
+    case 'fill': return ['Type ', value(s.value), ' in ', target(x)];
+    case 'press': return ['Press ', String(x)];
+    case 'back': return ['Go back'];
+    case 'wait': {
+      const k = WAITS.find((k) => k in (x ?? {}));
+      if (k === 'load') return ['Wait for the page to load'];
+      if (k === 'ms') return [`Wait ${x.ms} ms`];
+      if (k === 'text') return ['Wait for ', { el: String(x.text) }];
+      if (k) return ['Wait for ', { code: String(x[k]) }];
+      break;
+    }
+    case 'get_text': {
+      const where = x?.selector ?? x?.ref;
+      return ['Read the text of ', where ? { code: where } : 'the page', ...(x?.contains ? [' around ', value(x.contains)] : [])];
+    }
+    case 'snapshot': return ['List the elements', ...(x?.scope ? [' in ', { code: x.scope } as Part] : [])];
+  }
+  return [{ code: JSON.stringify(s) }];
+}

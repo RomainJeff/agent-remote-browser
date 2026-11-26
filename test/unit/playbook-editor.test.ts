@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { recipe } from '../../src/mcp/steps.ts';
 import { describe as describeBody } from '../../src/store/store.ts';
-import { parse, serialize, type Model } from '../../src/admin/ui/lib/playbook.ts';
+import { describeStep, parse, partText, serialize, type Model } from '../../src/admin/ui/lib/playbook.ts';
 
 // The admin's playbook editor must read a body the way the server does.
 const pbParse = (body: string) => parse(body) as Model & { err?: string };
@@ -48,4 +48,18 @@ test('playbook editor: no recipe, empty body, unreadable recipe', () => {
   assert.equal(pbSerialize(pbParse('')), '');
   assert.match(pbParse('# x\n```json\n{"steps": [\n```').err!, /invalid JSON/);
   assert.match(pbParse('# x\n```json\n{"steps": [1]}\n```').err!, /one object per step/);
+});
+
+test('playbook steps read as sentences, {inputs} kept apart, unknown shapes as JSON', () => {
+  const steps = JSON.parse(BODY.split('```json')[1].split('```')[0]).steps;
+  assert.deepEqual(steps.map((s: object) => partText(describeStep(s))), [
+    'Open app.n8n.cloud/manage', 'Wait for the page to load', 'Sign in with the saved login n8n-cloud, if asked',
+    'Click {workspace}', 'Type q in Search', 'Wait 500 ms', 'Read the text of the page around executions', 'List the elements',
+  ]);
+  assert.deepEqual(describeStep({ fill: { label: 'Email' }, value: '{email}' }), ['Type ', { input: 'email' }, ' in ', { el: 'Email' }]);
+  // A raw step the server accepted in an unexpected shape shows as its JSON instead of breaking the Playbooks tab.
+  assert.deepEqual(describeStep({ wait: 5 }), [{ code: '{"wait":5}' }]);
+  assert.deepEqual(describeStep({ fill: { css: '#q' }, value: 'shoes' }), ['Type ', { val: 'shoes' }, ' in ', { code: '#q' }]);
+  assert.equal(partText(describeStep({ get_text: { selector: '#total' } })), 'Read the text of #total');
+  assert.equal(partText(describeStep({ teleport: true })), '{"teleport":true}');
 });

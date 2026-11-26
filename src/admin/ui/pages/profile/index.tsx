@@ -3,8 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { ActionButton } from '@/components/action-button';
 import { PageHead } from '@/components/page';
-import { StatePill } from '@/components/state';
-import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { closeView } from '@/lib/live';
 import { computersQuery, detailsQuery, profilePath } from '@/lib/queries';
@@ -30,9 +28,9 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
   const { data: details } = useQuery({ ...detailsQuery(id), enabled: !!c });
   // Leaving the profile (or opening another) closes its view and ends a recording.
   useEffect(() => () => closeView(), [id]);
-  const crumb = (rest: React.ReactNode) => <><Link to="/profiles" className="font-semibold text-primary">Profiles</Link> › {rest}</>;
+  const crumb = <Link to="/profiles">Profiles</Link>;
   if (isPending) return null;
-  if (!c) return <PageHead crumb={crumb(id)} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
+  if (!c) return <PageHead crumb={crumb} title="Profile not found" sub={`${id} doesn't exist or was deleted.`} />;
   const tabs = tabsFor(c);
   // A tab this role does not get (or a mistyped one): the session, with the URL saying so.
   if (tab && !tabs.includes(tab as Tab)) return <Navigate to="/profiles/$id" params={{ id }} replace />;
@@ -41,17 +39,17 @@ export function ProfilePage({ id, tab }: { id: string; tab?: string }) {
 
   return (
     <>
-      <PageHead mono crumb={crumb(<span className="font-mono">{id}</span>)}
-        title={<span className="flex flex-wrap items-center gap-3">{id}<span className="flex gap-2 font-sans"><StatePill c={c} />{c.leasedUntil && <Badge dot variant="agent">Agent lease</Badge>}</span></span>}
+      <PageHead mono crumb={crumb}
+        title={id}
         actions={c.role !== 'viewer' && (
           <ActionButton variant="outline" size="lg" disabled={c.state !== 'running'} done="Browser stopped. The profile is kept."
             action={async () => { closeView(); await api(`${profilePath(id)}/stop`, 'POST'); await queryClient.invalidateQueries({ queryKey: ['computers'] }); }}>Stop browser</ActionButton>
         )} />
-      <nav className="-mb-2 flex gap-1 overflow-x-auto border-b" aria-label="Profile sections">
+      <nav className="-mb-2 flex gap-[22px] overflow-x-auto border-b" aria-label="Profile sections">
         {tabs.map((t) => (
           <Link key={t} to="/profiles/$id" params={{ id }} search={{ tab: t === 'session' ? undefined : t }} activeOptions={{ exact: true }}
-            className="-mb-px border-b-2 border-transparent px-3.5 py-2.5 font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:font-bold aria-[current=page]:text-primary">
-            {TABS[t]}{count[t] !== undefined && ` · ${count[t]}`}
+            className="-mb-px flex h-[42px] items-center gap-1.5 border-b-2 border-transparent px-0.5 text-[13.5px] font-medium whitespace-nowrap text-ink-2 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:font-semibold aria-[current=page]:text-ink">
+            {TABS[t]}{count[t] !== undefined && <span className="font-medium text-ink-3 tabular-nums">{count[t]}</span>}
           </Link>
         ))}
       </nav>

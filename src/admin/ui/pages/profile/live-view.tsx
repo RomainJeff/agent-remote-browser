@@ -4,8 +4,8 @@ import { Crosshair } from 'lucide-react';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { askNote } from '@/components/confirm';
+import { ControlFrame, ControlTab, driverLabel, driverOf, LeaseClock } from '@/components/state';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { leftMin, message, plural } from '@/lib/format';
 import { closeView, drawn, live, loading, openView, recorder, send, setNote, setOpening, startRecording, takeControl, takeOver, useLive } from '@/lib/live';
@@ -30,6 +30,7 @@ export function LiveView({ c }: { c: Computer }) {
   useEffect(() => { if (lost) openView(c.id, false); }, [lost, c.id]);
   useEffect(() => { if (live.focusTakeOver) { live.focusTakeOver = false; takeOverRef.current?.focus(); } }, []);
   const refresh = () => queryClient.refetchQueries({ queryKey: ['computers'] });
+  const driver = driverOf(c, { control: ctl, recording });
 
   /** Done / Failed (or Decline): the agent reads the outcome and the note on its next handoff_status. Ends control. */
   const endHandoff = (how: 'done' | 'fail', title?: string) => async () => {
@@ -55,106 +56,104 @@ export function LiveView({ c }: { c: Computer }) {
 
   // Saved logins for the page's exact origin (never a parent domain: SSO pages need their own login).
   const here = !viewer && ctl && view?.url ? (details?.logins ?? []).filter((x) => originOf(x.url) === originOf(view.url)) : [];
-  // The reason is the agent's words (untrusted): quoted, never phrased as an instruction from this page.
-  const says = h && <><br /><i className="font-normal">Agent says: {h.reason}</i></>;
-  const leaseTitle = 'An agent holds the lease: force release to take over';
-  const status = l.note ?? (ctl ? 'You have control' : 'Live'), mode = l.note ? '' : ctl ? 'control' : 'watch';
+  const caption = choosing ? `${choosing === 'text' ? 'Click the text to read.' : 'Click inside the area to keep.'} Nothing is clicked on the page.`
+    : l.note ?? (ctl ? `${viewer ? 'Keyboard and mouse go' : 'Keyboard, mouse and copy/paste go'} to the browser` : '');
+  const take = (label: string) => (
+    <ActionButton ref={takeOverRef} size="sm" action={() => takeOver(queryClient, c.id)}>{label}</ActionButton>
+  );
 
   return (
-    <section className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4" aria-label="Live view">
-      {h && (h.state === 'pending'
-        ? <Banner text={<>The agent needs you · {leftMin(h.deadline)} min left{says}</>}>
+    <section className="flex min-w-0 flex-col" aria-label="Live view">
+      {h && (
+        <RequestBanner reason={h.reason} left={leftMin(h.deadline)}>
+          {h.state === 'pending' ? <>
             <ActionButton variant="outline" size="sm" action={endHandoff('fail', "Decline the agent's request?")} done="The agent can continue.">Decline…</ActionButton>
-          </Banner>
-        : <Banner text={<>You are handling the agent's request.{says}</>}>
-            <ActionButton size="sm" action={endHandoff('done')} done="The agent can continue.">Done</ActionButton>
+            {take('Take over')}
+          </> : <>
+            {!ctl && take('Take over')}
             <ActionButton variant="outline" size="sm" action={endHandoff('fail')} done="The agent can continue.">Failed…</ActionButton>
-          </Banner>)}
-      {ctl ? (
-        <Banner text={`You have control. ${viewer ? 'Keyboard and mouse' : 'Keyboard, mouse and copy/paste'} go to this browser: click the view to type.`}>
-          <Button variant="outline" size="sm" onClick={() => openView(c.id, false)}>Hand back</Button>
-          {here.length > 0 && (
-            <div className="flex basis-full flex-wrap items-center gap-x-3 gap-y-2 border-t border-dashed border-warn-line pt-2.5 font-normal text-foreground">
-              <span className="flex-[1_1_220px]">{here.length === 1
-                ? <>Saved login: <b className="font-mono">{here[0].site}</b> · {here[0].username}</>
-                : <>{here.length} saved logins for <span className="font-mono">{new URL(view!.url!).host}</span></>}</span>
-              {here.map((x, i) => (
-                <ActionButton key={x.site} size="sm" variant={i ? 'outline' : 'default'} action={fill(x.site)}>{here.length === 1 ? 'Fill and submit' : `${x.site} · ${x.username}`}</ActionButton>
-              ))}
-            </div>
+            <ActionButton size="sm" variant={ctl ? 'default' : 'outline'} action={endHandoff('done')} done="The agent can continue.">Done</ActionButton>
+          </>}
+        </RequestBanner>
+      )}
+      {/* Wrapped buttons go above the tab, so the tab stays on its frame. */}
+      <div className="flex flex-wrap-reverse items-start gap-x-3 gap-y-2">
+        <ControlTab driver={driver}>{choosing ? <><Crosshair className="size-3.5" />{choosing === 'text' ? 'Picking an output' : 'Picking an area'}</> : driverLabel(driver, c, ctl)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}</ControlTab>
+        <span aria-live="polite" className="flex-[1_1_160px] pb-2 text-[13px] text-ink-3">{caption}</span>
+        <div className="flex flex-wrap gap-2 pb-1.5">
+          {!!c.leasedUntil && !viewer && <>
+            <ActionButton variant="outline" size="sm" done="Lease extended to at least 30 min from now." action={async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); await refresh(); }}>Extend 30 min</ActionButton>
+            <ActionButton variant="outline" size="sm" done="Lease released. The agent has to take a new one." action={async () => { await api(`${p}/release`, 'POST'); await refresh(); }}>Release lease</ActionButton>
+          </>}
+          {ctl && <Button variant="outline" size="sm" onClick={() => openView(c.id, false)}>Hand back</Button>}
+          {!view && (up || viewer) && (
+            <ActionButton variant="outline" size="sm" title="Watch without sending input"
+              action={async () => { if (up) openView(c.id, false); else await takeControl(queryClient, c.id, false); }}>{up ? 'Watch' : 'Start and watch'}</ActionButton>
           )}
-        </Banner>
-      ) : locked && !h && !viewer && (
-        <Banner agent text="An agent is in control. You can watch, or force release to take over.">
-          {!view && <Button variant="outline" size="sm" onClick={() => openView(c.id, false)}>Watch</Button>}
-          <ActionButton variant="danger-outline" size="sm" action={async () => { await api(`${p}/release`, 'POST'); await takeControl(queryClient, c.id); }}>Force release to take over</ActionButton>
-        </Banner>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <ActionButton variant="outline" size="sm" disabled={(!up && !viewer) || (!!view && !ctl)}
-          title={!up ? (viewer ? undefined : 'Browser stopped: use Start and take over.') : view && !ctl ? 'Already watching' : 'Watch without sending input'}
-          action={async () => { if (up) openView(c.id, false); else await takeControl(queryClient, c.id, false); }}>{viewer && !up ? 'Start and watch' : 'Watch'}</ActionButton>
-        {!(viewer && !h) && (
-          <ActionButton ref={takeOverRef} size="sm" disabled={ctl || (locked && !h)} title={ctl ? 'You already have control' : locked && !h ? leaseTitle : undefined}
-            action={() => takeOver(queryClient, c.id)}>{viewer || up ? 'Take over' : 'Start and take over'}</ActionButton>
-        )}
-        {view && <Button variant="outline" size="sm" onClick={() => { closeView(); takeOverRef.current?.focus(); }}>Leave view</Button>}
-        {!viewer && (
-          <ActionButton variant="outline" size="sm" disabled={recording || (locked && !h)}
-            title={recording ? 'Already recording' : locked && !h ? leaseTitle : 'Take over and record your gestures as a playbook'}
-            action={() => startRecording(queryClient, c.id)}>Record playbook</ActionButton>
-        )}
-        <span className="flex-auto" />
-        <span aria-live="polite" className={cn('inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground before:size-2 before:rounded-full before:bg-off',
-          mode === 'watch' && 'text-primary before:bg-ok', mode === 'control' && 'text-warn-ink before:bg-warn-dot')}>{status}</span>
-        <span className="text-xs text-muted-foreground">{l.fps}</span>
-      </div>
-      {!viewer && <UrlBar c={c} url={view?.url} />}
-      {choosing && (
-        <div className="-mb-3 flex flex-wrap items-end gap-x-3 gap-y-1">
-          <span className="inline-flex items-center gap-1.5 rounded-t-lg bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground">
-            <Crosshair className="size-3.5" />{choosing === 'text' ? 'Picking an output' : 'Picking an area'}
-          </span>
-          <span className="pb-1.5 text-[13px] text-muted-foreground">
-            {choosing === 'text' ? 'Click the text to read.' : 'Click inside the area to keep.'} Nothing is clicked on the page.
-          </span>
+          {!ctl && !h && !locked && !viewer && take(up ? 'Take over' : 'Start and take over')}
+          {!viewer && !recording && !(locked && !h) && (
+            <ActionButton variant="outline" size="sm" title="Take over and record your gestures as a playbook" action={() => startRecording(queryClient, c.id)}>Record playbook</ActionButton>
+          )}
+          {view && <Button variant="outline" size="sm" onClick={() => { closeView(); takeOverRef.current?.focus(); }}>Leave view</Button>}
         </div>
-      )}
-      <div className={cn('rounded-xl bg-[#2A2F35] p-2', choosing ? 'rounded-tl-none bg-primary p-1.5' : ctl && 'bezel-control p-1.5')}>
-        <div className={cn('screen relative min-h-[120px] overflow-hidden rounded-md bg-[#0D1116]', loading() && 'loading')}>
+      </div>
+      <ControlFrame driver={driver}>
+        {!viewer && (
+          <UrlBar c={c} url={view?.url}>
+            {here.length > 0 && (
+              <span className="flex flex-wrap items-center gap-2 text-[12.5px] text-ink-2">
+                {here.length === 1 ? `Saved login, ${here[0].username}` : 'Saved logins'}
+                {here.map((x) => (
+                  <ActionButton key={x.site} size="xs" title={`Fill and submit ${x.site}`} action={fill(x.site)}>{here.length === 1 ? 'Fill and submit' : `${x.site}, ${x.username}`}</ActionButton>
+                ))}
+              </span>
+            )}
+          </UrlBar>
+        )}
+        <div className={cn('screen relative min-h-[120px] overflow-hidden bg-surface-2', loading() && 'loading')}>
           {frame && <Frame c={c} src={frame.src} seq={frame.seq} control={ctl} hidden={!!view && !view.seen} />}
           {(!frame || (view && !view.seen)) && (view
             ? <NoSignal title="Connecting…">Waiting for the first image of the page.</NoSignal>
             : <NoSignal title="No signal">Watch shows a running browser.</NoSignal>)}
-          {filling && <div className="absolute inset-0 grid place-items-center bg-[rgba(13,17,22,.55)] p-4 text-center font-semibold text-white">The server is filling the form… do not touch the view</div>}
+          {filling && <div className="absolute inset-0 grid place-items-center bg-ink/60 p-4 text-center font-semibold text-white">The server is filling the form… do not touch the view</div>}
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span>{plural(c.viewers, 'viewer')}</span>
-        <span className="min-w-0 flex-[1_1_200px] truncate">{details?.page ? `${details.page.title || 'Untitled page'} · ${details.page.url}` : 'Browser stopped'}</span>
+      </ControlFrame>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-2.5 text-[12.5px] text-ink-3">
+        {details?.page ? <>
+          <span className="text-ink-2">{details.page.title || 'Untitled page'}</span>
+          <span className="min-w-0 flex-[1_1_200px] truncate font-mono text-xs">{details.page.url}</span>
+        </> : <span className="flex-auto">Browser stopped</span>}
+        {c.viewers > 0 && <span>{plural(c.viewers, 'viewer')}</span>}
+        {l.fps && <span className="tabular-nums">{l.fps}</span>}
       </div>
     </section>
   );
 }
 
-function Banner({ text, agent, children }: { text: ReactNode; agent?: boolean; children: ReactNode }) {
+/** An agent asks for a person. The reason is the agent's words (untrusted): quoted, never phrased as an instruction from this page. */
+function RequestBanner({ reason, left, children }: { reason: string; left: number; children: ReactNode }) {
   return (
-    <div className={cn('flex flex-wrap items-center gap-3 rounded-md border px-3.5 py-2.5 text-sm font-semibold',
-      agent ? 'border-[#D9C2FF] bg-agent-soft text-agent-ink' : 'border-warn-line bg-warn-soft text-warn-ink')}>
-      <span className="flex-[1_1_220px]">{text}</span>{children}
+    <div className="mb-4 flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-xl border border-needs-you-line bg-needs-you-soft px-3.5 py-3">
+      <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
+        <b className="font-semibold">An agent asked for help</b>
+        <q className="text-[13.5px] [overflow-wrap:anywhere] text-needs-you-ink">{reason}</q>
+      </div>
+      <span className="text-[13px] text-needs-you-ink tabular-nums">{left} min left</span>
+      {children}
     </div>
   );
 }
 
 function NoSignal({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="nosig grid h-[clamp(200px,36vh,360px)] place-items-center p-5 text-center text-[#9199A1]">
-      <div><b className="mb-1 block text-[15px] text-[#E9EBEC]">{title}</b>{children}</div>
+    <div className="grid h-[clamp(200px,36vh,360px)] place-items-center p-5 text-center text-ink-3">
+      <div><b className="mb-1 block text-[15px] font-semibold text-ink">{title}</b>{children}</div>
     </div>
   );
 }
 
-function UrlBar({ c, url }: { c: Computer; url?: string }) {
+/** The address bar on top of the frame. children: what sits at its end (saved logins for the page). */
+function UrlBar({ c, url, children }: { c: Computer; url?: string; children?: ReactNode }) {
   const queryClient = useQueryClient(), input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
   // The address follows the page, except while the admin types in it.
@@ -163,7 +162,7 @@ function UrlBar({ c, url }: { c: Computer; url?: string }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     let u = value.trim();
-    if (!u) return;
+    if (!u || busy) return;
     if (!/^https?:\/\//.test(u)) u = 'https://' + u;
     if (recorder.rec?.id === c.id) return recorder.open(u);
     setBusy(true); setNote('Opening…'); setOpening(true);
@@ -175,11 +174,12 @@ function UrlBar({ c, url }: { c: Computer; url?: string }) {
     finally { setOpening(false); setBusy(false); }
   };
   return (
-    <form className="flex gap-2" onSubmit={submit}>
+    <form className="flex min-h-[38px] flex-wrap items-center gap-2 border-b bg-surface-2 py-1 pr-1.5 pl-3 has-[input:focus-visible]:bg-surface has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50 has-[input:focus-visible]:ring-inset" onSubmit={submit}>
       <label htmlFor="vurl" className="sr-only">Address</label>
-      <Input ref={input} id="vurl" className="font-mono" placeholder="https://… (allowed domains only)" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} />
-      {loading() && <span className="size-4 flex-none animate-spin self-center rounded-full border-2 border-border border-t-ok" title="Page loading"><span className="sr-only">Page loading</span></span>}
-      <Button type="submit" variant="outline" size="lg" disabled={busy}>Open</Button>
+      <input ref={input} id="vurl" className="h-7 min-w-0 flex-[1_1_200px] bg-transparent font-mono text-[12.5px] outline-none placeholder:text-ink-3"
+        placeholder="https://… (allowed domains only)" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} />
+      {loading() && <span className="size-4 flex-none animate-spin rounded-full border-2 border-line border-t-ink" title="Page loading"><span className="sr-only">Page loading</span></span>}
+      {children}
     </form>
   );
 }

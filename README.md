@@ -1,6 +1,6 @@
 # agent-remote-browser
 
-![Admin UI: an agent drives the n8n-ops profile, live view of n8n.io, lease and activity on the right](docs/admin.png)
+![Admin UI: an agent drives the shop profile, live view of a shop page in a teal frame with the time left on its lease, activity on the right](docs/admin.png)
 
 **Give an AI agent a real browser, without giving it your machine or your passwords.**
 
@@ -112,6 +112,7 @@ npm run smoke       # end to end against a fresh stack
 
 - [deploy/runbook.md](deploy/runbook.md): running it on a server (secrets, tunnel or reverse proxy, agents, backups, upgrades, uninstall).
 - [docs/reference.md](docs/reference.md): deploy settings, CI, metrics, code layout, gateway and runner, database, auth details, admin API, login key, operator commands.
+- [docs/design.md](docs/design.md): admin UI design rules: color roles, type, components.
 - [SECURITY.md](SECURITY.md): open security topics and residual risks.
 
 Status: early, built for a single operator running their own stack. Expect breaking changes between commits; there are no versioned releases yet.

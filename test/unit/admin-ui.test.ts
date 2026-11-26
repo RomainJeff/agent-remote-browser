@@ -94,8 +94,8 @@ const frame = (seq) => {
 const mouse = (type, el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); };`;
 
 /** Serves the build with the fixture (then `setup`) first in <head>, runs the scenario once the page loaded; PASS or
- *  the failure comes back as data-result on <html>. */
-function browserCase(name: string, hash: string, scenario: string, setup = '') {
+ *  the failure comes back as data-result on <html>. A desktop window unless `size` says otherwise. */
+function browserCase(name: string, hash: string, scenario: string, setup = '', size = '1280,900') {
   test(name, { skip: !chrome && 'Chrome or Chromium required' }, async () => {
     const index = readFileSync(new URL('index.html', dist), 'utf8').replace('<head>', () => `<head><script>${fixture}
       ${setup};
@@ -115,7 +115,7 @@ function browserCase(name: string, hash: string, scenario: string, setup = '') {
     try {
       const out = await new Promise<string>((resolve, reject) => {
         const p = spawn(chrome!, ['--headless', '--disable-gpu', '--disable-background-networking', '--user-data-dir=' + join(dir, 'browser'),
-          '--dump-dom', '--virtual-time-budget=10000', `http://127.0.0.1:${(server.address() as AddressInfo).port}/${hash}`]);
+          '--dump-dom', '--virtual-time-budget=10000', '--window-size=' + size, `http://127.0.0.1:${(server.address() as AddressInfo).port}/${hash}`]);
         let stdout = '';
         p.stdout.on('data', (d) => { stdout += d; });
         p.on('error', reject);
@@ -165,7 +165,7 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   field('confirm').value = 'test-password';
   submit('password', 'test-password');
   await until(() => document.querySelector('textarea')?.value === 'otpauth://fixture', 'authenticator URI');
-  check(document.querySelector('[aria-current=step]').textContent.endsWith('Authenticator'), 'current step');
+  check(text().includes('Step 2 of 3'), 'current step');
   submit('code', '000000');
   await until(() => document.querySelector('[role=alert]')?.textContent === 'Invalid code', 'API error');
   submit('code', '123456');
@@ -179,19 +179,17 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   ]), 'invite requests');
 `);
 
-browserCase('profiles list filters and searches, and a new profile opens on its page', '#/profiles', `
+browserCase('profiles list groups by driver and searches, and a new profile opens on its page', '#/profiles', `
   await until(() => text().includes('other'), 'profile rows');
-  const rows = () => [...document.querySelectorAll('tbody tr')].map(r => r.querySelector('a').textContent).join();
-  check(rows() === 'sample,other', 'all rows ' + rows());
-  button('Running · 1').click();
-  await until(() => rows() === 'sample', 'running filter');
-  button('All · 2').click();
+  const rows = () => [...document.querySelectorAll('tbody tr:has(a)')].map(r => r.querySelector('a').textContent).join();
+  const groups = () => [...document.querySelectorAll('tbody th')].map(t => t.textContent).join();
+  check(rows() === 'sample,other' && groups() === 'Running1,Stopped1', 'grouped rows ' + rows() + ' ' + groups());
   choose(document.querySelector('[aria-label="Search profiles"]'), 'notion');
   await until(() => rows() === 'other', 'search by domain');
-  button('+ New profile').click();
+  button('New profile').click();
   await until(dialog, 'new profile dialog');
   field('id', dialog()).value = 'fresh';
-  field('allow', dialog()).value = 'fresh.example, b.example';
+  field('allow', dialog()).value = 'fresh.example\\nb.example';
   dialog().requestSubmit();
   await until(() => document.querySelector('h1')?.textContent.startsWith('fresh'), 'profile page');
   check(sent() === JSON.stringify([['/api/profiles', { id: 'fresh', allow: ['fresh.example', 'b.example'] }]]), 'create request ' + sent());
@@ -208,7 +206,7 @@ browserCase('editor asking for settings lands on the session, without Delete', '
   await until(() => document.querySelector('[aria-current=page][href*="sample"]'), 'current tab');
   const current = [...document.querySelectorAll('nav[aria-label="Profile sections"] [aria-current=page]')].map(a => a.textContent).join();
   check(current === 'Session', 'current tab ' + current);
-  check(!button('Delete profile') && button('Stop browser'), 'no Delete, Stop shown');
+  check(!button('Delete profile…') && button('Stop browser'), 'no Delete, Stop shown');
 `, "signedIn = true; role = 'editor'");
 
 browserCase('profile admin picks members to add, then changes and removes sharing', '#/profiles/sample?tab=sharing', `
@@ -222,9 +220,9 @@ browserCase('profile admin picks members to add, then changes and removes sharin
   await until(() => form.querySelector('summary').textContent === '2 selected', 'selection count');
   form.elements.role.value = 'viewer'; form.requestSubmit();
   await until(() => !pick.open && writes.length === 2, 'list closed after adding');
-  await until(() => document.querySelector('[aria-label="Role · other@example.com"]'), 'other row');
+  await until(() => document.querySelector('[aria-label="Role of other@example.com"]'), 'other row');
   check(!document.querySelector('tbody tr:first-child button'), 'no Remove on own row');
-  choose(document.querySelector('[aria-label="Role · ' + email + '"]'), 'editor');
+  choose(document.querySelector('[aria-label="Role of ' + email + '"]'), 'editor');
   await until(() => writes.length === 3, 'role change');
   [...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('other@example.com')).querySelector('button').click();
   await until(() => writes.length === 4, 'removal');
@@ -234,7 +232,7 @@ browserCase('profile admin picks members to add, then changes and removes sharin
 `, "signedIn = true; stepUpLeft = 900; members.push({ email: 'other@example.com', role: 'editor' })");
 
 browserCase('deleting a profile asks to retype its name and for a 2FA code, then returns to the list', '#/profiles/sample?tab=settings', `
-  (await until(() => button('Delete profile'), 'delete button')).click();
+  (await until(() => button('Delete profile…'), 'delete button')).click();
   await until(dialog, 'confirm dialog');
   field('typed', dialog()).value = 'wrong'; field('code', dialog()).value = '123456'; dialog().requestSubmit();
   await until(() => dialog().innerText.includes('The text does not match.'), 'typed check');
@@ -251,19 +249,19 @@ browserCase('saving domains with a stale second factor asks for a code once, the
   add.value = 'New.example'; add.form.requestSubmit();
   await until(() => document.querySelector('[aria-label="Remove new.example"]'), 'chip added');
   document.querySelector('[aria-label="Remove example.com"]').click();
-  await until(() => text().includes('Unsaved changes'), 'draft');
+  await until(() => text().includes('2 unsaved changes'), 'draft');
   button('Save domains').click();
   await until(() => dialog()?.innerText.includes('Confirm with your 2FA code'), 'step-up dialog');
   field('code', dialog()).value = '123456'; dialog().requestSubmit();
   await until(() => text().includes('Domains saved. The browser restarts on next use.'), 'saved');
   check(sent() === JSON.stringify([['/api/computers/sample/config', { allow: ['new.example'] }], ['/api/step-up', { code: '123456' }],
     ['/api/computers/sample/config', { allow: ['new.example'] }]]), 'requests ' + sent());
-  check(!text().includes('Unsaved changes'), 'draft cleared');
+  check(!text().includes('unsaved change'), 'draft cleared');
 `, 'signedIn = true');
 
 browserCase('playbook editor: edit in the form, check the Markdown, pause on an error, then save', '#/profiles/sample?tab=playbooks', `
   (await until(() => button('Edit'), 'playbook row')).click();
-  await until(() => field('name').value === 'check-quota', 'loaded name');
+  await until(() => field('name')?.value === 'check-quota', 'loaded name');
   check(document.querySelector('#bdesc').value === 'Check quota', 'description');
   check(document.querySelectorAll('ol li').length === 1, 'one step');
   button('+ Add step').click();
@@ -281,8 +279,8 @@ browserCase('playbook editor: edit in the form, check the Markdown, pause on an 
   document.querySelector('input[value=md]').click();
   choose(await until(() => document.querySelector('[aria-label="Playbook Markdown"]'), 'markdown again'), body);
   button('Save').click();
-  await until(() => text().includes('Updated.'), 'saved');
-  check(field('name').value === '' && document.querySelector('#bdesc')?.value === '', 'editor reset to the form, empty');
+  await until(() => text().includes('Playbook check-quota updated.'), 'saved');
+  check(!field('name') && text().includes('Open example.com'), 'editor closed, the playbook steps as sentences');
   check(sent() === JSON.stringify([['/api/computers/sample/playbook-save', { name: 'check-quota', body }]]), 'save request ' + sent());
 `, 'signedIn = true; stepUpLeft = 900');
 
@@ -297,21 +295,21 @@ browserCase('live view: watch a running browser, take over, send a click, hand b
   mouse('mousedown', img);
   check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'no input while watching');
   button('Take over').click();
-  await until(() => text().includes('You have control.'), 'control banner');
+  await until(() => text().includes('You have control'), 'control tab');
   check(sockets.length === 1, 'same stream');
   mouse('mousedown', img); mouse('mouseup', img);
   const input = sockets[0].sent.filter(m => m.type === 'input_mouse').map(m => m.eventType + ' ' + m.x + ',' + m.y).join();
   check(input === 'mousePressed 20,15,mouseReleased 20,15', 'mouse input ' + input);
   button('Hand back').click();
-  await until(() => !text().includes('You have control.'), 'control handed back');
+  await until(() => !text().includes('You have control') && text().includes('Nobody'), 'control handed back');
   check(sent() === JSON.stringify([['/api/computers/sample/start', {}]]), 'requests ' + sent());
 `, 'signedIn = true');
 
 browserCase('handoff link: Take over focused, takes the request, Done sends the note', '#/handoff/h1', `
   await until(() => document.activeElement?.textContent === 'Take over', 'Take over focused');
-  check(text().includes('The agent needs you') && text().includes('Agent says: Solve the captcha'), 'request banner');
+  check(text().includes('An agent asked for help') && text().includes('Solve the captcha') && text().includes('An agent is waiting'), 'request banner');
   button('Take over').click();
-  await until(() => text().includes("You are handling the agent's request."), 'request taken');
+  await until(() => text().includes('You have control') && button('Done'), 'request taken');
   button('Done').click();
   await until(dialog, 'note dialog');
   field('note', dialog()).value = 'Solved it'; dialog().requestSubmit();
@@ -322,17 +320,17 @@ browserCase('handoff link: Take over focused, takes the request, Done sends the 
 
 browserCase('recording: a click in the view becomes a step, saved through the playbook editor', '#/profiles/sample', `
   (await until(() => button('Record playbook'), 'Record button')).click();
-  await until(() => text().includes('No steps yet.'), 'recording panel');
+  await until(() => text().includes('each gesture becomes a step'), 'recording panel');
   frame(1);
   const img = await until(() => document.querySelector('#frame:not([hidden])'), 'frame');
   mouse('mousedown', img); mouse('mouseup', img);
-  await until(() => text().includes('{"click":{"text":"OK"}}'), 'step listed');
+  await until(() => document.querySelector('[aria-label=Recording] ol li')?.innerText.includes('Click OK'), 'step listed');
   check(!sockets[0].sent.some(m => m.type === 'input_mouse'), 'the click went to the gateway, not the stream');
   button('Add output').click();
   (await until(() => [...document.querySelectorAll('[role=menuitem]')].find(m => m.textContent.startsWith('Text on the page')), 'output menu')).click();
   await until(() => text().includes('Picking an output') && button('Cancel pick'), 'pick mode');
   mouse('mousedown', img); mouse('mouseup', img);
-  await until(() => text().includes('Read 48.90 EUR · Output 1') && button('Add output'), 'output row, pick mode over');
+  await until(() => text().includes('Read 48.90 EUR') && text().includes('Output 1') && button('Add output'), 'output row, pick mode over');
   const read = writes.find(w => w[0].endsWith('/teach-read'))[1];
   check(JSON.stringify(read.get_text) === '{}' && read.x === 20 && read.y === 15, 'teach-read ' + JSON.stringify(read));
   button('Save as playbook…').click();
@@ -343,6 +341,7 @@ browserCase('recording: a click in the view becomes a step, saved through the pl
 `, 'signedIn = true');
 
 browserCase('gateway admin reveals a new invite link once', '#/members', `
+  (await until(() => button('Invite member'), 'invite button')).click();
   const f = await until(() => field('email')?.form, 'invite form');
   field('email').value = 'new@example.test'; f.requestSubmit();
   await until(() => document.querySelector('[aria-label="Invite link"]')?.value.endsWith('#/invite/sample'), 'new link');
@@ -353,7 +352,7 @@ browserCase('gateway admin reveals a new invite link once', '#/members', `
 
 browserCase('gateway admin confirms the private profile count before removing an active member', '#/members', `
   await until(() => text().includes('other@example.test'), 'member rows');
-  const removes = [...document.querySelectorAll('tbody button')].filter(b => b.textContent === 'Remove');
+  const removes = [...document.querySelectorAll('tbody button')].filter(b => b.textContent === 'Remove…');
   check(removes.length === 1, 'only other active members ' + removes.length);
   removes[0].click();
   await until(() => dialog()?.innerText.includes('Remove other@example.test?') && dialog().innerText.includes('2 private profiles'), 'deletion warning');
@@ -363,13 +362,32 @@ browserCase('gateway admin confirms the private profile count before removing an
   check(sent() === JSON.stringify([['/api/users/remove', { email: 'other@example.test' }]]), 'requests ' + sent());
 `, "signedIn = true; stepUpLeft = 900; users.push(user('other@example.test', { privateProfileCount: 2 }), user('pending@example.test', { pending: true }))");
 
+browserCase('on a phone the navigation is a tab bar, hidden in a profile, and the account opens from the header', '#/profiles', `
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'profiles');
+  const shown = (el) => !!el && el.getClientRects().length > 0;
+  const tabs = () => [...document.querySelectorAll('nav[aria-label="Main navigation"]')].filter(shown);
+  check(!shown(document.querySelector('aside')) && tabs().length === 1, 'tab bar instead of the sidebar');
+  check(tabs()[0].querySelector('[aria-current=page]').textContent.endsWith('Profiles') && tabs()[0].textContent.includes('Members'), 'tabs');
+  location.hash = '#/profiles/sample';
+  await until(() => document.querySelector('h1')?.textContent === 'sample', 'profile');
+  check(tabs().length === 0 && !document.querySelector('[aria-label=Account]'), 'no tab bar or account in a profile');
+  history.back();
+  await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'back to profiles');
+  document.querySelector('[aria-label=Account]').click();
+  const sheet = await until(() => document.querySelector('[role=dialog]'), 'account sheet');
+  check(sheet.textContent.includes('admin@example.test'), 'account email');
+  button('Sign out', sheet).click();
+  await until(() => field('password'), 'back to sign-in');
+`, 'signedIn = true', '390,844');
+
 browserCase('a member without gateway admin is sent from Members to the profiles', '#/members', `
   await until(() => document.querySelector('h1')?.textContent === 'Profiles', 'profiles');
   check(!button('Members'), 'no Members navigation');
 `, 'signedIn = true; gatewayAdmin = false');
 
 browserCase('API key: scoped to a profile, shown once, closable only once saved', '#/access', `
-  (await until(() => button('+ Create API key'), 'create button')).click();
+  (await until(() => button('Connect an agent'), 'connect button')).click();
+  (await until(() => button('Use an API key instead'), 'API key option')).click();
   const f = await until(dialog, 'key dialog');
   field('name', f).value = 'ci-agent'; f.requestSubmit();
   const key = await until(() => document.querySelector('[aria-label="API key"]'), 'key shown');
@@ -384,11 +402,11 @@ browserCase('API key: scoped to a profile, shown once, closable only once saved'
   await until(() => !button('Close').disabled, 'Close enabled');
   button('Close').click();
   await until(() => !document.querySelector('[aria-label="API key"]'), 'key gone');
-  await until(() => text().includes('Active access · 1') && text().includes('arb_k_ab…'), 'listed');
+  await until(() => text().includes('arb_k_ab…'), 'listed');
   check(sent() === JSON.stringify([['/api/keys', { name: 'ci-agent', scope: 'profile:sample', expiresIn: '90d' }]]), 'requests ' + sent());
 `, 'signedIn = true; stepUpLeft = 900');
 
 browserCase('security page shows the reset command for the signed-in account', '#/security', `
-  await until(() => text().includes('Two-factor authentication is on'), 'security page');
+  await until(() => text().includes('Two-step sign-in is on'), 'security page');
   check(text().includes('docker compose exec gateway node src/cli.ts admin reset-2fa admin@example.test'), 'reset command');
 `, 'signedIn = true');

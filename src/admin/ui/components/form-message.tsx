@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { CircleAlertIcon } from 'lucide-react';
 import { message } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,10 @@ export function useFormAction(handler: (data: FormData) => Promise<string>) {
     } catch (err) { setMsg({ text: message(err), error: true }); }
     finally { setBusy(false); }
   };
-  const status = <p aria-live="polite" className={cn('min-h-5 text-[13px] text-muted-foreground', msg?.error && 'font-semibold text-destructive-ink')}>{msg?.text}</p>;
+  const status = (
+    <p aria-live="polite" className={cn('flex min-h-5 items-start gap-1.5 text-[13px] text-ink-3', msg?.error && 'font-medium text-ink')}>
+      {msg?.error && <CircleAlertIcon aria-hidden className="mt-[3px] size-3.5 flex-none" />}{msg?.text}
+    </p>
+  );
   return { onSubmit, busy, status };
 }

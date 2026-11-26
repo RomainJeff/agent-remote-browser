@@ -122,9 +122,9 @@ test('record: distinct default param names; one name for two different values is
   g.steps[4].pname = 'email';
   assert.deepEqual({ ...T.recBody(g).params }, { email: 'a', email_2: 'b' }, 'same name, same value: one param');
   g.steps[2].pname = 'email';
-  assert.throws(() => T.recBody(g), /Param "email" is used for different values/);
+  assert.throws(() => T.recBody(g), /Input "email" is used for different values/);
   g.steps[2].pname = '__proto__';
-  assert.throws(() => T.recBody(g), /Param name "__proto__"/);
+  assert.throws(() => T.recBody(g), /Input name "__proto__"/);
 });
 
 test('record: Save and Replay are on as soon as there is a step or typing', () => {

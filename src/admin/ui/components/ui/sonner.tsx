@@ -5,7 +5,7 @@ const Toaster = (props: ToasterProps) => (
   <Sonner
     theme="light"
     position="bottom-right"
-    toastOptions={{ classNames: { toast: "bg-foreground! text-white! border-0! rounded-lg! text-sm!", error: "bg-destructive-ink! before:font-bold before:content-['Error:']" } }}
+    toastOptions={{ classNames: { toast: "bg-foreground! text-white! border-0! rounded-lg! text-sm!", error: "before:font-semibold before:content-['Error:']" } }}
     {...props}
   />
 )
