@@ -2,6 +2,7 @@
   "buildCommand": "npm run build:admin",
   "startCommand": "node test/ui-preview.ts",
   "readyPath": "/?signed-in",
+  "env": { "EGRESS_DIR": ".ui-diff/egress" },
   "routes": [
     { "path": "/", "files": ["src/admin/ui/**"] },
     { "path": "/?signed-in#/profiles", "files": ["src/admin/ui/**"] },
@@ -10,5 +11,17 @@
     { "path": "/?signed-in#/access", "files": ["src/admin/ui/**"] },
     { "path": "/?signed-in#/security", "files": ["src/admin/ui/**"] },
     { "path": "/#/reset-password/preview", "files": ["src/admin/ui/**"] }
+  ],
+  "flows": [
+    { "name": "record output", "route": "/?signed-in#/profiles/shop", "steps": [
+      { "click": "button:has-text('Record playbook')" },
+      { "wait": "text=No steps yet.", "checkpoint": "recording" },
+      { "click": "button:has-text('Add output')" },
+      { "wait": "[role=menu]", "checkpoint": "output menu" },
+      { "click": "[role=menuitem]:has-text('Page snapshot')" },
+      { "wait": "text=Snapshot of the page", "checkpoint": "page snapshot" },
+      { "click": "button:has-text('Limit to an area')" },
+      { "wait": "button:has-text('Cancel pick')", "checkpoint": "picking an area" }
+    ] }
   ]
 }
