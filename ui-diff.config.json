@@ -2,7 +2,7 @@
   "buildCommand": "npm run build:admin",
   "startCommand": "node test/ui-preview.ts",
   "readyPath": "/?signed-in",
-  "detect": { "maxRoutes": 16 },
+  "detect": { "maxRoutes": 16, "conventions": false },
   "routes": [
     { "path": "/", "files": ["src/admin/ui/**"] },
     { "path": "/?signed-in#/profiles", "files": ["src/admin/ui/**"] },
