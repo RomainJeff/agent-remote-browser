@@ -89,6 +89,11 @@ const target = (l: any): Part => {
 
 /** One step as a sentence, for the recorder and the playbook detail. A shape it does not know comes back as its JSON. */
 export function describeStep(s: Step): Part[] {
+  try { return sentence(s); } catch { return [{ code: JSON.stringify(s) }]; }
+}
+
+// Throws on a shape it does not expect (a raw step can hold anything, such as {"wait": 5}): describeStep falls back to the JSON.
+function sentence(s: Step): Part[] {
   const a = (Object.keys(ACTIONS) as Action[]).find((k) => k in s), x = a && s[a];
   switch (a) {
     case 'open': return ['Open ', { code: shortUrl(String(x)) }];

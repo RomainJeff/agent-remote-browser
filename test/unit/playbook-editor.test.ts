@@ -57,6 +57,8 @@ test('playbook steps read as sentences, {inputs} kept apart, unknown shapes as J
     'Click {workspace}', 'Type q in Search', 'Wait 500 ms', 'Read the text of the page around executions', 'List the elements',
   ]);
   assert.deepEqual(describeStep({ fill: { label: 'Email' }, value: '{email}' }), ['Type ', { input: 'email' }, ' in ', { el: 'Email' }]);
+  // A raw step the server accepted in an unexpected shape shows as its JSON instead of breaking the Playbooks tab.
+  assert.deepEqual(describeStep({ wait: 5 }), [{ code: '{"wait":5}' }]);
   assert.deepEqual(describeStep({ fill: { css: '#q' }, value: 'shoes' }), ['Type ', { val: 'shoes' }, ' in ', { code: '#q' }]);
   assert.equal(partText(describeStep({ get_text: { selector: '#total' } })), 'Read the text of #total');
   assert.equal(partText(describeStep({ teleport: true })), '{"teleport":true}');
