@@ -17,7 +17,7 @@ export function McpUrl() {
   const value = url ?? session?.mcpUrl ?? '';
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-bold text-muted-foreground" htmlFor="mcpUrl">MCP server URL</label>
+      <label className="text-[13px] font-medium" htmlFor="mcpUrl">MCP server URL</label>
       <div className="flex gap-2">
         <Input id="mcpUrl" className="font-mono text-[13px]" spellCheck={false} autoComplete="off" value={value}
           onChange={(e) => setUrl(e.target.value)} onBlur={() => { try { localStorage.setItem(MCP_KEY, value.trim()); } catch {} }} />
@@ -28,13 +28,13 @@ export function McpUrl() {
   );
 }
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = 'Copy', className }: { text: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <ActionButton variant="outline" size="lg" action={async () => {
+    <ActionButton variant="outline" size="lg" className={className} action={async () => {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    }}>{copied ? 'Copied' : 'Copy'}</ActionButton>
+    }}>{copied ? 'Copied' : label}</ActionButton>
   );
 }

@@ -66,3 +66,9 @@ export function Alert({ kind = 'info', children }: { kind?: 'info' | 'warn' | 'd
 
 /** Small grey line under a table cell's main value. */
 export const Sub = ({ children, mono }: { children: ReactNode; mono?: boolean }) => <span className={cn('block text-xs text-muted-foreground', mono && 'font-mono')}>{children}</span>;
+
+/** A member's initials in a grey circle. Dashed and empty for someone invited who has not joined yet. */
+export const Avatar = ({ email, invited, className }: { email: string; invited?: boolean; className?: string }) => (
+  <span aria-hidden className={cn('grid size-7 flex-none place-items-center rounded-full bg-line text-[11px] font-bold text-ink',
+    invited && 'border border-dashed border-line-strong bg-transparent', className)}>{invited ? '' : email.slice(0, 2).toUpperCase()}</span>
+);
