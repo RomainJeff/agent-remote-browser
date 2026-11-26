@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { LockIcon } from 'lucide-react';
+import { FormError } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { api, ApiError, setApiHooks } from '@/lib/api';
 import { message } from '@/lib/format';
 import type { Session } from '@/lib/session';
-import { cn } from '@/lib/utils';
 
 /** typed: text to retype. code: ask for a 2FA code and open the step-up window before resolving. note: a note for the agent. */
 export type AskOptions = { title: string; desc?: string; label?: string; danger?: boolean; typed?: string; code?: boolean; note?: 'optional' | 'required' };
@@ -64,12 +63,9 @@ export function ConfirmHost() {
     <Dialog open={!!p} onOpenChange={(open) => { if (!open) finish(null); }}>
       {p && (
         <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-[520px]">
-          <form noValidate className="flex flex-col gap-4 p-6" onSubmit={submit}>
-            <span aria-hidden className={cn('flex size-10 items-center justify-center rounded-xl text-lg font-extrabold', p.danger ? 'bg-destructive-soft text-destructive-ink' : 'bg-warn-soft text-warn-ink')}>
-              {p.danger ? '!' : <LockIcon className="size-[18px]" />}
-            </span>
+          <form noValidate className="flex flex-col gap-4 p-[22px]" onSubmit={submit}>
             <div className="flex flex-col gap-1">
-              <DialogTitle className="text-xl font-extrabold">{p.title}</DialogTitle>
+              <DialogTitle className="text-base font-semibold">{p.title}</DialogTitle>
               {p.desc && <DialogDescription>{p.desc}</DialogDescription>}
             </div>
             {p.typed && (
@@ -91,7 +87,7 @@ export function ConfirmHost() {
                 <textarea id="note" name="note" rows={3} maxLength={1000} autoFocus className="rounded-lg border border-input px-3 py-2.5" />
               </Field>
             )}
-            <p aria-live="polite" className="min-h-5 text-[13px] font-semibold text-destructive-ink">{error}</p>
+            <FormError>{error}</FormError>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="lg" onClick={() => finish(null)}>Cancel</Button>
               <Button type="submit" size="lg" variant={p.danger ? 'danger' : 'default'}>{p.label ?? 'Confirm'}</Button>

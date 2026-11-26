@@ -164,7 +164,7 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   field('confirm').value = 'test-password';
   submit('password', 'test-password');
   await until(() => document.querySelector('textarea')?.value === 'otpauth://fixture', 'authenticator URI');
-  check(document.querySelector('[aria-current=step]').textContent.endsWith('Authenticator'), 'current step');
+  check(text().includes('Step 2 of 3'), 'current step');
   submit('code', '000000');
   await until(() => document.querySelector('[role=alert]')?.textContent === 'Invalid code', 'API error');
   submit('code', '123456');
@@ -333,6 +333,7 @@ browserCase('recording: a click in the view becomes a step, saved through the pl
 `, 'signedIn = true');
 
 browserCase('gateway admin reveals a new invite link once', '#/members', `
+  (await until(() => button('Invite member'), 'invite button')).click();
   const f = await until(() => field('email')?.form, 'invite form');
   field('email').value = 'new@example.test'; f.requestSubmit();
   await until(() => document.querySelector('[aria-label="Invite link"]')?.value.endsWith('#/invite/sample'), 'new link');
@@ -343,7 +344,7 @@ browserCase('gateway admin reveals a new invite link once', '#/members', `
 
 browserCase('gateway admin confirms the private profile count before removing an active member', '#/members', `
   await until(() => text().includes('other@example.test'), 'member rows');
-  const removes = [...document.querySelectorAll('tbody button')].filter(b => b.textContent === 'Remove');
+  const removes = [...document.querySelectorAll('tbody button')].filter(b => b.textContent === 'Remove…');
   check(removes.length === 1, 'only other active members ' + removes.length);
   removes[0].click();
   await until(() => dialog()?.innerText.includes('Remove other@example.test?') && dialog().innerText.includes('2 private profiles'), 'deletion warning');
@@ -359,7 +360,8 @@ browserCase('a member without gateway admin is sent from Members to the profiles
 `, 'signedIn = true; gatewayAdmin = false');
 
 browserCase('API key: scoped to a profile, shown once, closable only once saved', '#/access', `
-  (await until(() => button('+ Create API key'), 'create button')).click();
+  (await until(() => button('Connect an agent'), 'connect button')).click();
+  (await until(() => button('Use an API key instead'), 'API key option')).click();
   const f = await until(dialog, 'key dialog');
   field('name', f).value = 'ci-agent'; f.requestSubmit();
   const key = await until(() => document.querySelector('[aria-label="API key"]'), 'key shown');
@@ -374,11 +376,11 @@ browserCase('API key: scoped to a profile, shown once, closable only once saved'
   await until(() => !button('Close').disabled, 'Close enabled');
   button('Close').click();
   await until(() => !document.querySelector('[aria-label="API key"]'), 'key gone');
-  await until(() => text().includes('Active access · 1') && text().includes('arb_k_ab…'), 'listed');
+  await until(() => text().includes('arb_k_ab…'), 'listed');
   check(sent() === JSON.stringify([['/api/keys', { name: 'ci-agent', scope: 'profile:sample', expiresIn: '90d' }]]), 'requests ' + sent());
 `, 'signedIn = true; stepUpLeft = 900');
 
 browserCase('security page shows the reset command for the signed-in account', '#/security', `
-  await until(() => text().includes('Two-factor authentication is on'), 'security page');
+  await until(() => text().includes('Two-step sign-in is on'), 'security page');
   check(text().includes('docker compose exec gateway node src/cli.ts admin reset-2fa admin@example.test'), 'reset command');
 `, 'signedIn = true');

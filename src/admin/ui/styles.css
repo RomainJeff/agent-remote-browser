@@ -40,16 +40,6 @@
   --border: var(--line);
   --input: var(--line-strong);
   --ring: var(--ink);
-
-  /* Old names, kept as aliases until the slice that stops using them deletes them. */
-  --destructive-soft: var(--surface-2);
-  --destructive-ink: var(--ink);
-  --ok: var(--ink);
-  --off: var(--ink-3);
-  --warn-ink: var(--needs-you-ink);
-  --warn-soft: var(--needs-you-soft);
-  --warn-dot: var(--needs-you);
-  --info-line: var(--line);
 }
 
 @theme inline {
@@ -84,17 +74,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-soft: var(--destructive-soft);
-  --color-destructive-ink: var(--destructive-ink);
-  --color-ok: var(--ok);
-  --color-off: var(--off);
-  --color-warn-ink: var(--warn-ink);
-  --color-warn-soft: var(--warn-soft);
-  --color-warn-dot: var(--warn-dot);
   --color-agent: var(--agent);
   --color-agent-soft: var(--agent-soft);
   --color-agent-ink: var(--agent-ink);
-  --color-info-line: var(--info-line);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
