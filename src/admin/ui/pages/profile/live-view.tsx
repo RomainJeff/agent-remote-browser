@@ -74,10 +74,10 @@ export function LiveView({ c }: { c: Computer }) {
       )}
       {/* Wrapped buttons go above the tab, so the tab stays on its frame. */}
       <div className="flex flex-wrap-reverse items-start gap-x-3 gap-y-2">
-        <ControlTab driver={driver}>{driverLabel(driver, c)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}</ControlTab>
+        <ControlTab driver={driver}>{driverLabel(driver, c, ctl)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}</ControlTab>
         <span aria-live="polite" className="flex-[1_1_160px] pb-2 text-[13px] text-ink-3">{caption}</span>
         <div className="flex flex-wrap gap-2 pb-1.5">
-          {driver === 'agent' && !viewer && <>
+          {!!c.leasedUntil && !viewer && <>
             <ActionButton variant="outline" size="sm" done="Lease extended to at least 30 min from now." action={async () => { await api(`${p}/extend`, 'POST', { minutes: 30 }); await refresh(); }}>Extend 30 min</ActionButton>
             <ActionButton variant="outline" size="sm" done="Lease released. The agent has to take a new one." action={async () => { await api(`${p}/release`, 'POST'); await refresh(); }}>Release lease</ActionButton>
           </>}
