@@ -97,7 +97,7 @@ docker compose ps                                             # runner healthy, 
 docker compose exec gateway node src/cli.ts admin create you@example.com
 ```
 
-`admin create` asks for a password (12 to 128 characters), prints an `otpauth://` URI (add it to an authenticator app), asks for a code to confirm, then prints 10 backup codes (one use each). Store the codes offline (password manager or paper), then clear the terminal: they are never shown again. One admin per gateway; signups are disabled. 2FA enrolment happens only here, on the host: the admin UI cannot enrol or reset a second factor.
+`admin create` asks for a password (12 to 128 characters), prints a QR code and a setup key (add either to an authenticator app), asks for a code to confirm, then prints 10 backup codes (one use each). Store the codes offline (password manager or paper), then clear the terminal: they are never shown again. One admin per gateway; signups are disabled. 2FA enrolment happens only here, on the host: the admin UI cannot enrol or reset a second factor.
 
 Test key from the host, without the admin UI (e.g. for a bench or an agent the operator lets run it): the key goes to a 0600 file, never to the terminal, and expires after 1 day unless `[days]` says otherwise (up to 365). `--global` instead of `<profile>` makes a global key (all profiles, like the admin UI's). The gateway container is read-only, so write it to a fresh directory in its `/tmp` and copy it out; the key lands in a private temp file, moved into place only on success:
 

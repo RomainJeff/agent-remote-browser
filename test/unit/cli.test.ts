@@ -11,7 +11,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../src/store/db.ts';
 import { openStore } from '../../src/store/store.ts';
 import { parseProfileId } from '../../src/policy.ts';
-import { totp } from '../totp.ts';
+import { setupKeyIn, totp } from '../totp.ts';
 
 const scratch = mkdtempSync(join(tmpdir(), 'arb-cli-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -90,25 +90,26 @@ test('backup-db: consistent copy while the database is open and written, 0600, n
   assert.equal(readFileSync(file, 'utf8'), 'x');
 });
 
-/** Answers the CLI prompts like a person with an authenticator app: password, then the code for the printed URI. */
-const asker = (t: ReturnType<typeof fresh>, password: string, code?: (uri: string) => string) => async (prompt: string) =>
-  prompt.startsWith('Password') ? password : (code ?? totp)(t.lines.findLast((l) => l.startsWith('otpauth://'))!);
+/** Answers the CLI prompts like a person with an authenticator app: password, then the code for the printed setup key. */
+const asker = (t: ReturnType<typeof fresh>, password: string, code?: (key: string) => string) => async (prompt: string) =>
+  prompt.startsWith('Password') ? password : (code ?? totp)(setupKeyIn(t.lines.findLast((l) => setupKeyIn(l))!)!);
 const backups = (lines: string[]) => lines.filter((l) => /^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l));
 const count = (t: ReturnType<typeof fresh>, sql: string) => {
   const db = openDb(join(t.env.DATA_DIR, 'arb.db'));
   try { return (db.prepare(sql).get() as { n: number }).n; } finally { db.close(); }
 };
 
-test('admin create: only the TOTP URI and backup codes are printed; bootstrap only; no session left', async () => {
+test('admin create: only the setup key and backup codes are printed; bootstrap only; no session left', async () => {
   const t = fresh(), password = randomBytes(12).toString('base64url');
   assert.equal(await t.run(['admin', 'create', 'Admin@Example.com'], asker(t, password)), 0);
-  const uri = t.lines.find((l) => l.startsWith('otpauth://totp/'))!;
-  assert.match(uri, /secret=[A-Z2-7]+/);
+  const key = t.lines.map(setupKeyIn).find(Boolean)!;
+  assert.match(key, /^([A-Z2-7]{4} )+[A-Z2-7]{1,4}$/);
+  assert.ok(!t.lines.some((l) => l.includes('otpauth://')), 'no otpauth URI printed');
   assertNoSecret(t.lines, [password, t.env.BETTER_AUTH_SECRET]);
   assert.equal(t.lines.at(-1), 'Admin admin@example.com ready: sign in with the password and a TOTP code.');
   assert.equal(count(t, 'SELECT count(*) n FROM user WHERE twoFactorEnabled = 1'), 1);
   assert.equal(count(t, 'SELECT count(*) n FROM session'), 0);
-  const secret = new URL(uri).searchParams.get('secret')!;
+  const secret = key.replaceAll(' ', '');
   assert.equal(count(t, `SELECT count(*) n FROM twoFactor WHERE secret LIKE '%${secret}%'`), 0, 'TOTP secret encrypted at rest');
   const codes = backups(t.lines);
   assert.equal(codes.length, 10);
@@ -132,10 +133,10 @@ test('admin reset-2fa: new password and TOTP secret, sessions dropped', async ()
   const t = fresh(), first = randomBytes(12).toString('base64url'), second = randomBytes(12).toString('base64url');
   await assert.rejects(t.run(['admin', 'reset-2fa', 'a@example.com'], asker(t, first)), /No user/);
   assert.equal(await t.run(['admin', 'create', 'a@example.com'], asker(t, first)), 0);
-  const before = t.lines.find((l) => l.startsWith('otpauth://')), oldCodes = backups(t.lines);
+  const before = t.lines.find(setupKeyIn), oldCodes = backups(t.lines);
   t.lines.length = 0;
   assert.equal(await t.run(['admin', 'reset-2fa', 'a@example.com'], asker(t, second)), 0);
-  const after = t.lines.find((l) => l.startsWith('otpauth://'));
+  const after = t.lines.find(setupKeyIn);
   assert.ok(after && after !== before, 'new TOTP secret');
   assert.equal(backups(t.lines).filter((c) => oldCodes.includes(c)).length, 0, 'new backup codes');
   assertNoSecret(t.lines, [first, second]);

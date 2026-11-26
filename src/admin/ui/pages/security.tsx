@@ -54,7 +54,7 @@ export function SecurityPage() {
           <h2 id="tips" className="pb-1 text-sm font-semibold">Good to know</h2>
           <ul>
             <Tip>Keep backup codes offline, away from your phone.</Tip>
-            <Tip><span>The <code className="font-mono text-[12.5px]">otpauth://</code> link holds the secret. Never paste it in a chat or a ticket.</span></Tip>
+            <Tip>The QR code and setup key hold the secret. Never paste them in a chat or a ticket.</Tip>
             <Tip>Changing domains, saved logins, keys or deleting asks for a code again after 15 min. Five wrong codes end the session.</Tip>
           </ul>
           <details className="py-3 text-[13.5px]">

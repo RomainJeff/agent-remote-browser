@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Step = { n: 0 } | { n: 1; totpURI: string; qrSVG: string } | { n: 2; backupCodes: string[] };
+type Step = { n: 0 } | { n: 1; setupKey: string; qrSVG: string } | { n: 2; backupCodes: string[] };
 
 /** One-time invitation: choose a password, enroll an authenticator, keep the backup codes. */
 export function InvitePage({ token }: { token: string }) {
@@ -18,7 +18,7 @@ export function InvitePage({ token }: { token: string }) {
       <Progress current={step.n} />
       {step.n === 0 && (
         <StepForm key={0} title="Join the gateway" lead="Choose a password, then set up two-step sign-in." onSubmit={async (data) => {
-          const r = await api<{ totpURI: string; qrSVG: string }>('/api/invite/start', 'POST', { token, password: newPassword(data) });
+          const r = await api<{ setupKey: string; qrSVG: string }>('/api/invite/start', 'POST', { token, password: newPassword(data) });
           setStep({ n: 1, ...r });
         }}>
           <NewPasswordFields />
@@ -31,8 +31,11 @@ export function InvitePage({ token }: { token: string }) {
         }}>
           <img className="size-[172px] self-center rounded-xl border p-2.5 [image-rendering:pixelated]" alt="QR code" src={`data:image/svg+xml,${encodeURIComponent(step.qrSVG)}`} />
           <details className="-mt-1.5 text-[13px]">
-            <summary className="mx-auto w-fit cursor-pointer font-medium text-ink-2 underline underline-offset-[3px]">Can't scan? Copy the link</summary>
-            <textarea className="mt-2 w-full rounded-lg border border-input p-2 font-mono text-[13px]" aria-label="Authenticator link" readOnly value={step.totpURI} />
+            <summary className="mx-auto w-fit cursor-pointer font-medium text-ink-2 underline underline-offset-[3px]">Can't scan? Enter a setup key</summary>
+            <div className="mt-2 flex flex-col gap-2">
+              <code aria-label="Setup key" className="rounded-lg border bg-surface-2 px-3 py-2 text-center font-mono text-[13.5px] font-medium break-words">{step.setupKey}</code>
+              <CopyButton text={step.setupKey.replaceAll(' ', '')} label="Copy key" className="h-[38px]" />
+            </div>
           </details>
           <Field>
             <FieldLabel htmlFor="code">6-digit code</FieldLabel>

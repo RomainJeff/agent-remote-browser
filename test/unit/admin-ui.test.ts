@@ -64,7 +64,7 @@ window.fetch = async (path, options = {}) => {
       signedIn = trusted; return json(trusted ? { token: 't', user: { email } } : { twoFactorRedirect: true });
     case '/api/auth/two-factor/verify-totp': signedIn = body.code === '123456'; return signedIn ? json({}) : json({ message: 'Invalid' }, 401);
     case '/api/auth/sign-out': signedIn = false; return json({});
-    case '/api/invite/start': return json({ totpURI: 'otpauth://fixture', qrSVG: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    case '/api/invite/start': return json({ setupKey: 'ABCD EFGH', qrSVG: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
     case '/api/invite/finish': return body.code === '123456' ? json({ backupCodes: ['sample-backup'] }) : json({ error: 'Invalid code' }, 401);
     default: throw Error(path);
   }
@@ -165,7 +165,7 @@ browserCase('invite enrollment keeps an invalid code on screen, then shows backu
   await until(() => document.querySelector('[role=alert]')?.textContent === "Passwords don't match.", 'mismatch caught before any request');
   field('confirm').value = 'test-password';
   submit('password', 'test-password');
-  await until(() => document.querySelector('textarea')?.value === 'otpauth://fixture', 'authenticator URI');
+  await until(() => document.querySelector('[aria-label="Setup key"]')?.textContent === 'ABCD EFGH', 'setup key');
   check(text().includes('Step 2 of 3'), 'current step');
   submit('code', '000000');
   await until(() => document.querySelector('[role=alert]')?.textContent === 'Invalid code', 'API error');
