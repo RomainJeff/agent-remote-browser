@@ -386,7 +386,8 @@ browserCase('on a phone the navigation is a tab bar, hidden in a profile, and th
   const shown = (el) => !!el && el.getClientRects().length > 0;
   const tabs = () => [...document.querySelectorAll('nav[aria-label="Main navigation"]')].filter(shown);
   check(!shown(document.querySelector('aside')) && tabs().length === 1, 'tab bar instead of the sidebar');
-  check(tabs()[0].querySelector('[aria-current=page]').textContent.endsWith('Profiles') && tabs()[0].textContent.includes('Members'), 'tabs');
+  // Members joins the tabs once /api/users confirms a gateway admin, a request of its own that can land after the heading.
+  await until(() => tabs()[0].querySelector('[aria-current=page]').textContent.endsWith('Profiles') && tabs()[0].textContent.includes('Members'), 'tabs');
   location.hash = '#/profiles/sample';
   await until(() => document.querySelector('h1')?.textContent === 'sample', 'profile');
   check(tabs().length === 0 && !document.querySelector('[aria-label=Account]'), 'no tab bar or account in a profile');
