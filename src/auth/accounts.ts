@@ -56,7 +56,12 @@ export async function startTotp(auth: Auth, email: string, password: string) {
   const headers = new Headers({ cookie: cookies.map((c) => c.split(';')[0]).join('; ') });
   const enrolled = await auth.api.enableTwoFactor({ body: { password }, headers });
   if (!('totpURI' in enrolled)) throw Error('TOTP enrollment failed');
-  return { ...enrolled, cookies, headers };
+  return { ...enrolled, setupKey: setupKey(enrolled.totpURI), cookies, headers };
+}
+
+/** The secret in an otpauth:// URI, in groups of four, for typing into an authenticator app. */
+function setupKey(totpURI: string) {
+  return new URL(totpURI).searchParams.get('secret')!.replace(/=+$/, '').match(/.{1,4}/g)!.join(' ');
 }
 
 export function verifyTotp(auth: Auth, headers: Headers, code: string) {

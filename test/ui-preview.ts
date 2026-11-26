@@ -10,7 +10,7 @@ import { main } from '../src/cli.ts';
 import { loadConfig } from '../src/config.ts';
 import { FakeDriver } from '../src/host/fake.ts';
 import { start } from '../src/server.ts';
-import { totp } from './totp.ts';
+import { setupKeyIn, totp } from './totp.ts';
 
 const freePort = () => new Promise<number>((resolve) => {
   const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as { port: number }; s.close(() => resolve(port)); });
@@ -24,11 +24,11 @@ const env = {
 };
 const base = `http://localhost:${port}`;
 
-/** Enrolls through the CLI, like an operator; returns the TOTP URI. */
+/** Enrolls through the CLI, like an operator; returns the setup key. */
 async function enroll(args: string[], password: string) {
   let uri = '';
   const answers = [() => password, () => totp(uri)];
-  const code = await main(args, env, (l) => { if (l.startsWith('otpauth://')) uri = l; }, async () => answers.shift()!());
+  const code = await main(args, env, (l) => { uri = setupKeyIn(l) ?? uri; }, async () => answers.shift()!());
   if (code !== 0) throw Error(`${args.join(' ')} failed`);
   return uri;
 }

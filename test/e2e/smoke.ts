@@ -18,20 +18,20 @@ const log = (...a: unknown[]) => console.log('[smoke]', ...a);
 const compose = (...a: string[]) => execFileSync('docker', ['compose', ...a], { encoding: 'utf8' });
 const docker = (...a: string[]) => execFileSync('docker', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
-// 1. Admin account through the CLI: password on stdin, then the code computed from the printed URI.
+// 1. Admin account through the CLI: password on stdin, then the code computed from the printed setup key.
 const uri = await new Promise<string>((resolve, reject) => {
   const p = spawn('docker', ['compose', 'exec', '-T', 'gateway', 'node', 'src/cli.ts', 'admin', 'create', email]);
   let out = '', u = '';
   p.stdout.on('data', (d) => {
     out += d;
-    const m = out.match(/^otpauth:\/\/\S+$/m);
-    if (m && !u) { u = m[0]; p.stdin.write(totp(u) + '\n'); }
+    const m = out.match(/^Setup key: ([A-Z2-7 ]+)$/m);
+    if (m && !u) { u = m[1]; p.stdin.write(totp(u) + '\n'); }
   });
   p.stderr.on('data', (d) => { out += d; });
   p.stdin.write(password + '\n');
   p.on('close', (c) => {
     assert.ok(!out.includes(password), 'password printed by the CLI');
-    c === 0 && u ? resolve(u) : reject(Error(`admin create failed: ${out.replace(u, '<URI>')}`));
+    c === 0 && u ? resolve(u) : reject(Error(`admin create failed: ${out.replace(u, '<KEY>')}`));
   });
 });
 log('admin created');

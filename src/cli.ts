@@ -108,10 +108,10 @@ async function enroll(cfg: Config, email: string, mode: 'bootstrap' | 'admin' | 
       return id;
     });
     const enrolled = await startTotp(auth, email, password);
-    out('Scan this QR code with your authenticator app, or add the link below (shown once, do not share):');
+    out('Scan this QR code with your authenticator app, or enter the setup key below (shown once, do not share):');
     // White on black set explicitly, so the code scans on light and dark terminal themes alike.
     for (const line of renderUnicodeCompact(enrolled.totpURI).split('\n')) out(`\x1b[97;40m${line}\x1b[0m`);
-    out(enrolled.totpURI);
+    out(`Setup key: ${enrolled.setupKey}`);
     try { await verifyTotp(auth, enrolled.headers, (await ask('Code from the app: ')).trim()); }
     catch { throw Error(`Code rejected: run admin reset-2fa ${email}`); }
     finally { deleteSessions(db, id); }

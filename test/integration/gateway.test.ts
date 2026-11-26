@@ -23,7 +23,7 @@ import { parseProfileId } from '../../src/policy.ts';
 import { AB_FLAGS, HIT } from '../../src/runner/protocol.ts';
 import { limits } from '../../src/mcp/steps.ts';
 import { purgeClients } from '../../src/auth/guards.ts';
-import { totp } from '../totp.ts';
+import { setupKeyIn, totp } from '../totp.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'arb-gw-'));
 const f = {
@@ -66,7 +66,7 @@ before(async () => {
   const answers = [() => owner.password, () => totp(owner.uri)];
   assert.equal(await main(['admin', 'create', owner.email], env(), (l) => {
     lines.push(l);
-    if (l.startsWith('otpauth://')) owner.uri = l;
+    owner.uri = setupKeyIn(l) ?? owner.uri;
     if (/^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(l)) owner.backup.push(l);
   }, async () => answers.shift()!()), 0);
   assert.equal(lines.filter((l) => l.includes(owner.password)).length, 0, 'password never printed');
@@ -109,7 +109,7 @@ async function signInNewUser(email: string) {
   let uri = '';
   const answers = [() => password, () => totp(uri)];
   assert.equal(await main(['user', 'create', email], env(), (line) => {
-    if (line.startsWith('otpauth://')) uri = line;
+    uri = setupKeyIn(line) ?? uri;
   }, async () => answers.shift()!()), 0);
   const half = await admin('POST', '/api/auth/sign-in/email', { body: { email, password }, headers: adminOrigin() });
   assert.equal(half.status, 200);
@@ -1521,14 +1521,14 @@ test('invite enrollment binds the session to the recipient and applies the role 
   assert.deepEqual(open.map((i: any) => [i.id, i.email, i.createdBy, i.admin]), [[issued.json.id, email, owner.email, true]]);
   const start = await accept('start', { token, password });
   assert.equal(start.status, 200);
-  assert.deepEqual(Object.keys(start.json), ['totpURI', 'qrSVG']);
+  assert.deepEqual(Object.keys(start.json), ['setupKey', 'qrSVG']);
   assert.match(start.json.qrSVG, /^<svg /);
   const row = async () => (await admin('GET', '/api/users')).json.find((u: any) => u.email === email);
   assert.deepEqual([(await row()).admin, (await row()).pending], [false, true]);
   assert.equal((await admin('POST', '/api/users/admin', { body: { email, admin: true } })).status, 409);
   assert.equal((await admin('POST', '/api/computers/shop2/members', { body: { email, role: 'viewer' } })).status, 409);
   assert.equal((await admin('POST', '/api/users/remove', { body: { email } })).status, 409);
-  assert.equal((await accept('finish', { token, code: totp(start.json.totpURI) }, session)).status, 401);
+  assert.equal((await accept('finish', { token, code: totp(start.json.setupKey) }, session)).status, 401);
   // Exercise authorization with a real pending session after the auth provider has enabled its second factor.
   sql(db => db.prepare('UPDATE user SET twoFactorEnabled = 1 WHERE email = ?').run(email));
   const cookie = jar(start.cookies);
@@ -1539,7 +1539,7 @@ test('invite enrollment binds the session to the recipient and applies the role 
 
   const retry = await accept('start', { token, password });
   assert.equal(retry.status, 200);
-  const code = totp(retry.json.totpURI), wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
+  const code = totp(retry.json.setupKey), wrong = String((Number(code) + 1) % 1e6).padStart(6, '0');
   assert.equal((await accept('finish', { token, code: wrong }, jar(retry.cookies))).status, 401);
   const finished = await accept('finish', { token, code }, jar(retry.cookies));
   assert.equal(finished.status, 200);
@@ -1554,7 +1554,7 @@ test('invite enrollment binds the session to the recipient and applies the role 
   sql(db => db.exec('DELETE FROM rateLimit'));
   const half = await admin('POST', '/api/auth/sign-in/email', { headers: adminOrigin(), body: { email, password } });
   assert.equal(half.json.twoFactorRedirect, true);
-  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(retry.json.totpURI) } });
+  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(retry.json.setupKey) } });
   assert.equal(signed.status, 200);
   const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
   assert.deepEqual((await admin('GET', '/api/computers', { headers })).json, []);
@@ -1570,12 +1570,12 @@ test('a default invite enrolls a member who can sign in and starts with no profi
   assert.equal(issued.status, 201);
   const token = tokenOf(issued.json);
   const start = await accept('start', { token, password });
-  const code = totp(start.json.totpURI);
+  const code = totp(start.json.setupKey);
   assert.equal((await accept('finish', { token, code }, jar(start.cookies))).status, 200);
   sql(db => db.exec('DELETE FROM rateLimit'));
   const half = await admin('POST', '/api/auth/sign-in/email', { headers: adminOrigin(), body: { email, password } });
   assert.equal(half.json.twoFactorRedirect, true);
-  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(start.json.totpURI) } });
+  const signed = await admin('POST', '/api/auth/two-factor/verify-totp', { headers: { ...adminOrigin(), cookie: jar(half.cookies) }, body: { code: totp(start.json.setupKey) } });
   assert.equal(signed.status, 200);
   const headers = { cookie: jar(signed.cookies, jar(half.cookies)) };
   assert.equal((await admin('GET', '/api/users', { headers })).status, 403);
@@ -1586,7 +1586,7 @@ test('a password reset link from an admin sets a new password, keeps 2FA and sig
   await restart();
   const email = 'forgetful@example.com', password = randomBytes(16).toString('hex'), next = randomBytes(16).toString('hex');
   const invite = tokenOf((await admin('POST', '/api/users/invite', { body: { email } })).json);
-  const start = await accept('start', { token: invite, password }), uri = start.json.totpURI;
+  const start = await accept('start', { token: invite, password }), uri = start.json.setupKey;
   assert.equal((await accept('finish', { token: invite, code: totp(uri) }, jar(start.cookies))).status, 200);
   const signIn = async (pw: string) => {
     sql((db) => db.exec('DELETE FROM rateLimit'));

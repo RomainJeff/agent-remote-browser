@@ -215,9 +215,9 @@ export function createAdmin({ cfg, db, store, auth: pubAuth, adminAuth, audit, l
           return send(res, 200, { reset: true });
         }
         if (path === '/api/invite/start') {
-          const { totpURI, cookies } = await startInvite(db, authOf(pub), body.token, body.password, email);
+          const { totpURI, setupKey, cookies } = await startInvite(db, authOf(pub), body.token, body.password, email);
           res.setHeader('set-cookie', cookies);
-          return send(res, 200, { totpURI, qrSVG: renderSVG(totpURI) });
+          return send(res, 200, { setupKey, qrSVG: renderSVG(totpURI) });
         }
         return send(res, 200, await finishInvite(db, authOf(pub), toHeaders(req.headers), body.token, body.code, email));
       }
