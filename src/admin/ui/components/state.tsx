@@ -50,28 +50,24 @@ export function LeaseClock({ until }: { until: string }) {
   return <span className="font-medium tabular-nums opacity-80" title={`Renewed on every agent call, ends at ${end}`}>{String(Math.floor(s / 60)).padStart(2, '0')}:{String(s % 60).padStart(2, '0')}</span>;
 }
 
-/** What a frame and its tab show: who drives, or the recorder picking an output (the agent's color: what it will read). */
-export type Tab = Driver | 'picking';
-
-const TAB: Record<Tab, string> = {
+const TAB: Record<Driver, string> = {
   agent: 'border-agent bg-agent text-white',
   you: 'border-ink bg-ink text-white',
   recording: 'border-ink bg-ink text-white',
   waiting: 'border-dashed border-needs-you bg-needs-you-soft text-needs-you-ink',
   nobody: 'border-line-strong bg-surface-2 text-ink-2',
   stopped: 'border-dashed border-line-strong bg-surface text-ink-3',
-  picking: 'border-agent-ink bg-agent-ink text-white',
 };
-const FRAME: Record<Tab, string> = {
+const FRAME: Record<Driver, string> = {
   agent: 'border-agent', you: 'border-ink', recording: 'border-ink',
-  waiting: 'border-dashed border-needs-you', nobody: 'border-line-strong', stopped: 'border-dashed border-line-strong', picking: 'border-agent-ink',
+  waiting: 'border-dashed border-needs-you', nobody: 'border-line-strong', stopped: 'border-dashed border-line-strong',
 };
 
 /** The tab on top of a frame: who drives. It overlaps the frame's top border so the two read as one shape. */
-export function ControlTab({ driver, children }: { driver: Tab; children: ReactNode }) {
+export function ControlTab({ driver, children }: { driver: Driver; children: ReactNode }) {
   return <span className={cn('relative z-[1] -mb-0.5 inline-flex h-[30px] items-center gap-2.5 rounded-t-lg border-2 border-b-0 px-3 text-[13px] font-semibold', TAB[driver])}>{children}</span>;
 }
 
-export function ControlFrame({ driver, className, children }: { driver: Tab; className?: string; children: ReactNode }) {
+export function ControlFrame({ driver, className, children }: { driver: Driver; className?: string; children: ReactNode }) {
   return <div className={cn('flex flex-col overflow-hidden rounded-xl rounded-tl-none border-2', FRAME[driver], className)}>{children}</div>;
 }

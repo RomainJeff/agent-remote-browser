@@ -347,14 +347,14 @@ browserCase('recording: Add output picks a text in the view, or snapshots the pa
   await menu('Text on the page');
   await until(() => text().includes('Picking an output') && text().includes('Click the text to read.') && button('Cancel pick'), 'pick mode');
   mouse('mousedown', img); mouse('mouseup', img);
-  await until(() => /^1 Read 48\\.90 . Output 1 #total$/.test(rows()[0]), 'text output ' + rows());
+  await until(() => /^1 Read 48\\.90, Output 1 #total$/.test(rows()[0]), 'text output ' + rows());
   check(!text().includes('Picking an output') && !writes.some(w => w[0].endsWith('/teach-click')), 'one pick, nothing clicked');
   await menu('Page snapshot');
-  await until(() => /^2 Snapshot of the page . Output 2 /.test(rows()[1]) && rows()[1].includes('Buy again'), 'snapshot output ' + rows());
+  await until(() => /^2 Snapshot of the page, Output 2 /.test(rows()[1]) && rows()[1].includes('Buy again'), 'snapshot output ' + rows());
   button('Limit to an area').click();
   await until(() => text().includes('Picking an area'), 'area pick mode');
   mouse('mousedown', img); mouse('mouseup', img);
-  await until(() => /^2 Snapshot of an area . Output 2 /.test(rows()[1]) && button('Larger area') && button('Whole page'), 'area ' + rows());
+  await until(() => /^2 Snapshot of an area, Output 2 /.test(rows()[1]) && button('Larger area') && button('Whole page'), 'area ' + rows());
   const reads = writes.filter(w => w[0].endsWith('/teach-read')).map(w => { const { rec, ...b } = w[1]; return b; });
   check(JSON.stringify(reads) === JSON.stringify([{ x: 20, y: 15, get_text: {} }, { snapshot: {} }, { x: 20, y: 15, snapshot: {} }]), 'reads ' + JSON.stringify(reads));
 `, 'signedIn = true');

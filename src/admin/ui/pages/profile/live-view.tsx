@@ -28,7 +28,7 @@ export function LiveView({ c }: { c: Computer }) {
   useEffect(() => { if (lost) openView(c.id, false); }, [lost, c.id]);
   useEffect(() => { if (live.focusTakeOver) { live.focusTakeOver = false; takeOverRef.current?.focus(); } }, []);
   const refresh = () => queryClient.refetchQueries({ queryKey: ['computers'] });
-  const driver = driverOf(c, { control: ctl, recording }), choosing = recording ? recorder.rec!.choosing : null, tab = choosing ? 'picking' : driver;
+  const driver = driverOf(c, { control: ctl, recording }), choosing = recording ? recorder.rec!.choosing : null;
 
   /** Done / Failed (or Decline): the agent reads the outcome and the note on its next handoff_status. Ends control. */
   const endHandoff = (how: 'done' | 'fail', title?: string) => async () => {
@@ -75,7 +75,7 @@ export function LiveView({ c }: { c: Computer }) {
       )}
       {/* Wrapped buttons go above the tab, so the tab stays on its frame. */}
       <div className="flex flex-wrap-reverse items-start gap-x-3 gap-y-2">
-        <ControlTab driver={tab}>{choosing ? <><CrosshairIcon className="size-3.5" />{choosing === 'text' ? 'Picking an output' : 'Picking an area'}</>
+        <ControlTab driver={driver}>{choosing ? <><CrosshairIcon className="size-3.5" />{choosing === 'text' ? 'Picking an output' : 'Picking an area'}</>
           : <>{driverLabel(driver, c, ctl)}{driver === 'agent' && <LeaseClock until={c.leasedUntil!} />}</>}</ControlTab>
         <span aria-live="polite" className={cn('flex-[1_1_160px] pb-2 text-[13px]', choosing ? 'text-ink-2' : 'text-ink-3')}>
           {choosing ? `${choosing === 'text' ? 'Click the text to read.' : 'Click inside the area to keep.'} Nothing is clicked on the page.` : caption}
@@ -97,7 +97,7 @@ export function LiveView({ c }: { c: Computer }) {
           {view && <Button variant="outline" size="sm" onClick={() => { closeView(); takeOverRef.current?.focus(); }}>Leave view</Button>}
         </div>
       </div>
-      <ControlFrame driver={tab}>
+      <ControlFrame driver={driver}>
         {!viewer && (
           <UrlBar c={c} url={view?.url}>
             {here.length > 0 && (

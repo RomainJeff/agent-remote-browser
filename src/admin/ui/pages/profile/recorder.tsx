@@ -28,7 +28,7 @@ export function Recorder({ id }: { id: string }) {
       </div>
       <ol className="border-t border-line-soft">
         {g.steps.map((s, i) => (
-          <NumberedStep key={i} n={i + 1} output={isOutput(s)} action={<Button variant="ghost" size="icon-xs" className="text-ink-3" aria-label={`Remove step ${i + 1}`} onClick={() => { g.steps.splice(i, 1); if (g.choosing === s) g.choosing = null; recorder.edited(); }}><XIcon /></Button>}>
+          <NumberedStep key={i} n={i + 1} action={<Button variant="ghost" size="icon-xs" className="text-ink-3" aria-label={`Remove step ${i + 1}`} onClick={() => { g.steps.splice(i, 1); if (g.choosing === s) g.choosing = null; recorder.edited(); }}><XIcon /></Button>}>
             {isOutput(s) ? <Output s={s} n={g.steps.slice(0, i + 1).filter(isOutput).length} /> : <StepText parts={describeStep(s.step)} />}
             {s.step.fill && (
               <span className="mt-2 flex items-center gap-2 text-[13px] text-ink-2">
@@ -59,7 +59,7 @@ export function Recorder({ id }: { id: string }) {
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
           <span className="flex flex-auto flex-wrap items-center gap-1.5">{inputs.length > 0 && <>Inputs {inputs.map((n) => <InputToken key={n} name={n} />)}</>}</span>
           {g.choosing
-            ? <Button variant="outline" size="sm" aria-pressed className="border-agent-ink bg-agent-soft text-agent-ink hover:bg-agent-soft hover:text-agent-ink" onClick={() => recorder.choose(null)}>Cancel pick</Button>
+            ? <Button variant="outline" size="sm" aria-pressed onClick={() => recorder.choose(null)}>Cancel pick</Button>
             : <AddOutput />}
         </div>
         {g.out && <pre aria-live="polite" className="max-h-[200px] overflow-auto rounded-lg border bg-surface-2 p-2.5 font-mono text-xs leading-[18px] whitespace-pre-wrap [overflow-wrap:anywhere]">{g.out}</pre>}
@@ -80,7 +80,7 @@ export function Recorder({ id }: { id: string }) {
 
 /** "Add output": text picked in the view, or a snapshot of the page. */
 function AddOutput() {
-  const item = 'grid w-full cursor-default grid-cols-[20px_minmax(0,1fr)] items-start gap-2.5 rounded-md px-3 py-2.5 text-left text-[13px] leading-[18px] outline-none data-highlighted:bg-canvas [&_svg]:mt-px [&_svg]:size-[18px] [&_svg]:text-agent-ink';
+  const item = 'grid w-full cursor-default grid-cols-[20px_minmax(0,1fr)] items-start gap-2.5 rounded-md px-3 py-2.5 text-left text-[13px] leading-[18px] outline-none data-highlighted:bg-canvas [&_svg]:mt-px [&_svg]:size-[18px] [&_svg]:text-ink-2';
   return (
     <Menu.Root>
       <Menu.Trigger render={<Button variant="outline" size="sm" />}>Add output<ChevronUpIcon /></Menu.Trigger>
@@ -102,7 +102,7 @@ function AddOutput() {
 
 /** A recorded output: the value read and where, or a snapshot (of the page or of an area) with its first lines. */
 function Output({ s, n }: { s: RecStep; n: number }) {
-  const tag = <span className="text-ink-3"> · Output {n}</span>, mono = 'font-mono text-[12.5px] text-ink-2 [overflow-wrap:anywhere]';
+  const tag = <span className="text-ink-3">, Output {n}</span>, mono = 'font-mono text-[12.5px] text-ink-2 [overflow-wrap:anywhere]';
   if ('get_text' in s.step) {
     const v = (s.text ?? '').trim().split('\n')[0];
     return (
@@ -126,7 +126,7 @@ function Output({ s, n }: { s: RecStep; n: number }) {
             {parent && <Button variant="outline" size="xs" onClick={() => recorder.snapshot(s, parent)}>Larger area</Button>}
             <Button variant="outline" size="xs" onClick={() => recorder.snapshot(s)}>Whole page</Button>
           </span>
-        : <span><button type="button" className="text-[13px] text-agent-ink underline underline-offset-2" onClick={() => recorder.choose(s)}>Limit to an area</button></span>}
+        : <span><button type="button" className="text-[13px] text-ink underline underline-offset-2" onClick={() => recorder.choose(s)}>Limit to an area</button></span>}
     </span>
   );
 }
